@@ -110,6 +110,7 @@ class WatchIn(BaseModel):
     match_terms: list[str] = Field(default_factory=list)
     min_bookmarks: int = 0
     include_r18: bool = False
+    sources: list[str] = Field(default_factory=lambda: ["pixiv", "twitter"])
 
 
 class JobIn(BaseModel):

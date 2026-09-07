@@ -204,6 +204,39 @@ def test_honest_denominators(tmp: Path) -> None:
     print(f"  honest denominators:  ok (discover total=None; media total={pending}=pending count)")
 
 
+def test_watch_sources_gate_each_stage(tmp: Path) -> None:
+    """A watch crawls only the sources it has ticked. pixiv-off means no
+    search request and -- the part that matters for the unauthenticated case
+    -- no 'not signed in' failure either; X-off drops the watch from the
+    timeline matcher. Both off is rejected at the model."""
+    try:
+        Watch(slug="none", sources=[])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a watch with no source must be rejected")
+    assert Watch(slug="d").sources == ["pixiv", "twitter"]  # default: both
+    assert Watch(slug="x", sources=["twitter", "twitter"]).sources == ["twitter"]
+
+    runner, cfg = make_runner(tmp / "s")
+    store = Store(cfg.db_path)
+    store.upsert_watch(Watch(slug="ganyu", pixiv_tags=["甘雨"], sources=["twitter"]))
+    assert store.watches()[0].sources == ["twitter"]  # round-trips through v4 column
+    jid = JobRunner.submit(store, "poll", {"media": False, "link": False})
+    runner.run_pending(store)
+    j = JobRunner.get(store, jid)
+    assert j.state == SUCCEEDED, j.error
+    assert j.counters.get("new_posts", 0) == 0 and store.stats()["posts"] == 0
+
+    store.upsert_watch(Watch(slug="ganyu", pixiv_tags=["甘雨"], sources=["pixiv"]))
+    jid = JobRunner.submit(store, "poll", {"media": False, "link": False})
+    runner.run_pending(store)
+    j = JobRunner.get(store, jid)
+    assert j.state == SUCCEEDED, j.error
+    assert store.stats()["posts"] == 2
+    print("  watch sources:        ok (X-only -> no pixiv search; pixiv-only -> 2 posts)")
+
+
 def test_failure_is_data(tmp: Path) -> None:
     runner, cfg = make_runner(tmp / "f")
     store = Store(cfg.db_path)
@@ -226,5 +259,6 @@ if __name__ == "__main__":
         test_cancel_from_other_process(tmp)
         test_interrupted_at_boot(tmp)
         test_honest_denominators(tmp)
+        test_watch_sources_gate_each_stage(tmp)
         test_failure_is_data(tmp)
     print("\nall passed")

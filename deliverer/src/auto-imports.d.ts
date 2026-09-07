@@ -112,9 +112,6 @@ declare global {
   export type { DateStyle, SizeUnit, FormatsState } from './stores/formats'
   import('./stores/formats')
   // @ts-ignore
-  export type { Source } from './stores/sources'
-  import('./stores/sources')
-  // @ts-ignore
   export type { ThemeState } from './stores/theme'
   import('./stores/theme')
   // @ts-ignore
@@ -124,7 +121,7 @@ declare global {
   export type { ApiError, Endpoint, DaemonEvent } from './lib/api'
   import('./lib/api')
   // @ts-ignore
-  export type { Watch, JobState, Job, LogLine, GalleryItem, GalleryPage, TagStat, PostDetail, ProbeResult, SourcesStatus, Health } from './lib/types'
+  export type { Source, Watch, JobState, Job, LogLine, GalleryItem, GalleryPage, TagStat, PostDetail, ProbeResult, SourcesStatus, Health } from './lib/types'
   import('./lib/types')
 }
 

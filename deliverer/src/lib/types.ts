@@ -1,4 +1,6 @@
 /** Shapes from docs/design/architecture.md §6. Keep in step with dawnmaker/app.py. */
+export type Source = 'pixiv' | 'twitter';
+
 export interface Watch {
   slug: string;
   label: string;
@@ -6,6 +8,8 @@ export interface Watch {
   match_terms: string[];
   min_bookmarks: number;
   include_r18: boolean;
+  /** which sources this character is crawled from; both by default */
+  sources: Source[];
   post_count?: number;
   latest_posted_at?: string | null;
   cover_sha?: string | null;

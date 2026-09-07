@@ -19,13 +19,20 @@ function add() {
     match_terms: [],
     min_bookmarks: 0,
     include_r18: false,
+    sources: ['pixiv', 'twitter'],
   };
 
   isNew.value = true;
 }
 
 function edit(w: Watch) {
-  editing.value = { ...w, pixiv_tags: [...w.pixiv_tags], match_terms: [...w.match_terms] };
+  editing.value = {
+    ...w,
+    pixiv_tags: [...w.pixiv_tags],
+    match_terms: [...w.match_terms],
+    sources: [...(w.sources ?? ['pixiv', 'twitter'])],
+  };
+
   isNew.value = false;
 }
 
@@ -69,6 +76,7 @@ async function run(slug?: string) {
         <thead>
           <tr>
             <th>{{ $t('crawl.table.character') }}</th>
+            <th>{{ $t('crawl.table.sources') }}</th>
             <th>{{ $t('crawl.table.pixivTags') }}</th>
             <th>{{ $t('crawl.table.matchTerms') }}</th>
             <th>{{ $t('crawl.table.bookmarks') }}</th>
@@ -82,6 +90,18 @@ async function run(slug?: string) {
             <td>
               <b>{{ w.label || w.slug }}</b>
               <div class="kv mono">{{ w.slug }}</div>
+            </td>
+            <td style="white-space: nowrap">
+              <span
+                class="chip"
+                :class="w.sources.includes('pixiv') ? 'on' : 'off'"
+                style="margin-right: 4px"
+              >
+                {{ $t('crawl.table.sourcePixiv') }}
+              </span>
+              <span class="chip" :class="w.sources.includes('twitter') ? 'on' : 'off'">
+                {{ $t('crawl.table.sourceX') }}
+              </span>
             </td>
             <td>
               <span v-for="tag in w.pixiv_tags" :key="tag" class="chip jp" style="margin-right: 4px">

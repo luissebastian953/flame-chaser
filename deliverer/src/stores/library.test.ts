@@ -10,6 +10,7 @@ function watch(slug: string, post_count?: number): Watch {
     slug,
     label: slug,
     pixiv_tags: [],
+    sources: ['pixiv', 'twitter'],
     match_terms: [],
     min_bookmarks: 0,
     include_r18: false,

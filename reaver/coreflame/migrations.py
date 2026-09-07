@@ -272,3 +272,12 @@ CREATE TABLE IF NOT EXISTS job_log (
     PRIMARY KEY (job_id, seq)
 );
 """
+
+
+# ---------------------------------------------------------------- v4
+@migration(4, "watch_sources")
+def _v4() -> str:
+    # per-watch source selection; existing watches keep crawling both
+    return """
+ALTER TABLE watches ADD COLUMN sources TEXT NOT NULL DEFAULT '["pixiv","twitter"]';
+"""

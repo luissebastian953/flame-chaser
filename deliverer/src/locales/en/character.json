@@ -71,7 +71,14 @@
   "errors": {
     "name": "a display name is what the gallery shows",
     "slug": "slug: lowercase letters, digits, dashes",
-    "noTags": "at least one pixiv tag: without it there is no discovery source",
-    "allFullwidth": "every tag uses fullwidth（）— none will match"
+    "noTags": "at least one pixiv tag: without it there is no discovery source (or untick pixiv)",
+    "allFullwidth": "every tag uses fullwidth（）— none will match",
+    "noSource": "tick at least one source — pixiv, X, or both",
+    "noTerms": "X needs at least one match term when pixiv is off — there is nothing else to filter timelines by"
+  },
+  "sources": {
+    "pixiv": "crawl pixiv",
+    "x": "crawl X",
+    "off": "off — this source is skipped for this character"
   }
 }

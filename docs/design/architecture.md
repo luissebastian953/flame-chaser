@@ -731,6 +731,8 @@ POST   /net/diagnose?host=           → {host, verdict, advice, steps, system_i
 ```
 GET    /watches                      → [{slug,label,pixiv_tags,match_terms,
                                          min_bookmarks,include_r18,
+                                         sources:["pixiv","twitter"],  -- per-watch;
+                                           poll skips an unticked source
                                          post_count,image_count,last_polled_at,
                                          cover_sha}]
 POST   /watches                      ← {slug,label,pixiv_tags,match_terms,...}

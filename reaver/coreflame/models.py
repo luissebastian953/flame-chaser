@@ -19,6 +19,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Source = Literal["pixiv", "twitter"]
+ALL_SOURCES: tuple[Source, ...] = ("pixiv", "twitter")
 
 
 def utcnow() -> datetime:
@@ -172,6 +173,23 @@ class Watch(BaseModel):
     match_terms: list[str] = Field(default_factory=list)  # X text matching
     min_bookmarks: int = Field(default=0, ge=0)
     include_r18: bool = False
+    # which sources this character is crawled from; both by default. pixiv
+    # discovers, X only filters the timelines of artists already found, so an
+    # X-only watch matches against whoever the other watches have surfaced.
+    sources: list[Source] = Field(default_factory=lambda: list(ALL_SOURCES))
+
+    @field_validator("sources", mode="before")
+    @classmethod
+    def _sources(cls, v: Any) -> list[Source]:
+        if v is None:
+            return list(ALL_SOURCES)
+        out = [s for s in ALL_SOURCES if s in (v or [])]
+        if not out:
+            raise ValueError("a watch needs at least one source: pixiv, twitter")
+        return out
+
+    def wants(self, source: Source) -> bool:
+        return source in self.sources
 
     @field_validator("pixiv_tags", "match_terms", mode="before")
     @classmethod

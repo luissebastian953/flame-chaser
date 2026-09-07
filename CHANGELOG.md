@@ -12,6 +12,7 @@ person using the app, not for git log.
 - Added: Settings › Theme (background colour, plate opacity and blur, cut corners)
 - Added: Shutdown button in the rail (desktop)
 - Added: Settings › Language — interface language or follow the system, translation coverage, and number/date/time/file-size formats with a live preview
+- Added: per-character source checkboxes (pixiv, X, or both) in the character form; the crawl skips whatever is unticked
 - Changed: cyber build design — Chakra Petch, magenta ember, square plates by default
 - Added: language setting (English; Japanese, Indonesian, Chinese and Filipino planned)
 - Added: by-character folders are now written during download (hardlinks where the drive allows)

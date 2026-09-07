@@ -61,12 +61,13 @@ class Store:
             if w.include_r18 and not old["include_r18"]:
                 reopened += self.seen.reopen_skipped("pixiv", SkipReason.R18_EXCLUDED)
         self.conn.execute(
-            """INSERT INTO watches(slug,label,pixiv_tags,match_terms,min_bookmarks,include_r18)
-               VALUES(?,?,?,?,?,?)
+            """INSERT INTO watches(slug,label,pixiv_tags,match_terms,min_bookmarks,include_r18,sources)
+               VALUES(?,?,?,?,?,?,?)
                ON CONFLICT(slug) DO UPDATE SET
                  label=excluded.label, pixiv_tags=excluded.pixiv_tags,
                  match_terms=excluded.match_terms,
-                 min_bookmarks=excluded.min_bookmarks, include_r18=excluded.include_r18""",
+                 min_bookmarks=excluded.min_bookmarks, include_r18=excluded.include_r18,
+                 sources=excluded.sources""",
             (
                 w.slug,
                 w.label,
@@ -74,6 +75,7 @@ class Store:
                 json.dumps(w.match_terms, ensure_ascii=False),
                 w.min_bookmarks,
                 int(w.include_r18),
+                json.dumps(w.sources),
             ),
         )
         return reopened
@@ -88,6 +90,7 @@ class Store:
                 match_terms=json.loads(r["match_terms"]),
                 min_bookmarks=r["min_bookmarks"],
                 include_r18=bool(r["include_r18"]),
+                sources=json.loads(r["sources"]),
             )
             for r in rows
         ]

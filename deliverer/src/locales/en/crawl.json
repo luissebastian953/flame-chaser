@@ -8,6 +8,9 @@
   "table": {
     "heading": "Watched characters",
     "character": "Character",
+    "sources": "Sources",
+    "sourcePixiv": "pixiv",
+    "sourceX": "X",
     "pixivTags": "pixiv tags",
     "matchTerms": "X match terms",
     "bookmarks": "Bookmarks ≥",

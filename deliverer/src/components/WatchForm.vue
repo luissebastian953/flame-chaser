@@ -5,7 +5,7 @@
  * the daemon. The slug is derived from the name and frozen after the first
  * save: folder names and post_watches rows key off it.
  */
-import type { ProbeResult, Watch } from '@/lib/types';
+import type { ProbeResult, Source, Watch } from '@/lib/types';
 
 const props = defineProps<{ watch: Watch; isNew: boolean }>();
 const emit = defineEmits<{ save: [w: Watch, run: boolean]; close: [] }>();
@@ -26,7 +26,18 @@ const w = reactive<Watch>({
   ...props.watch,
   pixiv_tags: [...props.watch.pixiv_tags],
   match_terms: [...props.watch.match_terms],
+  sources: [...(props.watch.sources ?? ['pixiv', 'twitter'])],
 });
+
+// ---- sources: which of pixiv / X this character is crawled from ------------
+const uses = (s: Source) => w.sources.includes(s);
+
+function setSource(s: Source, on: boolean | 'indeterminate') {
+  const next = w.sources.filter((x) => x !== s);
+  if (on === true) next.push(s);
+  // keep the canonical order so the API and the table agree
+  w.sources = (['pixiv', 'twitter'] as Source[]).filter((x) => next.includes(x));
+}
 
 const newTag = ref('');
 const newTerm = ref('');
@@ -67,7 +78,7 @@ const tagStatus = (t: string) => probe.value?.tags.find((p) => p.tag === t) ?? n
 
 // ---- probe (debounced) -----------------------------------------------------
 async function runProbe() {
-  if (src.status && !src.pixivOk) {
+  if (!uses('pixiv') || (src.status && !src.pixivOk)) {
     probe.value = null;
     return;
   } // badge explains; no request spent
@@ -93,7 +104,7 @@ async function runProbe() {
 }
 
 watch(
-  () => [w.pixiv_tags.join('\u0000'), w.include_r18],
+  () => [w.pixiv_tags.join('\u0000'), w.include_r18, uses('pixiv')],
   () => {
     if (timer) clearTimeout(timer);
     timer = setTimeout(runProbe, 350);
@@ -149,19 +160,35 @@ function validate(): boolean {
     err.value = t('character.errors.slug');
     return false;
   }
-  if (!w.pixiv_tags.length) {
-    err.value = t('character.errors.noTags');
+  if (!w.sources.length) {
+    err.value = t('character.errors.noSource');
     return false;
   }
-  if (w.pixiv_tags.every((t) => FULLWIDTH.test(t))) {
-    err.value = t('character.errors.allFullwidth');
+  if (uses('pixiv')) {
+    if (!w.pixiv_tags.length) {
+      err.value = t('character.errors.noTags');
+      return false;
+    }
+    if (w.pixiv_tags.every((t) => FULLWIDTH.test(t))) {
+      err.value = t('character.errors.allFullwidth');
+      return false;
+    }
+  } else if (uses('twitter') && !w.match_terms.length) {
+    // pixiv-off: the slug fallback in the matcher is too loose to be the only filter
+    err.value = t('character.errors.noTerms');
     return false;
   }
   return true;
 }
 
 function submit(run: boolean) {
-  if (validate()) emit('save', { ...w, pixiv_tags: [...w.pixiv_tags], match_terms: [...w.match_terms] }, run);
+  if (validate()) {
+    emit(
+      'save',
+      { ...w, pixiv_tags: [...w.pixiv_tags], match_terms: [...w.match_terms], sources: [...w.sources] },
+      run,
+    );
+  }
 }
 </script>
 
@@ -206,17 +233,32 @@ function submit(run: boolean) {
             </div>
           </div>
 
-          <div class="sec">
+          <div class="sec" :class="{ off: !uses('pixiv') }">
             <div class="sec-h">
               <span class="n">1</span>
               <b>{{ $t('character.tags.heading') }}</b>
               <AuthBadge
+                v-if="uses('pixiv')"
                 :state="src.pixivOk ? 'on' : src.status?.pixiv.verified === false ? 'expired' : 'off'"
                 @connect="connect('pixiv')"
               />
+              <span class="spacer" />
+              <label class="src-toggle">
+                <CheckboxRoot
+                  id="src-pixiv"
+                  :model-value="uses('pixiv')"
+                  class="rk-checkbox"
+                  @update:model-value="(v) => setSource('pixiv', v)"
+                >
+                  <CheckboxIndicator />
+                </CheckboxRoot>
+                <span class="text-small">{{ $t('character.sources.pixiv') }}</span>
+              </label>
             </div>
-            <div class="hint">{{ $t('character.tags.hint') }}</div>
-            <div class="rows">
+            <div class="hint">
+              {{ uses('pixiv') ? $t('character.tags.hint') : $t('character.sources.off') }}
+            </div>
+            <div v-if="uses('pixiv')" class="rows">
               <div
                 v-for="(tag, i) in w.pixiv_tags"
                 :key="tag"
@@ -270,14 +312,32 @@ function submit(run: boolean) {
             </div>
           </div>
 
-          <div class="sec">
+          <div class="sec" :class="{ off: !uses('twitter') }">
             <div class="sec-h">
               <span class="n">2</span>
               <b>{{ $t('character.terms.heading') }}</b>
-              <AuthBadge :state="src.twitterOk ? 'on' : 'off'" @connect="connect('twitter')" />
+              <AuthBadge
+                v-if="uses('twitter')"
+                :state="src.twitterOk ? 'on' : 'off'"
+                @connect="connect('twitter')"
+              />
+              <span class="spacer" />
+              <label class="src-toggle">
+                <CheckboxRoot
+                  id="src-twitter"
+                  :model-value="uses('twitter')"
+                  class="rk-checkbox"
+                  @update:model-value="(v) => setSource('twitter', v)"
+                >
+                  <CheckboxIndicator />
+                </CheckboxRoot>
+                <span class="text-small">{{ $t('character.sources.x') }}</span>
+              </label>
             </div>
-            <div class="hint">{{ $t('character.terms.hint') }}</div>
-            <div class="chips">
+            <div class="hint">
+              {{ uses('twitter') ? $t('character.terms.hint') : $t('character.sources.off') }}
+            </div>
+            <div v-if="uses('twitter')" class="chips">
               <span v-for="(term, i) in w.match_terms" :key="term" class="chip mono">
                 {{ term }}
                 <button
@@ -462,6 +522,23 @@ function submit(run: boolean) {
   align-items: center;
   gap: 10px;
   font-size: 13px;
+}
+.sec-h .spacer {
+  flex: 1;
+}
+.src-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.sec.off > :not(.sec-h) {
+  opacity: 0.55;
+}
+.sec.off .n {
+  color: var(--dim);
+  border-color: var(--line);
 }
 .sec-h .n {
   width: 20px;

@@ -105,11 +105,15 @@ def poll_pixiv(
 ) -> RunStats:
     st = RunStats()
     c = _ctx(ctx)
+    ws = [w for w in (watches or store.watches()) if w.wants("pixiv")]
+    if not ws:
+        st.notes.append("pixiv: no watch has pixiv enabled -- nothing to discover")
+        return st
     if not pixiv.authed:
         # pixiv's search endpoint answers 401 anonymously; say it once, up front
         raise RuntimeError("pixiv: not signed in -- connect it in Settings > Accounts")
     c.stage("discover", source="pixiv")
-    for w in watches or store.watches():
+    for w in ws:
         for tag in w.pixiv_tags:
             c.check()
             feed = f"tag:{tag}"
@@ -207,7 +211,10 @@ def poll_twitter(
 ) -> RunStats:
     st = RunStats()
     c = _ctx(ctx)
-    ws = watches or store.watches()
+    ws = [w for w in (watches or store.watches()) if w.wants("twitter")]
+    if not ws:
+        st.notes.append("X: no watch has X enabled -- timelines skipped")
+        return st
     handles = store.followed_handles()
     c.stage("discover", source="twitter", handles=len(handles))
     if not handles:
