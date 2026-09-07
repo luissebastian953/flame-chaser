@@ -33,7 +33,9 @@ VITE_DAEMON_TOKEN=$(printf '%s' "${LINE#DAWNMAKER_READY }" | python -c 'import j
 cd /app
 # node_modules are container-only volumes; sync them to pnpm-lock.yaml every
 # start so deps added on the host appear here. A no-op when nothing changed.
-pnpm install --frozen-lockfile --prefer-offline
+# stdin is /dev/null on purpose: compose gives this a tty, so any pnpm prompt
+# would sit here forever and Vite would never start. Fail loudly instead.
+pnpm install --frozen-lockfile --prefer-offline < /dev/null
 echo "curio: webview http://localhost:5173  ·  daemon ${VITE_DAEMON_URL}  ·  data ${REAVER_HOME}" >&2
 cd /app/deliverer
 exec pnpm exec vite --host 0.0.0.0 --port 5173 --strictPort

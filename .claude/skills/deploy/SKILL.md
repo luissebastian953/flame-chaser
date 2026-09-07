@@ -88,6 +88,27 @@ bind-mounted at `/app`; `node_modules` are container-only volumes.
   value overrides it. Never put a value in `docker-compose.yml`.
 - The Tauri window cannot run in Docker; that is `pnpm tauri dev` on the host.
 
+### `localhost:5173` refuses the connection while `docker compose ps` says Up
+
+The container being up means dawnmaker is up, not Vite. `entrypoint.sh` starts
+the daemon *first*, so port 8765 answering (`401 bad token`) while 5173 gives
+"empty reply" means the entrypoint died or stalled between the two — check
+`docker compose logs dev` for the `curio: webview …` line; no line, no Vite.
+
+The stall to know about is `pnpm install` asking *"The modules directories will
+be removed and reinstalled from scratch. Proceed?"* — with a tty and no stdin
+that prompt waits forever. It appears when the `storeDir` recorded in
+`/app/node_modules/.modules.yaml` (written at image build, `/pnpm/store/v10`)
+no longer matches the store pnpm resolves at run time: `/app` is a bind mount
+from the host, so pnpm treats the image's `/pnpm` as another filesystem and
+relocates the store to `/app/.pnpm-store`, i.e. into the host repo. Compose
+pins it back with `npm_config_store_dir=/pnpm/store` on a `pnpm_store` volume,
+`npm_config_confirm_modules_purge=false`, and the entrypoint runs the install
+with stdin on `/dev/null` so a prompt fails loudly instead of hanging. If you
+change the store path, the node_modules volumes or the Dockerfile's install
+step, re-check that `pnpm store path` inside the container still matches
+`.modules.yaml`.
+
 ### Restart, rebuild or recreate?
 
 | You changed | Do |

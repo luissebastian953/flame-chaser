@@ -17,6 +17,15 @@ services:
     environment:
       REAVER_HOME: /data
       DAWNMAKER_PORT: "8765"
+      # pnpm's store, pinned to the path the image already recorded in
+      # node_modules/.modules.yaml. Without an explicit store-dir pnpm sees
+      # /pnpm on a different filesystem from the bind-mounted /app, relocates
+      # the store to /app/.pnpm-store (into the host repo), then asks to purge
+      # node_modules because the recorded storeDir no longer matches -- a
+      # prompt nothing can answer, so the entrypoint hangs before Vite starts.
+      npm_config_store_dir: /pnpm/store
+      # If the modules dir ever does need purging, reinstall instead of asking.
+      npm_config_confirm_modules_purge: "false"
       # Secrets: put them in .env next to this file (gitignored), never here.
       PIXIV_PHPSESSID: ${PIXIV_PHPSESSID:-}
       REAVER_PROXY: ${REAVER_PROXY:-}
@@ -27,6 +36,7 @@ services:
       - .:/app
       - root_node_modules:/app/node_modules
       - deliverer_node_modules:/app/deliverer/node_modules
+      - pnpm_store:/pnpm/store
       - /app/deliverer/src-tauri/target
       # db + blobs + thumbs. Bind-mount a host folder so the archive is yours,
       # not the container's. Hardlinks (by-character/) work inside one mount.
@@ -37,3 +47,4 @@ services:
 volumes:
   root_node_modules:
   deliverer_node_modules:
+  pnpm_store:
