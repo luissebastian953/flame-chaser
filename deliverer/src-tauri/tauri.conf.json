@@ -1,0 +1,81 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Curio",
+  "version": "0.1.0",
+  "identifier": "dev.flamechaser.deliverer",
+  "build": {
+    "beforeDevCommand": "pnpm run dev",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeBuildCommand": "pnpm run build && ./scripts/build-sidecar.sh",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Curio",
+        "width": 1280,
+        "height": 840,
+        "minWidth": 960,
+        "label": "main",
+        "minHeight": 640
+      }
+    ],
+    "security": {
+      "//": "CSP is OFF until set. Once set, loopback fetch and <img src> are",
+      "//2": "blocked with no useful error -- the gallery just goes blank.",
+      "//3": "The sidecar port is ephemeral, so the port must be wildcarded.",
+      "csp": {
+        "default-src": "'self'",
+        "connect-src": "'self' ipc: http://ipc.localhost http://127.0.0.1:*",
+        "img-src": "'self' data: blob: http://127.0.0.1:*",
+        "style-src": "'self' 'unsafe-inline'"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "//": "resources, NOT externalBin: externalBin takes one file per target",
+    "//2": "triple, forcing PyInstaller --onefile (re-extracts the runtime on",
+    "//3": "every launch, AV-flagged on Windows, not replaced by the updater).",
+    "resources": {
+      "resources/sidecar/": "sidecar/"
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": true,
+    "//4": "targets: CI passes --bundles per OS (dmg / nsis / appimage,deb); 'all' is for local builds",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English", "Japanese"]
+      }
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": false
+      },
+      "deb": {
+        "depends": []
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "//": "pubkey: `npm run tauri signer generate -- -w ~/.tauri/curio.key`; paste the PUBLIC key. Private key + password -> CI secrets only. Losing it strands every install (see cut-release skill).",
+      "pubkey": "REPLACE_WITH_PUBLIC_KEY",
+      "endpoints": ["https://github.com/luissebastian953/flame-chaser/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

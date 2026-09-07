@@ -1,0 +1,19 @@
+# Line endings: LF in the repo, whatever the OS wants on checkout.
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.rs text eol=lf
+
+# Binaries: no diff, no merge, no line-ending conversion.
+*.png binary
+*.icns binary
+*.ico binary
+*.jpg binary
+*.webp binary
+*.woff2 binary
+
+# Generated files: collapse in diffs and PR views.
+pnpm-lock.yaml linguist-generated=true
+deliverer/src/auto-imports.d.ts linguist-generated=true
+deliverer/src/components.d.ts linguist-generated=true
+deliverer/.eslintrc-auto-import.json linguist-generated=true

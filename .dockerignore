@@ -1,0 +1,14 @@
+**/node_modules
+_to_delete
+**/.venv
+**/dist
+**/__pycache__
+**/.mypy_cache
+**/.ruff_cache
+deliverer/src-tauri/target
+deliverer/src-tauri/resources
+_to_delete
+data
+docs
+.git
+.pnpm-store

@@ -1,0 +1,121 @@
+# Tag → installers for every platform → GitHub Release with latest.json.
+#   scripts/bump-version.sh 0.2.0 && git commit -am "chore(release): v0.2.0"
+#   git tag v0.2.0 && git push origin master --tags
+#
+# Order inside each job is the whole point (see .claude/skills/cut-release):
+# the Python sidecar is built BEFORE tauri-action, so the bundle carries the
+# daemon from this commit -- not whatever was left in resources/ locally.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/check-version.sh
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e "reaver[daemon,dev]"
+      - run: cd reaver && ./check.sh
+      - uses: pnpm/action-setup@v4          # version from package.json#packageManager
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile && pnpm --filter deliverer run check
+
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bundles: dmg
+          - os: macos-13            # last Intel runner
+            target: x86_64-apple-darwin
+            bundles: dmg
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+          - os: ubuntu-22.04        # oldest glibc we ship; AppImage runs on newer
+            target: x86_64-unknown-linux-gnu
+            bundles: appimage,deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: "${{ matrix.target }}" }
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: deliverer/src-tauri }
+
+      - name: Linux webkit deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Sidecar (dawnmaker, PyInstaller --onedir)
+        # BEFORE tauri-action. Every time.
+        run: |
+          pip install -e "reaver[daemon]" pyinstaller
+          pnpm install --frozen-lockfile
+          cd deliverer && bash scripts/build-sidecar.sh
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        shell: bash
+
+      - name: Smoke the sidecar we just built
+        # A bundle that reports the wrong version is the bug this job exists to prevent.
+        run: |
+          BIN=deliverer/src-tauri/resources/sidecar/dawnmaker/dawnmaker
+          [ "${{ runner.os }}" = "Windows" ] && BIN="$BIN.exe"
+          "$BIN" --help | head -1
+        shell: bash
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS notarization (optional until you have a Developer ID)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: deliverer
+          tauriScript: pnpm tauri
+          tagName: v__VERSION__
+          releaseName: "Curio v__VERSION__"
+          releaseBody: "See CHANGELOG.md. Installers below; the app updates itself from here on."
+          releaseDraft: true          # publish by hand after the verification list in cut-release
+          prerelease: false
+          includeUpdaterJson: true    # latest.json = the update endpoint
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+  linux-installer:
+    # The one-line install for Linux: downloads the AppImage for the arch.
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: scripts/install-linux.sh

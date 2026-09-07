@@ -1,0 +1,45 @@
+{
+  "gallery": {
+    "title": "Gallery",
+    "sub": "{posts} across {characters}",
+    "postCount": "0 posts | 1 post | {n} posts",
+    "characterCount": "0 characters | 1 character | {n} characters",
+    "noImages": "no images yet",
+    "posts": "posts | post | posts",
+    "latest": "· latest {date}",
+    "empty": "Add a character in Crawl to start."
+  },
+  "detail": {
+    "back": "Back to gallery",
+    "images": "0 images | 1 image | {n} images",
+    "imagesMore": "{n}+ images",
+    "observedTags": "Observed tags",
+    "share": "{n}%",
+    "state": {
+      "watched": "watched",
+      "suggested": "suggested"
+    },
+    "watch": "+ watch",
+    "ignore": "ignore",
+    "end": "end",
+    "loading": "loading…"
+  },
+  "aside": {
+    "title": "Image detail",
+    "pages": "0 pages | 1 page | {n} pages",
+    "close": "Close",
+    "untitled": "(untitled)",
+    "source": {
+      "pixiv": "pixiv",
+      "twitter": "X"
+    },
+    "gone": "removed at source — kept here, never re-fetched",
+    "dimensions": "dimensions",
+    "file": "file",
+    "fileSize": "{n} MB",
+    "bookmarks": "bookmarks",
+    "hash": "sha256",
+    "sameImageOn": "Same image on {source}",
+    "openOn": "Open on {source}"
+  }
+}

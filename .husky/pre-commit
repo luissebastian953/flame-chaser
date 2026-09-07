@@ -1,0 +1,5 @@
+# ruff comes from the reaver venv or a uv tool install, the same two places
+# check.sh looks; prettier/eslint are resolved per-workspace in .lintstagedrc.json.
+export PATH="$PWD/reaver/.venv/bin:$HOME/.local/bin:$PATH"
+scripts/check-staged-size.sh
+pnpm exec lint-staged

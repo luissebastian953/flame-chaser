@@ -1,0 +1,24 @@
+{
+  "title": "Crawl configuration",
+  "subtitle": "{characters} characters watched · {tags} pixiv tags",
+  "addCharacter": "+ Add character",
+  "runAll": "▶ Run all now",
+  "edit": "Edit",
+  "run": "▶ Run",
+  "table": {
+    "heading": "Watched characters",
+    "character": "Character",
+    "pixivTags": "pixiv tags",
+    "matchTerms": "X match terms",
+    "bookmarks": "Bookmarks ≥",
+    "r18": "R-18",
+    "posts": "Posts",
+    "r18On": "on",
+    "r18Off": "—"
+  },
+  "empty": "No characters yet. Discovery starts from a pixiv tag.",
+  "status": {
+    "saved": "saved",
+    "reopened": "saved · reopened {n} previously skipped artworks"
+  }
+}

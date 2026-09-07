@@ -1,0 +1,97 @@
+{
+  "title": "Settings",
+  "subtitle": "webview theme · daemon config",
+  "tabs": {
+    "accounts": "Accounts",
+    "updates": "Updates",
+    "theme": "Theme",
+    "storage": "Storage",
+    "network": "Network",
+    "duplicates": "Duplicates",
+    "about": "About"
+  },
+  "language": {
+    "label": "Language",
+    "hint": "English is complete. Japanese, Indonesian, Chinese and Filipino are on the way; anything not yet translated shows in English.",
+    "soon": "{name} — coming soon"
+  },
+  "status": {
+    "saving": "saving…",
+    "savedNextJob": "saved · applies to the next job",
+    "saved": "saved",
+    "loading": "loading…"
+  },
+  "accounts": {
+    "title": "Accounts",
+    "local": "your login stays on this computer",
+    "intro": "Curio browses pixiv and X as you, the way your browser does. Signing in happens on the site's own page — Curio never sees your password. pixiv is required for finding artworks; X is optional and adds the artists' own posts.",
+    "skipped": "You skipped this at first launch; signing in here does the same thing."
+  },
+  "theme": {
+    "title": "Theme",
+    "reset": "Reset",
+    "background": "Background",
+    "backgroundHint": "Neutrals stay hue-locked to this colour; artwork tiles are never tinted.",
+    "presets": {
+      "ice": "ice",
+      "void": "void",
+      "ember": "ember",
+      "moss": "moss",
+      "wine": "wine",
+      "paper": "paper"
+    },
+    "plateOpacity": "Plate opacity",
+    "plateOpacityAria": "plate opacity",
+    "plateBlur": "Plate blur",
+    "plateBlurAria": "plate blur",
+    "plateBlurHint": "Blur only matters when opacity < 100%; it costs GPU on large galleries.",
+    "gridSubstrate": "Grid substrate",
+    "gridAria": "grid opacity",
+    "percent": "{n}%",
+    "px": "{n}px",
+    "scanlines": "Scanline plates",
+    "cutCorners": "Cut panel corners",
+    "cutCornersHint": "square by default; polygonal plates when on"
+  },
+  "storage": {
+    "title": "Storage",
+    "library": "Library",
+    "database": "Database",
+    "schema": "Schema",
+    "schemaValue": "v{n}",
+    "layout": "Layout",
+    "layoutValue": "blobs/ (content-addressed) · by-character/ (hardlinks) · thumbs/ (WebP 400px)",
+    "hint": "The database never lives inside the library folder — moving the library to a synced drive is safe; the db is not."
+  },
+  "network": {
+    "title": "Network",
+    "save": "Save",
+    "resolver": "Resolver",
+    "resolverSystem": "system — OS DNS",
+    "resolverDoh": "doh — DNS over HTTPS (1.1.1.1 / 8.8.8.8 by IP)",
+    "resolverHint": "Layer 1 of the bypass: names resolve over HTTPS to an IP endpoint, so ISP DNS hijack is skipped. TLS still verifies the real hostname.",
+    "proxy": "Proxy",
+    "proxyPlaceholder": "socks5://127.0.0.1:1080",
+    "proxyHint": "Layer 2, for SNI/DPI blocks. Also passed to gallery-dl. Certificate verification is never disabled — a proxy that needs that is an interceptor.",
+    "pixivRate": "pixiv rate",
+    "pixivRateAria": "pixiv rate",
+    "rateValue": "{n} req/s",
+    "rateHint": "Conservative on purpose — this is a private archive, not a mirror."
+  },
+  "duplicates": {
+    "title": "Duplicates",
+    "save": "Save",
+    "distance": "dHash distance",
+    "distanceValue": "≤ {n}",
+    "distanceAria": "hamming threshold",
+    "hint": "Exact sha256 always dedupes. Near-duplicates compare within the same artist only — cross-artist matches are far more often two people drawing the same pose than one repost. 6 is conservative; above 10 starts merging variants."
+  },
+  "about": {
+    "title": "About",
+    "name": "Curio",
+    "version": "Curio {version} · build {build} · crawler v{crawler}",
+    "blurb": "A private archive. Attribution is kept on every record; nothing here is meant to be redistributed.",
+    "pixiv": "pixiv",
+    "repository": "repository"
+  }
+}

@@ -1,0 +1,4 @@
+# see the repo-root .gitignore; this file exists because `tauri init` expects one
+target/
+gen/schemas/
+resources/sidecar/

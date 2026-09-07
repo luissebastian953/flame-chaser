@@ -1,0 +1,19 @@
+{
+  "brand": { "name": "Curio", "tagline": "local archive" },
+  "nav": { "crawl": "Crawl", "pipeline": "Pipeline", "gallery": "Gallery", "settings": "Settings" },
+  "shutdown": { "label": "Shutdown app", "armed": "Crawl running — click again" },
+  "status": {
+    "daemon": "dawnmaker v{version}",
+    "unreachable": "daemon unreachable",
+    "connecting": "connecting…",
+    "idle": "idle",
+    "crawling": "crawling",
+    "pixiv": "pixiv {state}",
+    "x": "X {state}",
+    "connected": "connected",
+    "checking": "checking…",
+    "expired": "expired",
+    "notLinked": "not linked"
+  },
+  "connectingDaemon": "connecting to dawnmaker…"
+}

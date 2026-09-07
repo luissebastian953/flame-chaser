@@ -1,0 +1,62 @@
+[project]
+name = "reaver"                 # umbrella project; packages are coreflame + dawnmaker
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["httpx>=0.27", "Pillow>=10", "gallery-dl>=1.27", "pydantic>=2.7", "glom>=24"]
+
+[project.optional-dependencies]
+daemon = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
+dev = ["ruff>=0.16", "mypy>=2.3"]
+
+[project.scripts]
+coreflame = "coreflame.cli:main"
+dawnmaker = "dawnmaker.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["coreflame*", "dawnmaker*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["."]
+extend-exclude = ["_to_delete"]
+
+[tool.ruff.lint]
+# E/F  pycodestyle + pyflakes     I  import order     UP  pyupgrade
+# B    bugbear (real bugs)        SIM simplify        RUF ruff-specific
+# S    bandit security -- we WANT S501 (verify=False) to be a hard error
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "S", "T20", "PL"]
+ignore = [
+  "E501",    # line length: format handles it; SQL strings are long on purpose
+  "S101",    # assert: used deliberately for invariants in a personal tool
+  "S608",    # SQL built from f-strings: every case is a constant clause, reviewed
+  "S324",    # sha256 for content addressing is not a security hash
+  "PLR0913", "PLR0912", "PLR0915", "PLR2004",   # arg/branch/statement/magic-number counts
+  "T201",    # print: the CLI prints
+  "RUF001", "RUF002", "RUF003",  # ambiguous unicode: the corpus is Japanese
+  "B008",    # function call in default arg (pydantic Field)
+  "UP017",   # datetime.UTC is 3.11+; timezone.utc keeps 3.10
+  "UP042",   # StrEnum is 3.11+; (str, Enum) keeps 3.10
+  "PLC0415", # import-outside-top-level: lazy imports in CLI commands are deliberate
+  "PLR0917", # positional-arg counts
+  "S311",    # random() for backoff jitter is not cryptographic
+  "S603",    # subprocess without shell=True is the SAFE form; the rule is inverted here
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "PL", "B011", "E402"]     # tests assert freely, import after sys.path
+"coreflame/net.py" = ["S"]                   # names verify=False only to refuse it
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["coreflame", "dawnmaker"]
+strict_optional = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true       # glom, gallery-dl have no stubs

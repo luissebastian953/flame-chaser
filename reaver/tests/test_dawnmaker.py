@@ -1,0 +1,356 @@
+"""The daemon's HTTP surface, in-process via TestClient. Offline."""
+
+from __future__ import annotations
+
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from fastapi.testclient import TestClient
+from test_jobs import make_runner
+from test_smoke import _img, fake_pixiv
+
+from coreflame.db import Store
+from coreflame.jobs import JobRunner
+from coreflame.models import IllustRecord, Watch
+from coreflame.thumbs import ThumbStore
+from dawnmaker.app import Heartbeat, State, create_app
+from dawnmaker.events import EventHub
+
+TOKEN = "t0k3n"
+PORT = 5555
+
+
+def boot(tmp: Path) -> tuple[TestClient, Store, State]:
+    runner, cfg = make_runner(tmp)
+    hub = EventHub()
+    runner.subscribers.append(hub.from_job_event)
+    state = State(cfg, runner, hub, TOKEN, PORT)
+    app = create_app(state)
+    client = TestClient(
+        app, base_url=f"http://127.0.0.1:{PORT}", headers={"Authorization": f"Bearer {TOKEN}"}
+    )
+    return client, Store(cfg.db_path), state
+
+
+def test_auth_layers(tmp: Path) -> None:
+    client, _, _ = boot(tmp / "a")
+    assert client.get("/api/health").status_code == 200
+    assert client.get("/api/health", headers={"Authorization": "Bearer nope"}).status_code == 401
+    assert client.get("/api/health", headers={"Host": "evil.example"}).status_code == 421
+    assert client.get("/api/health", headers={"Origin": "http://evil.example"}).status_code == 403
+    r = client.get("/api/health", headers={"Origin": "tauri://localhost"})
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] == "tauri://localhost"
+    # preflight: no token yet, must still be answered -- but only for an allowed origin
+    pre = client.options(
+        "/api/health",
+        headers={
+            "Origin": "tauri://localhost",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    assert pre.status_code == 204
+    assert "authorization" in pre.headers["access-control-allow-headers"].lower()
+    assert (
+        client.options("/api/health", headers={"Origin": "http://evil.example"}).status_code == 403
+    )
+    # vite's origin is only an origin in --dev
+    assert client.get("/api/health", headers={"Origin": "http://localhost:5173"}).status_code == 403
+    # EventSource can't set headers: token as a query param, on /events ONLY
+    anon = TestClient(client.app, base_url=f"http://127.0.0.1:{PORT}")
+    assert anon.get(f"/api/health?token={TOKEN}").status_code == 401
+    assert anon.get(f"/api/events?live=false&token={TOKEN}").status_code == 200
+    assert (
+        anon.get(f"/api/media/{'0' * 64}/thumb?token={TOKEN}").status_code == 404
+    )  # authed, no such thumb
+    assert anon.get(f"/api/media/{'0' * 64}/thumb").status_code == 401
+    print("  auth layers:          ok (token / host / origin; ?token= only on /events + /media)")
+
+
+def test_watches_and_jobs_api(tmp: Path) -> None:
+    client, store, state = boot(tmp / "b")
+    r = client.post(
+        "/api/watches", json={"slug": "ganyu", "pixiv_tags": ["甘雨"], "min_bookmarks": 500}
+    )
+    assert r.status_code == 201 and r.json()["reopened"] == 0
+    r = client.patch(
+        "/api/watches/ganyu", json={"slug": "ganyu", "pixiv_tags": ["甘雨"], "min_bookmarks": 100}
+    )
+    assert r.status_code == 200
+    assert client.post("/api/jobs", json={"type": "nope"}).status_code == 400
+    r = client.post(
+        "/api/jobs", json={"type": "poll", "params": {"media": False, "twitter": False}}
+    )
+    assert r.status_code == 202
+    jid = r.json()["job_id"]
+    state.runner.run_pending(store)  # drain synchronously
+    j = client.get(f"/api/jobs/{jid}").json()
+    # min_bookmarks=100 from the PATCH: 1002 (900 bookmarks) kept, 1001 (10) skipped
+    assert j["state"] == "succeeded", j["error"]
+    assert j["counters"]["new_posts"] == 1 and j["counters"]["skipped"] == 1
+    assert len(j["log"]) > 5
+    assert client.get("/api/jobs").json()[0]["id"] == jid
+    assert client.get("/api/health").json()["idle"] is True
+    print("  watches + jobs API:   ok (PATCH applied: 1 kept, 1 skipped; job log via API)")
+
+
+def test_sse_replay_and_live(tmp: Path) -> None:
+    client, store, state = boot(tmp / "c")
+    store.upsert_watch(Watch(slug="ganyu", pixiv_tags=["甘雨"]))
+    JobRunner.submit(store, "poll", {"media": False, "twitter": False, "link": False})
+    state.runner.run_pending(store)
+    last = state.hub.last_id
+    assert last > 5
+    # replay everything after event 3 -- reconnect semantics. live=false ends
+    # the stream after the replay; a real EventSource stays open.
+    r = client.get("/api/events?live=false", headers={"Last-Event-ID": "3"})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
+    got, ids = [], []
+    for line in r.text.splitlines():
+        if line.startswith("id: "):
+            ids.append(int(line[4:]))
+        elif line.startswith("event: "):
+            got.append(line[7:])
+    assert ids[0] == 4 and ids[-1] == last and ids == list(range(4, last + 1))
+    # and the live path: a subscriber registered while streaming gets a fresh publish
+    frames = state.hub.stream(last_id=last, live=True, keepalive=0.2)
+    state.hub.publish("job.log", {"message": "live"})
+    assert "event: job.log" in next(frames)
+    frames.close()
+    assert got[0] in ("job.stage", "job.log", "job.item", "job.progress")
+    assert "job.finished" in got
+    print(
+        f"  SSE replay:           ok (Last-Event-ID 3 -> ids {ids[0]}..{ids[-1]}; types {sorted(set(got))})"
+    )
+
+
+def test_gallery_keyset_and_media(tmp: Path) -> None:
+    client, store, state = boot(tmp / "d")
+    store.upsert_watch(Watch(slug="ganyu", pixiv_tags=["甘雨"]))
+    thumbs = ThumbStore(state.cfg.blob_root.parent / "thumbs")
+    # 7 posts, 2 sharing a posted_at (the keyset tie case), each with a stored image
+    for i in range(7):
+        sha = f"{i:064x}"
+        data = _img(i, (300, 400))
+        rec = IllustRecord(
+            source="pixiv",
+            external_id=str(100 + i),
+            artist_id="a",
+            posted_at=f"2026-08-{20 + (i // 2):02d}T10:00:00+00:00",
+            media=[{"index": 0, "url": f"https://x/{i}.png"}],
+        )
+        store.upsert_post(rec, "ganyu")
+        state.blobs.put(data, "png")
+        import hashlib
+
+        real_sha = hashlib.sha256(data).hexdigest()
+        store.mark_media(
+            "pixiv", str(100 + i), 0, state="stored", sha=real_sha, nbytes=len(data), ext="png"
+        )
+        thumbs.make(real_sha, data)
+    page1 = client.get("/api/gallery/ganyu?limit=3").json()
+    assert len(page1["items"]) == 3 and page1["next_cursor"]
+    page2 = client.get(f"/api/gallery/ganyu?limit=3&cursor={page1['next_cursor']}").json()
+    page3 = client.get(f"/api/gallery/ganyu?limit=3&cursor={page2['next_cursor']}").json()
+    ids = [it["external_id"] for it in page1["items"] + page2["items"] + page3["items"]]
+    assert ids == ["106", "105", "104", "103", "102", "101", "100"] and page3["next_cursor"] is None
+    assert len(set(ids)) == 7  # no dupes, no skips across the tie
+    sha = page1["items"][0]["sha256"]
+    t = client.get(f"/api/media/{sha}/thumb")
+    assert t.status_code == 200 and t.headers["content-type"] == "image/webp"
+    assert "immutable" in t.headers["cache-control"]
+    f = client.get(f"/api/media/{sha}/full")
+    assert f.status_code == 200 and len(f.content) > 100
+    cards = client.get("/api/gallery").json()
+    assert (
+        cards[0]["slug"] == "ganyu" and cards[0]["post_count"] == 7 and cards[0]["cover_sha"] == sha
+    )
+    print(
+        "  gallery keyset:       ok (7 rows / 3 pages, tie on posted_at handled; thumb+full+cover)"
+    )
+
+
+def test_post_detail_links_cross_source(tmp: Path) -> None:
+    client, store, _ = boot(tmp / "e")
+    store.upsert_post(
+        IllustRecord(
+            source="pixiv",
+            external_id="1",
+            artist_id="a",
+            artist_handle="h",
+            permalink="https://www.pixiv.net/artworks/1",
+            media=[{"index": 0, "url": "https://x/a.png"}],
+        )
+    )
+    store.mark_media("pixiv", "1", 0, state="stored", sha="ab" * 32, nbytes=10, ext="png")
+    store.upsert_post(
+        IllustRecord(
+            source="twitter",
+            external_id="9",
+            artist_id="9",
+            artist_handle="h",
+            permalink="https://x.com/h/status/9",
+            media=[{"index": 0, "url": "https://pbs/b.jpg"}],
+        )
+    )
+    store.mark_media(
+        "twitter", "9", 0, state="dupe", sha="cd" * 32, dupe_of="ab" * 32, error="phash d=2"
+    )
+    d = client.get("/api/posts/twitter/9").json()
+    assert (
+        d["linked"]
+        and d["linked"][0]["source"] == "pixiv"
+        and d["linked"][0]["reason"] == "phash d=2"
+    )
+    d2 = client.get("/api/posts/pixiv/1").json()
+    assert d2["linked"] and d2["linked"][0]["source"] == "twitter"
+    print("  post detail links:    ok (X dupe -> pixiv original, and back)")
+
+
+def test_heartbeat_sleep_guard() -> None:
+    hb = Heartbeat(timeout=30, sleep_grace=300)
+    hb.last = time.monotonic() - 31
+    assert hb.expired()  # ordinary silence -> dead
+    hb.last = time.monotonic() - 3600
+    assert not hb.expired()  # laptop wake -> one grace period
+    assert not hb.expired()  # still inside grace
+    hb.last = time.monotonic() - 31
+    assert hb.expired()
+    print("  heartbeat sleep guard: ok (31s silence dies; 1h gap = wake, granted grace)")
+
+
+def test_config_rejects_sync_folder(tmp: Path) -> None:
+    client, _, _ = boot(tmp / "f")
+    r = client.put("/api/config", json={"library_root": "/Users/x/Dropbox/art"})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "sync_folder"
+    assert client.get("/api/config").json()["pixiv_session"] is False  # redacted to bool
+    print("  config guard:         ok (sync folder refused; secrets redacted)")
+
+
+def test_probe_and_preview(tmp: Path) -> None:
+    """The character form's validation: one search page per tag, cached;
+    preview thumbs only for ids a probe returned; fullwidth never spends."""
+    from dawnmaker.probe import Prober
+
+    runner, cfg = make_runner(tmp)
+    fake = fake_pixiv()
+    calls: list[str] = []
+    real_get_json = fake.client.get_json
+
+    def counting(url, **kw):
+        calls.append(url)
+        return real_get_json(url, **kw)
+
+    fake.client.get_json = counting  # type: ignore[assignment]
+    fake.fetch_media = lambda url, referer=None: _img(7, (250, 250))  # type: ignore[method-assign]
+    hub = EventHub()
+    state = State(cfg, runner, hub, TOKEN, PORT, prober=Prober(cfg, pixiv=fake))
+    client = TestClient(
+        create_app(state),
+        base_url=f"http://127.0.0.1:{PORT}",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+
+    r = client.post("/api/pixiv/probe", json={"tags": ["甘雨", "甘雨（原神）"]}).json()
+    good, bad = r["tags"]
+    assert good["ok"] and good["total"] == 2 and good["warning"] is None
+    assert not bad["ok"] and "fullwidth" in bad["warning"]
+    assert len(calls) == 1, "fullwidth tag must not spend a request"
+    assert [p["illust_id"] for p in r["preview"]] == ["1002", "1001"]
+    assert r["estimate"]["artworks"] == 2 and r["estimate"]["seconds"] >= 0
+    assert all(s["tag_norm"] != "甘雨" for s in r["suggestions"]), "the probed tag is excluded"
+
+    # cached: a second probe of the same tag is free
+    client.post("/api/pixiv/probe", json={"tags": ["甘雨"]})
+    assert len(calls) == 1
+
+    # preview thumbs: probed id ok (and ?token= works for <img>), unknown id 404
+    anon = TestClient(client.app, base_url=f"http://127.0.0.1:{PORT}")
+    t = anon.get(f"/api/preview/1002/thumb?token={TOKEN}")
+    assert t.status_code == 200 and t.headers["content-type"].startswith("image/")
+    assert anon.get(f"/api/preview/999999/thumb?token={TOKEN}").status_code == 404
+    assert anon.get("/api/preview/1002/thumb").status_code == 401
+    print("  probe + preview:      ok (1 request / tag, cached, fullwidth free, thumbs gated)")
+
+
+def test_auth_sessions(tmp: Path) -> None:
+    """Sessions: a pixiv cookie is verified by one search before it is kept,
+    stored 0600 outside config.json, never echoed; X cookies become a
+    gallery-dl cookies.txt; the crawl refuses to start unauthenticated."""
+    import json
+    import stat
+
+    import httpx
+
+    from dawnmaker import auth as authmod
+
+    class FakePx:
+        def __init__(self, sessid):
+            self.sessid = sessid
+
+        def probe_tag(self, tag, include_r18=False):
+            if self.sessid != "77_goodtoken00000000000000":
+                req = httpx.Request("GET", "https://www.pixiv.net/ajax/search/artworks/x")
+                raise httpx.HTTPStatusError(
+                    "401", request=req, response=httpx.Response(401, request=req)
+                )
+            return 1, []
+
+        def close(self):
+            pass
+
+    authmod.make_pixiv = lambda cfg, sink=None: FakePx(cfg.pixiv_php_sessid)  # type: ignore[assignment]
+    client, _store, state = boot(tmp)
+    assert client.get("/api/sources/status").json()["pixiv"]["authed"] is False
+
+    # bad shape -> 400, rejected by pixiv -> 401, nothing stored either way
+    assert client.post("/api/auth/pixiv", json={"php_sessid": "nope"}).status_code == 400
+    r = client.post("/api/auth/pixiv", json={"php_sessid": "77_badtoken000000000000000"})
+    assert r.status_code == 401 and r.json()["error"]["code"] == "session_rejected"
+    assert not (state.cfg.home / "secrets.json").exists()
+
+    r = client.post("/api/auth/pixiv", json={"php_sessid": "PHPSESSID=77_goodtoken00000000000000"})
+    assert r.status_code == 200
+    px = r.json()["pixiv"]
+    assert px == {**px, "authed": True, "user_id": "77", "verified": True}
+    sp = state.cfg.home / "secrets.json"
+    assert stat.S_IMODE(sp.stat().st_mode) == 0o600
+    assert "goodtoken" in sp.read_text()
+    assert "goodtoken" not in json.dumps(client.get("/api/config").json())
+    state.cfg.save()
+    assert "goodtoken" not in (state.cfg.home / "config.json").read_text()
+
+    # X: cookies.txt written for gallery-dl, 0600, config points at it
+    r = client.post("/api/auth/twitter", json={"auth_token": "a" * 40, "ct0": "b" * 32})
+    assert r.status_code == 200 and r.json()["twitter"]["authed"] is True
+    ck = state.cfg.home / "twitter-cookies.txt"
+    assert stat.S_IMODE(ck.stat().st_mode) == 0o600 and ".x.com\tTRUE" in ck.read_text()
+    assert client.delete("/api/auth/twitter").status_code == 204 and not ck.exists()
+
+    assert client.delete("/api/auth/pixiv").status_code == 204
+    assert client.get("/api/sources/status").json()["pixiv"]["authed"] is False
+    print(
+        "  auth sessions:        ok (verify-before-store, 0600 secrets, never echoed, X cookies.txt)"
+    )
+
+
+if __name__ == "__main__":
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        print("dawnmaker")
+        test_auth_layers(tmp)
+        test_watches_and_jobs_api(tmp)
+        test_sse_replay_and_live(tmp)
+        test_gallery_keyset_and_media(tmp)
+        test_post_detail_links_cross_source(tmp)
+        test_heartbeat_sleep_guard()
+        test_config_rejects_sync_folder(tmp)
+        test_probe_and_preview(tmp / "probe")
+        test_auth_sessions(tmp / "auth")
+    print("\nall passed")

@@ -1,0 +1,77 @@
+{
+  "title": {
+    "add": "Add character",
+    "edit": "Edit {name}",
+    "tagline": "pixiv finds the art · X follows the artists it finds"
+  },
+  "close": "close",
+  "name": {
+    "label": "Display name",
+    "hint": "shown in the gallery",
+    "placeholder": "Shenhe"
+  },
+  "slug": {
+    "label": "Slug",
+    "hintNew": "from the name",
+    "hintFrozen": "frozen — folders key off it",
+    "placeholder": "auto from name"
+  },
+  "tags": {
+    "heading": "Discovery — pixiv tags",
+    "hint": "Every artwork carrying one of these tags is pulled. Matching is exact: 申鶴 and 申鶴(原神) are different tags, and fullwidth（）will not match.",
+    "checking": "checking…",
+    "artworks": "✓ {n} artwork | ✓ {n} artworks",
+    "error": "⚠ {error}",
+    "warning": "⚠ 0 — {warning}",
+    "remove": "remove tag",
+    "placeholder": "Paste a tag from pixiv…"
+  },
+  "terms": {
+    "heading": "X match terms",
+    "hint": "X has no character search and no character tags. These terms filter the timelines of artists already found on pixiv — they do not discover anything on their own.",
+    "remove": "remove term",
+    "placeholder": "+ term"
+  },
+  "bookmarks": {
+    "label": "Minimum bookmarks",
+    "hint": "raising skips · lowering re-crawls",
+    "slider": "minimum bookmarks",
+    "note": "Skipped artworks stay marked with the value that skipped them, so lowering this later re-opens them."
+  },
+  "r18": {
+    "label": "Include R-18",
+    "hint": "requires a signed-in pixiv session",
+    "on": "On — search runs as mode=all",
+    "off": "Off — search runs as mode=safe"
+  },
+  "preview": {
+    "heading": "Preview",
+    "lead": "{tag} · newest first · confirm this is the right character"
+  },
+  "suggestions": {
+    "heading": "Suggested tags",
+    "lead": "Ranked from the tags co-occurring in the preview results — frequent for this character, rare for the others. Franchise tags rank themselves out.",
+    "add": "+ add",
+    "checking": "checking…",
+    "none": "no co-occurring tags on page 1",
+    "empty": "add a pixiv tag to see suggestions",
+    "refresh": "Suggestions refresh after every crawl from the tags observed on this character's posts."
+  },
+  "estimate": {
+    "line": "Backfill will fetch up to {n} artworks · {time} at the current rate",
+    "underMinute": "under a minute",
+    "aboutMinutes": "about {m} min",
+    "aboutHours": "about {h} h"
+  },
+  "actions": {
+    "cancel": "Cancel",
+    "saveOnly": "Save only",
+    "saveRun": "▸ Save & run now"
+  },
+  "errors": {
+    "name": "a display name is what the gallery shows",
+    "slug": "slug: lowercase letters, digits, dashes",
+    "noTags": "at least one pixiv tag: without it there is no discovery source",
+    "allFullwidth": "every tag uses fullwidth（）— none will match"
+  }
+}

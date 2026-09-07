@@ -1,0 +1,27 @@
+{
+  "title": "Worker pipeline",
+  "sub": "single worker · {status} · {queued}",
+  "oneRunning": "1 running",
+  "idle": "idle",
+  "queuedCount": "0 queued | 1 queued | {n} queued",
+  "cancelJob": "Cancel job",
+  "cancel": "Cancel",
+  "stage": "stage · {stage}",
+  "started": "started {time}",
+  "counter": "{done} / {total}",
+  "noDenominator": "no honest denominator for this stage — unvisited work is only known as the listing unfolds",
+  "noJob": "No job running. Start one from Crawl.",
+  "queued": "Queued",
+  "empty": "empty",
+  "recent": "Recent",
+  "log": "Log",
+  "followTail": "follow tail",
+  "state": {
+    "queued": "queued",
+    "running": "running",
+    "succeeded": "succeeded",
+    "failed": "failed",
+    "cancelled": "cancelled",
+    "interrupted": "interrupted"
+  }
+}

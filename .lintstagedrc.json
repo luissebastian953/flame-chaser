@@ -1,0 +1,7 @@
+{
+  "deliverer/**/*.{ts,vue,js,json,css,md}": [
+    "pnpm --filter deliverer exec prettier --write",
+    "pnpm --filter deliverer exec eslint --fix --no-warn-ignored"
+  ],
+  "reaver/**/*.py": ["ruff format", "ruff check --fix"]
+}

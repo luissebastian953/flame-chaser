@@ -1,0 +1,9 @@
+dist
+src-tauri/target
+src-tauri/gen
+src-tauri/resources
+.build
+node_modules
+package-lock.json
+src/auto-imports.d.ts
+src/components.d.ts

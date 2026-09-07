@@ -1,0 +1,31 @@
+{
+  "name": "flame-chaser",
+  "private": true,
+  "type": "module",
+  "description": "Curio monorepo tooling: commit convention (commitizen + commitlint) and git hooks. App code lives in deliverer/ and reaver/.",
+  "scripts": {
+    "commit": "cz",
+    "prepare": "husky || echo 'no .git yet: run `pnpm prepare` after git init'",
+    "check": "pnpm --filter deliverer run check && cd reaver && ./check.sh && cd .. && scripts/check-version.sh",
+    "dev": "pnpm --filter deliverer run dev",
+    "tauri": "pnpm --filter deliverer exec tauri"
+  },
+  "config": {
+    "commitizen": {
+      "path": "node_modules/cz-git"
+    }
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
+    "commitizen": "^4.3.2",
+    "cz-git": "^1.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.0"
+  },
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=22.12",
+    "pnpm": ">=10"
+  }
+}

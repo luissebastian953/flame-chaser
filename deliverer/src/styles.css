@@ -1,0 +1,935 @@
+/*
+ * Curio — "cyber build" tokens. Tailwind v4 is CSS-first: everything under
+ * @theme becomes both a CSS variable and a utility family (bg-ember, text-mut,
+ * p-15, text-small, ...). Component classes below are plain CSS on the same
+ * variables so templates can mix `class="btn pri"` with `class="mt-10 flex"`.
+ *
+ * Palette: cool hue-265 neutrals, magenta ember accent, cyan reserved for the
+ * cross-source link, moss = ok, rose = error. Chroma stays low on neutrals so
+ * artwork reads true.
+ */
+@import 'tailwindcss';
+
+@theme {
+  /* ---- colors (utilities: bg-*, text-*, border-*) ---- */
+  --color-*: initial;
+  /* Sampled from the Settings — Theme board: a much deeper navy than the
+     first pass, plates only ~4% above the canvas, hairlines ~9%. */
+  --color-bg: #080b16;
+  --color-rail: #050812;
+  --color-surf: #11151f;
+  --color-surf2: #171b26;
+  --color-line: #2b303c;
+  --color-line-soft: #1f232e;
+  --color-tx: #e5ebfb;
+  --color-mut: #9aa3b5;
+  --color-dim: #5f6572;
+  --color-ember: #e279de;
+  --color-ember-ink: #1a0c1a;
+  --color-cyan: oklch(0.74 0.198 196);
+  --color-moss: oklch(0.74 0.198 158);
+  --color-rose: oklch(0.74 0.19 12);
+  --color-white: #fff;
+  --color-black: #000;
+  --color-transparent: transparent;
+
+  /* ---- fonts ---- */
+  /* Chakra Petch: all UI text · IBM Plex Mono: numbers, keys, hints, table
+     headers · Noto Sans JP: Japanese names and tags. Chakra Petch has no CJK
+     glyphs, so it falls through to Noto for any Japanese inside UI text. */
+  --font-sans: 'Chakra Petch', 'Noto Sans JP Variable', 'Hiragino Sans', 'Yu Gothic', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  --font-jp: 'Noto Sans JP Variable', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+
+  /* ---- fontSize: text-xsmall … text-ultra (size + line-height) ---- */
+  --text-*: initial;
+  --text-xsmall: 10px;
+  --text-xsmall--line-height: 14px;
+  --text-small: 12px;
+  --text-small--line-height: 17px;
+  --text-base: 14px;
+  --text-base--line-height: 20px;
+  --text-medium: 18px;
+  --text-medium--line-height: 25px;
+  --text-extra: 24px;
+  --text-extra--line-height: 32px;
+  --text-ultra: 36px;
+  --text-ultra--line-height: 46px;
+
+  /* ---- spacing: fixed px scale, replaces the rem multiplier.
+          p-15 = 15px, gap-10 = 10px, w-300 = 300px; p-4 does NOT exist. ---- */
+  --spacing-*: initial;
+  --spacing-0: 0px;
+  --spacing-3: 3px;
+  --spacing-5: 5px;
+  --spacing-10: 10px;
+  --spacing-15: 15px;
+  --spacing-20: 20px;
+  --spacing-25: 25px;
+  --spacing-30: 30px;
+  --spacing-35: 35px;
+  --spacing-40: 40px;
+  --spacing-45: 45px;
+  --spacing-50: 50px;
+  --spacing-60: 60px;
+  --spacing-70: 70px;
+  --spacing-80: 80px;
+  --spacing-90: 90px;
+  --spacing-100: 100px;
+  --spacing-150: 150px;
+  --spacing-200: 200px;
+  --spacing-250: 250px;
+  --spacing-300: 300px;
+  --spacing-400: 400px;
+  --spacing-500: 500px;
+
+  /* ---- custom-height.screen ---- */
+  --custom-height-screen: 100dvh;
+
+  /* ---- radius: the cyber build is square; keep one soft radius for chips ---- */
+  --radius-*: initial;
+  --radius-none: 0;
+  --radius-chip: 2px;
+
+  /* ---- breakpoints used by the container below ---- */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+}
+
+/* container { center, padding 10px, screens sm/md 100%, lg 1024, xl 1120 } */
+@utility container {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: 10px;
+  @variant sm {
+    max-width: 100%;
+  }
+  @variant md {
+    max-width: 100%;
+  }
+  @variant lg {
+    max-width: 1024px;
+  }
+  @variant xl {
+    max-width: 1120px;
+  }
+}
+
+@utility h-custom-screen {
+  height: var(--custom-height-screen);
+}
+@utility min-h-custom-screen {
+  min-height: var(--custom-height-screen);
+}
+
+/* Cut corners — the signature of the build. --cut is per-element overridable. */
+@utility cut {
+  --cut: 8px;
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
+}
+@utility cut-sm {
+  --cut: 4px;
+}
+@utility cut-lg {
+  --cut: 14px;
+}
+@utility cut-tr {
+  --cut: 8px;
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
+}
+
+/* Scanline plate: faint horizontal lines over a surface. */
+@utility scan {
+  background-image: repeating-linear-gradient(to bottom, transparent 0 2px, oklch(1 0 0 / 0.025) 2px 3px);
+}
+
+/* Mono data readout: tabular digits, no ligatures. */
+@utility data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-variant-ligatures: none;
+  letter-spacing: 0.01em;
+}
+
+/* ------------------------------------------------------------------ base */
+:root {
+  /* Legacy aliases so `style="color:var(--ember)"` in templates keeps working. */
+  --bg: var(--color-bg);
+  --surf: var(--color-surf);
+  --surf2: var(--color-surf2);
+  --line: var(--color-line);
+  --line-soft: var(--color-line-soft);
+  --tx: var(--color-tx);
+  --mut: var(--color-mut);
+  --dim: var(--color-dim);
+  --ember: var(--color-ember);
+  --cyan: var(--color-cyan);
+  --moss: var(--color-moss);
+  --rose: var(--color-rose);
+  --font: var(--font-sans);
+  --mono: var(--font-mono);
+
+  /* Settings › Theme writes these at runtime. */
+  --plate-opacity: 1;
+  --plate-blur: 0px;
+  --grid-alpha: 0.035;
+  /* selected-state halo shared by radio / switch (checkbox uses drop-shadow) */
+  --glow:
+    0 0 0 3px color-mix(in oklch, var(--color-ember) 22%, transparent),
+    0 0 14px color-mix(in oklch, var(--color-ember) 55%, transparent);
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    background-color: var(--color-bg);
+    /* grid substrate */
+    background-image:
+      linear-gradient(oklch(1 0 0 / var(--grid-alpha)) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(1 0 0 / var(--grid-alpha)) 1px, transparent 1px);
+    background-size: 40px 40px;
+    color: var(--color-tx);
+    font: 13px/1.45 var(--font-sans);
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  a {
+    color: var(--color-cyan);
+    text-decoration: none;
+  }
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: var(--color-tx);
+    background: var(--color-bg);
+    border: 1px solid var(--color-line);
+    border-radius: 0;
+    height: 31px;
+    padding: 0 11px;
+  }
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--color-ember);
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    appearance: none;
+    -webkit-appearance: none;
+    height: auto;
+    padding: 0;
+    margin: 0 8px 0 0;
+    vertical-align: -3px;
+    cursor: pointer;
+  }
+  input[type='checkbox']:disabled,
+  input[type='radio']:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  ::selection {
+    background: var(--color-ember);
+    color: var(--color-ember-ink);
+  }
+}
+
+/* ------------------------------------------------------------ components */
+@layer components {
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-ligatures: none;
+  }
+  .jp {
+    font-family: var(--font-jp);
+  }
+
+  .layout {
+    display: flex;
+    height: 100%;
+  }
+  .rail {
+    width: 196px;
+    flex: 0 0 196px;
+    border-right: 1px solid var(--color-line-soft);
+    background: var(--color-rail);
+    padding: 20px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 8px 20px;
+  }
+  .brand b {
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .brand span {
+    display: block;
+    font-size: 10px;
+    color: var(--color-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .nav a,
+  .nav button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    color: var(--color-mut);
+    font-weight: 500;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border-left: 2px solid transparent;
+  }
+  .nav a:hover,
+  .nav button:hover {
+    color: var(--color-tx);
+  }
+  .nav a.router-link-active,
+  .nav button.router-link-active {
+    color: var(--color-tx);
+    border-left-color: var(--color-ember);
+    /* selected: ember wash at the bar, fading to nothing by the right edge */
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--color-ember) 22%, transparent) 0%,
+      color-mix(in oklch, var(--color-ember) 6%, transparent) 55%,
+      transparent 100%
+    );
+  }
+  /* settings sub-nav: same rail language, taller rows, no icons */
+  .subnav a,
+  .subnav button {
+    padding: 12px 14px;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+  }
+  .nav .ic {
+    color: var(--color-dim);
+    flex: 0 0 auto;
+  }
+  .nav a.router-link-active .ic {
+    color: var(--color-ember);
+  }
+  .nav .ct {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--color-dim);
+  }
+  /* everything that lives at the bottom of the rail: update banner, shutdown, status */
+  .railbottom {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 16px;
+  }
+  .shutdown {
+    width: 100%;
+    justify-content: center;
+    gap: 9px;
+  }
+  .shutdown .ic {
+    font-size: 13px;
+  }
+  .railfoot {
+    padding-top: 10px;
+    border-top: 1px solid var(--color-line-soft);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-dim);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .dot {
+    width: 6px;
+    height: 6px;
+    display: inline-block;
+    margin-right: 6px;
+  }
+
+  .main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--color-line-soft);
+  }
+  .h1 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+  }
+  .sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-dim);
+  }
+  .spacer {
+    margin-left: auto;
+  }
+  .body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 18px 24px;
+  }
+
+  /* Buttons — components sheet "live": corners cut top-right + bottom-left.
+     hover: lifts one step in surface + border · active: drops 1px · on: ember
+     tint + ember text (a pressed toggle, e.g. the source filter). */
+  .btn {
+    --cut: 7px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 14px;
+    border: 1px solid var(--color-line);
+    background: var(--color-surf2);
+    color: var(--color-tx);
+    font-weight: 500;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    clip-path: polygon(
+      0 0,
+      calc(100% - var(--cut)) 0,
+      100% var(--cut),
+      100% 100%,
+      var(--cut) 100%,
+      0 calc(100% - var(--cut))
+    );
+    transition:
+      background 0.1s,
+      border-color 0.1s,
+      transform 0.06s,
+      filter 0.1s;
+  }
+  .btn:hover {
+    background: color-mix(in oklch, var(--color-surf2) 80%, white);
+    border-color: var(--color-mut);
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn:focus-visible {
+    outline: none;
+    border-color: var(--color-ember);
+  }
+  .btn.pri {
+    background: var(--color-ember);
+    border-color: var(--color-ember);
+    color: var(--color-ember-ink);
+    font-weight: 600;
+  }
+  .btn.pri:hover {
+    background: color-mix(in oklch, var(--color-ember) 88%, white);
+    border-color: color-mix(in oklch, var(--color-ember) 88%, white);
+  }
+  .btn.gh {
+    background: transparent;
+  }
+  .btn.gh:hover {
+    background: color-mix(in oklch, var(--color-surf2) 80%, white);
+  }
+  .btn.on {
+    background: color-mix(in oklch, var(--color-ember) 22%, var(--color-bg));
+    border-color: var(--color-ember);
+    color: var(--color-ember);
+  }
+  .btn.on:hover {
+    background: color-mix(in oklch, var(--color-ember) 30%, var(--color-bg));
+  }
+  .btn.sm {
+    height: 25px;
+    padding: 0 10px;
+    font-size: 11px;
+    --cut: 5px;
+  }
+  .btn.danger {
+    border-color: color-mix(in oklch, var(--color-rose) 45%, transparent);
+    color: var(--color-rose);
+  }
+  .btn.danger:hover {
+    background: color-mix(in oklch, var(--color-rose) 12%, var(--color-bg));
+    border-color: var(--color-rose);
+  }
+  .btn:disabled,
+  .btn:disabled:hover,
+  .btn:disabled:active {
+    background: var(--color-surf);
+    border-color: var(--color-line-soft);
+    color: var(--color-dim);
+    transform: none;
+    cursor: default;
+  }
+
+  /* Chips — same silhouette at chip scale; `.on` = ember tint, `.off` = dim */
+  .chip {
+    --cut: 5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 9px;
+    background: var(--color-surf2);
+    border: 1px solid var(--color-line-soft);
+    font-size: 11.5px;
+    color: var(--color-tx);
+    clip-path: polygon(
+      0 0,
+      calc(100% - var(--cut)) 0,
+      100% var(--cut),
+      100% 100%,
+      var(--cut) 100%,
+      0 calc(100% - var(--cut))
+    );
+  }
+  .chip.on {
+    background: color-mix(in oklch, var(--color-ember) 22%, var(--color-bg));
+    border-color: var(--color-ember);
+    color: var(--color-ember);
+  }
+  .chip.off {
+    color: var(--color-dim);
+  }
+  .chip.err {
+    border-color: color-mix(in oklch, var(--color-rose) 45%, transparent);
+    color: var(--color-rose);
+  }
+
+  /* Panels are square by default. Two ways to get cut corners:
+     - globally: Settings › Theme sets `corners-cut` on <html>
+     - per panel: `.panel.poly` forces cut, `.panel.square` forces square */
+  .panel {
+    --cut: 10px;
+    position: relative;
+    border: 1px solid var(--color-line-soft);
+    background: color-mix(in oklch, var(--color-surf) calc(var(--plate-opacity) * 100%), transparent);
+    backdrop-filter: blur(var(--plate-blur));
+    overflow: hidden;
+  }
+  .corners-cut .panel:not(.square),
+  .panel.poly {
+    clip-path: polygon(
+      var(--cut) 0,
+      100% 0,
+      100% calc(100% - var(--cut)),
+      calc(100% - var(--cut)) 100%,
+      0 100%,
+      0 var(--cut)
+    );
+  }
+  .panel.scan::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(to bottom, transparent 0 2px, oklch(1 0 0 / 0.025) 2px 3px);
+  }
+  .no-scan .panel.scan::after {
+    display: none;
+  }
+  .phead {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 10px 13px;
+    border-bottom: 1px solid var(--color-line-soft);
+  }
+  .ptitle {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-dim);
+  }
+  .ptitle::before {
+    content: '//';
+    color: var(--color-ember);
+    margin-right: 6px;
+  }
+  .kv {
+    font-size: 11.5px;
+    color: var(--color-dim);
+  }
+  .kv b {
+    color: var(--color-tx);
+    font-weight: 500;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    text-align: left;
+    font: 600 10px var(--font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-dim);
+    padding: 8px 13px;
+    border-bottom: 1px solid var(--color-line-soft);
+  }
+  td {
+    padding: 9px 13px;
+    border-bottom: 1px solid var(--color-line-soft);
+    font-size: 12.5px;
+    vertical-align: middle;
+  }
+  tr:last-child td {
+    border-bottom: none;
+  }
+  tbody tr:hover td {
+    background: oklch(1 0 0 / 0.02);
+  }
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 11.5px;
+    color: var(--color-mut);
+  }
+  .err {
+    color: var(--color-rose);
+  }
+  .ok {
+    color: var(--color-moss);
+  }
+  .empty {
+    color: var(--color-dim);
+    padding: 40px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+
+  /* progress bar */
+  .bar {
+    height: 3px;
+    background: var(--color-line-soft);
+    overflow: hidden;
+  }
+  .bar > div {
+    height: 100%;
+    background: var(--color-ember);
+    transition: width 0.3s;
+  }
+  .bar.indet > div {
+    animation: indet 1.4s linear infinite;
+  }
+  @keyframes indet {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(400%);
+    }
+  }
+
+  /* form field */
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .field > label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-dim);
+  }
+  .hint {
+    font-size: 11px;
+    color: var(--color-dim);
+  }
+
+  /* Reka primitives — headless, skinned here */
+  /* ---- selection controls: state reads from the box, never from the label.
+     Selected = ember fill + glow. Checkbox is the cut-corner polygon (glow via
+     drop-shadow because clip-path clips box-shadow). ---- */
+  .rk-checkbox,
+  input[type='checkbox'] {
+    --cut: 5px;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    border: 1px solid var(--color-line);
+    background: var(--color-surf);
+    clip-path: polygon(
+      0 0,
+      calc(100% - var(--cut)) 0,
+      100% var(--cut),
+      100% 100%,
+      var(--cut) 100%,
+      0 calc(100% - var(--cut))
+    );
+    transition:
+      background 0.12s,
+      filter 0.12s;
+  }
+  .rk-checkbox:hover,
+  input[type='checkbox']:hover {
+    border-color: var(--color-mut);
+  }
+  .rk-checkbox[data-state='checked'],
+  .rk-checkbox[data-state='indeterminate'],
+  input[type='checkbox']:checked {
+    background: var(--color-ember);
+    border-color: var(--color-ember);
+    filter: drop-shadow(0 0 6px color-mix(in oklch, var(--color-ember) 70%, transparent));
+  }
+  .rk-checkbox[data-state='checked']::after,
+  input[type='checkbox']:checked::after {
+    content: '';
+    position: absolute;
+    width: 4px;
+    height: 8px;
+    margin-top: -2px;
+    border: solid var(--color-ember-ink);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .rk-checkbox[data-state='indeterminate']::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 2px;
+    background: var(--color-ember-ink);
+  }
+  .rk-checkbox:focus-visible,
+  input[type='checkbox']:focus-visible {
+    outline: none;
+    border-color: var(--color-ember);
+  }
+
+  .rk-radio,
+  input[type='radio'] {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    border: 1px solid var(--color-line);
+    background: var(--color-surf);
+    transition:
+      box-shadow 0.12s,
+      border-color 0.12s;
+  }
+  .rk-radio:hover,
+  input[type='radio']:hover {
+    border-color: var(--color-mut);
+  }
+  .rk-radio[data-state='checked'],
+  input[type='radio']:checked {
+    border-color: var(--color-ember);
+    box-shadow: var(--glow);
+  }
+  .rk-radio[data-state='checked']::after,
+  input[type='radio']:checked::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-ember);
+  }
+  .rk-radio:focus-visible,
+  input[type='radio']:focus-visible {
+    outline: none;
+    border-color: var(--color-ember);
+  }
+  /* radio group rows: unselected rows carry a hairline where the ring would sit */
+  .rk-radio-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+  }
+  .rk-radio-row[data-state='unchecked'] {
+    border-left: 1px solid var(--color-line-soft);
+    padding-left: 12px;
+  }
+  .rk-radio-row[data-state='unchecked'] .rk-radio {
+    display: none;
+  }
+
+  .rk-switch {
+    width: 36px;
+    height: 20px;
+    padding: 2px;
+    border: 1px solid var(--color-line);
+    background: var(--color-surf2);
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    transition:
+      background 0.15s,
+      box-shadow 0.15s;
+  }
+  .rk-switch:hover {
+    border-color: var(--color-mut);
+  }
+  .rk-switch[data-state='checked'] {
+    background: var(--color-ember);
+    border-color: var(--color-ember);
+    box-shadow: var(--glow);
+  }
+  .rk-switch-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--color-tx);
+    transition:
+      transform 0.15s,
+      background 0.15s;
+  }
+  .rk-switch[data-state='checked'] .rk-switch-thumb {
+    transform: translateX(16px);
+    background: var(--color-ember-ink);
+  }
+  .rk-switch:focus-visible {
+    outline: none;
+    border-color: var(--color-tx);
+  }
+  .rk-switch:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .rk-slider {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 20px;
+    user-select: none;
+    touch-action: none;
+  }
+  .rk-slider-track {
+    position: relative;
+    flex: 1;
+    height: 3px;
+    background: var(--color-line-soft);
+  }
+  .rk-slider-range {
+    position: absolute;
+    height: 100%;
+    background: var(--color-ember);
+  }
+  .rk-slider-thumb {
+    display: block;
+    width: 12px;
+    height: 12px;
+    background: var(--color-tx);
+    border: 1px solid var(--color-bg);
+    transform: rotate(45deg);
+    cursor: grab;
+  }
+  .rk-slider-thumb:focus-visible {
+    outline: 1px solid var(--color-ember);
+    outline-offset: 2px;
+  }
+
+  .rk-select-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 160px;
+  }
+  .rk-select-content {
+    z-index: 50;
+    min-width: var(--reka-select-trigger-width);
+    background: var(--color-surf2);
+    border: 1px solid var(--color-line);
+    padding: 4px;
+    box-shadow: 0 8px 24px oklch(0 0 0 / 0.5);
+  }
+  .rk-select-item {
+    padding: 6px 9px;
+    font-size: 12px;
+    color: var(--color-mut);
+    cursor: pointer;
+    outline: none;
+  }
+  .rk-select-item[data-highlighted] {
+    background: var(--color-surf);
+    color: var(--color-tx);
+  }
+  .rk-select-item[data-state='checked'] {
+    color: var(--color-ember);
+  }
+
+  .rk-overlay {
+    position: fixed;
+    inset: 0;
+    background: oklch(0 0 0 / 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 40;
+  }
+  .rk-dialog {
+    position: fixed;
+    z-index: 50;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(560px, 92vw);
+    max-height: 85vh;
+    overflow: auto;
+  }
+}

@@ -1,0 +1,39 @@
+# Browser-mode dev stack: engine + daemon + Vite in one container.
+#   docker compose up --build          # http://localhost:5173
+#   docker compose run --rm dev coreflame status
+#   docker compose run --rm dev coreflame net      # ISP diagnosis from inside Docker's network
+# The Tauri desktop window is NOT this -- see docs/build.md for `pnpm tauri dev`.
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: curio-dev
+    ports:
+      # Loopback only. The daemon binds 0.0.0.0 inside the container; publishing
+      # on 127.0.0.1 keeps it off the LAN. The bearer token still applies.
+      - "127.0.0.1:5173:5173"
+      - "127.0.0.1:8765:8765"
+    environment:
+      REAVER_HOME: /data
+      DAWNMAKER_PORT: "8765"
+      # Secrets: put them in .env next to this file (gitignored), never here.
+      PIXIV_PHPSESSID: ${PIXIV_PHPSESSID:-}
+      REAVER_PROXY: ${REAVER_PROXY:-}
+      REAVER_RESOLVER: ${REAVER_RESOLVER:-}
+    volumes:
+      # the whole repo, live (pnpm workspace needs the root); node_modules and
+      # build output are container-only so macOS binaries never leak in
+      - .:/app
+      - root_node_modules:/app/node_modules
+      - deliverer_node_modules:/app/deliverer/node_modules
+      - /app/deliverer/src-tauri/target
+      # db + blobs + thumbs. Bind-mount a host folder so the archive is yours,
+      # not the container's. Hardlinks (by-character/) work inside one mount.
+      - ${CURIO_DATA:-./data}:/data
+    init: true
+    tty: true
+
+volumes:
+  root_node_modules:
+  deliverer_node_modules:

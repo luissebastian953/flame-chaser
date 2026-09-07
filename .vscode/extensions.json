@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "Vue.volar",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "charliermarsh.ruff",
+    "ms-python.python",
+    "rust-lang.rust-analyzer",
+    "tauri-apps.tauri-vscode",
+    "lokalise.i18n-ally"
+  ]
+}
