@@ -3,6 +3,7 @@
   "subtitle": "webview theme · daemon config",
   "tabs": {
     "accounts": "Accounts",
+    "language": "Language",
     "updates": "Updates",
     "theme": "Theme",
     "storage": "Storage",
@@ -11,9 +12,52 @@
     "about": "About"
   },
   "language": {
-    "label": "Language",
-    "hint": "English is complete. Japanese, Indonesian, Chinese and Filipino are on the way; anything not yet translated shows in English.",
-    "soon": "{name} — coming soon"
+    "title": "Language",
+    "interface": "Interface language",
+    "interfaceHint": "anything not yet translated shows in English",
+    "soon": "coming soon",
+    "followSystem": "Follow system language",
+    "systemIs": "system is set to {name}",
+    "systemNotReady": "system is set to {name} — not translated yet, so English is shown",
+    "coverage": {
+      "title": "Translation coverage",
+      "sub": "counted from the bundled message files",
+      "contribute": "Contribute",
+      "keys": "{translated} / {total} keys",
+      "complete": "complete",
+      "pending": "{n} pending",
+      "contributeHint": "Translations live in deliverer/src/locales — one folder per language, one JSON file per page. A language switches on once its coverage is real."
+    },
+    "formats": {
+      "title": "Formats",
+      "sub": "independent of the interface language",
+      "reset": "Reset",
+      "region": "Region",
+      "regionHint": "Drives number separators and regional-style dates and times.",
+      "regions": {
+        "auto": "System ({tag})",
+        "en_US": "United States",
+        "en_GB": "United Kingdom",
+        "id_ID": "Indonesia",
+        "ja_JP": "Japan",
+        "zh_CN": "China",
+        "fil_PH": "Philippines"
+      },
+      "date": "Date format",
+      "dateIso": "ISO 8601",
+      "dateLocale": "Regional",
+      "time": "Time",
+      "time24": "24-hour",
+      "time12": "12-hour",
+      "size": "File size",
+      "sizeBinary": "Binary (MiB)",
+      "sizeDecimal": "Decimal (MB)",
+      "preview": "Preview",
+      "previewNumber": "Number",
+      "previewDate": "Date",
+      "previewDateTime": "Date & time",
+      "previewSize": "Size"
+    }
   },
   "status": {
     "saving": "saving…",

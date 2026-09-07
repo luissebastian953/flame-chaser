@@ -1,22 +1,22 @@
 <script setup lang="ts">
-import { LOCALES, setLocale } from '@/i18n';
 /**
  * Settings. Theme lives in the webview only (localStorage) — it is the one
  * piece of state the daemon has no business knowing. Storage / network /
  * duplicates come from /api/config (secrets already redacted server-side).
  */
 
-const { t, locale } = useI18n();
+const { t } = useI18n();
 const ep = useEndpoint();
 const theme = useTheme();
 const src = useSources();
 
-type Tab = 'accounts' | 'updates' | 'theme' | 'storage' | 'network' | 'duplicates' | 'about';
+type Tab = 'accounts' | 'language' | 'updates' | 'theme' | 'storage' | 'network' | 'duplicates' | 'about';
 
 const tab = ref<Tab>('accounts');
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'accounts', label: 'settings.tabs.accounts' },
+  { id: 'language', label: 'settings.tabs.language' },
   { id: 'updates', label: 'settings.tabs.updates' },
   { id: 'theme', label: 'settings.tabs.theme' },
   { id: 'storage', label: 'settings.tabs.storage' },
@@ -146,6 +146,9 @@ const link = (u: string) =>
       </div>
     </div>
 
+    <!-- LANGUAGE -->
+    <LanguagePanel v-else-if="tab === 'language'" />
+
     <!-- UPDATES -->
     <UpdatesPanel v-else-if="tab === 'updates'" />
 
@@ -157,25 +160,6 @@ const link = (u: string) =>
         <button class="btn gh sm" @click="theme.reset()">{{ $t('settings.theme.reset') }}</button>
       </div>
       <div class="p-15 flex flex-col gap-20">
-        <div class="field">
-          <label>{{ $t('settings.language.label') }}</label>
-          <div class="flex items-center gap-10 flex-wrap">
-            <button
-              v-for="l in LOCALES"
-              :key="l.code"
-              class="btn sm"
-              :class="{ on: locale === l.code }"
-              :disabled="!l.ready"
-              :title="l.ready ? l.label : $t('settings.language.soon', { name: l.label })"
-              @click="setLocale(l.code)"
-            >
-              {{ l.label }}
-              <span v-if="!l.ready" class="text-dim">·</span>
-            </button>
-          </div>
-          <div class="hint">{{ $t('settings.language.hint') }}</div>
-        </div>
-
         <div class="field">
           <label>{{ $t('settings.theme.background') }}</label>
           <div class="flex items-center gap-10">

@@ -10,8 +10,10 @@ export {}
 declare global {
   const ApiError: typeof import('./lib/api').ApiError
   const EffectScope: typeof import('vue').EffectScope
+  const REGIONS: typeof import('./stores/formats').REGIONS
   const TYPES: typeof import('./lib/api').TYPES
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
+  const actions: typeof import('./stores/formats').actions
   const api: typeof import('./lib/api').api
   const authedUrl: typeof import('./lib/api').authedUrl
   const computed: typeof import('vue').computed
@@ -82,6 +84,7 @@ declare global {
   const useCssModule: typeof import('vue').useCssModule
   const useCssVars: typeof import('vue').useCssVars
   const useEndpoint: typeof import('./stores/endpoint').useEndpoint
+  const useFormats: typeof import('./stores/formats').useFormats
   const useI18n: typeof import('vue-i18n').useI18n
   const useId: typeof import('vue').useId
   const useJobs: typeof import('./stores/jobs').useJobs
@@ -106,6 +109,9 @@ declare global {
   export type { Component, Slot, Slots, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, ShallowRef, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
   // @ts-ignore
+  export type { DateStyle, SizeUnit, FormatsState } from './stores/formats'
+  import('./stores/formats')
+  // @ts-ignore
   export type { Source } from './stores/sources'
   import('./stores/sources')
   // @ts-ignore
@@ -129,8 +135,10 @@ declare module 'vue' {
   interface ComponentCustomProperties {
     readonly ApiError: UnwrapRef<typeof import('./lib/api')['ApiError']>
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
+    readonly REGIONS: UnwrapRef<typeof import('./stores/formats')['REGIONS']>
     readonly TYPES: UnwrapRef<typeof import('./lib/api')['TYPES']>
     readonly acceptHMRUpdate: UnwrapRef<typeof import('pinia')['acceptHMRUpdate']>
+    readonly actions: UnwrapRef<typeof import('./stores/formats')['actions']>
     readonly api: UnwrapRef<typeof import('./lib/api')['api']>
     readonly authedUrl: UnwrapRef<typeof import('./lib/api')['authedUrl']>
     readonly computed: UnwrapRef<typeof import('vue')['computed']>
@@ -201,6 +209,7 @@ declare module 'vue' {
     readonly useCssModule: UnwrapRef<typeof import('vue')['useCssModule']>
     readonly useCssVars: UnwrapRef<typeof import('vue')['useCssVars']>
     readonly useEndpoint: UnwrapRef<typeof import('./stores/endpoint')['useEndpoint']>
+    readonly useFormats: UnwrapRef<typeof import('./stores/formats')['useFormats']>
     readonly useI18n: UnwrapRef<typeof import('vue-i18n')['useI18n']>
     readonly useId: UnwrapRef<typeof import('vue')['useId']>
     readonly useJobs: UnwrapRef<typeof import('./stores/jobs')['useJobs']>

@@ -10,17 +10,19 @@
  */
 import { createI18n } from 'vue-i18n';
 
+// `native` is how the language names itself; `label` is its English name.
+// `ready` flips on when src/locales/<code>/ exists with real coverage.
 export const LOCALES = [
-  { code: 'en', label: 'English', ready: true },
-  { code: 'ja', label: '日本語', ready: false },
-  { code: 'id', label: 'Bahasa Indonesia', ready: false },
-  { code: 'zh', label: '中文', ready: false },
-  { code: 'fil', label: 'Filipino', ready: false },
+  { code: 'en', native: 'English', label: 'English (US)', ready: true },
+  { code: 'ja', native: '日本語', label: 'Japanese', ready: false },
+  { code: 'id', native: 'Bahasa Indonesia', label: 'Indonesian', ready: false },
+  { code: 'zh', native: '简体中文', label: 'Simplified Chinese', ready: false },
+  { code: 'fil', native: 'Filipino', label: 'Filipino', ready: false },
 ] as const;
 
 export type LocaleCode = (typeof LOCALES)[number]['code'];
 
-const KEY = 'curio.locale';
+const KEY = 'curio.locale'; // a code, or 'system' = follow the OS/browser language
 
 // src/locales/en/settings.json → messages.en.settings. vue-i18n's message
 // tree type is recursive and JSON modules are `any`-shaped by nature.
@@ -37,18 +39,31 @@ for (const [path, mod] of Object.entries(files)) {
   (messages[locale!] ??= {})[ns!] = mod.default;
 }
 
-function initial(): LocaleCode {
+/** The OS/browser language, mapped onto a locale we ship (ready or not). */
+export function systemLocale(): LocaleCode {
+  const nav = (navigator.language || 'en').toLowerCase();
+  return LOCALES.find((l) => nav.startsWith(l.code))?.code ?? 'en';
+}
+
+/** Persisted choice: a locale code, or 'system' (the default). */
+export function savedChoice(): LocaleCode | 'system' {
   try {
     const saved = localStorage.getItem(KEY);
-    if (saved && LOCALES.some((l) => l.code === saved && l.ready)) return saved as LocaleCode;
+    if (saved === 'system') return 'system';
+    if (saved && LOCALES.some((l) => l.code === saved)) return saved as LocaleCode;
   } catch {
     /* no storage */
   }
+  return 'system';
+}
 
-  const nav = (navigator.language || 'en').toLowerCase();
-  const hit = LOCALES.find((l) => l.ready && nav.startsWith(l.code));
+function resolve(choice: LocaleCode | 'system'): LocaleCode {
+  const want = choice === 'system' ? systemLocale() : choice;
+  return LOCALES.find((l) => l.code === want)?.ready ? want : 'en';
+}
 
-  return hit?.code ?? 'en';
+function initial(): LocaleCode {
+  return resolve(savedChoice());
 }
 
 export const i18n = createI18n({
@@ -60,15 +75,58 @@ export const i18n = createI18n({
   fallbackWarn: false,
 });
 
-export function setLocale(code: LocaleCode) {
+export function setLocale(choice: LocaleCode | 'system') {
+  const code = resolve(choice);
   i18n.global.locale.value = code;
   document.documentElement.lang = code;
 
   try {
-    localStorage.setItem(KEY, code);
+    localStorage.setItem(KEY, choice);
   } catch {
     /* best effort */
   }
+}
+
+/**
+ * Translation coverage per locale, counted from the bundled message files:
+ * how many English keys have a counterpart. Shown in Settings › Language so
+ * a half-done language is visibly half-done rather than silently English.
+ */
+export interface Coverage {
+  code: LocaleCode;
+  native: string;
+  label: string;
+  ready: boolean;
+  total: number;
+  translated: number;
+  pct: number;
+  pending: number;
+}
+
+function leaves(o: Dict, pre = ''): string[] {
+  return Object.entries(o).flatMap(([k, v]) =>
+    v && typeof v === 'object' ? leaves(v as Dict, `${pre}${k}.`) : [`${pre}${k}`],
+  );
+}
+
+export function coverage(): Coverage[] {
+  const enKeys = leaves(messages.en ?? {});
+  const total = enKeys.length;
+
+  return LOCALES.map((l) => {
+    const have = new Set(leaves(messages[l.code] ?? {}));
+    const translated = l.code === 'en' ? total : enKeys.filter((k) => have.has(k)).length;
+    return {
+      code: l.code,
+      native: l.native,
+      label: l.label,
+      ready: l.ready,
+      total,
+      translated,
+      pct: total ? Math.round((100 * translated) / total) : 0,
+      pending: total - translated,
+    };
+  });
 }
 
 document.documentElement.lang = i18n.global.locale.value;

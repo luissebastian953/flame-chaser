@@ -75,9 +75,11 @@ infinite grid with a detail aside (source, artist, bookmarks, the same image on
 the other site if dedupe linked them, and an "open on pixiv / X" link) plus the
 observed-tags strip, where you can watch or ignore tags the crawl has seen.
 
-**Settings** has Accounts (sessions), Updates (check, download, install, the
-changelog), Theme (background colour presets, plate opacity and blur, grid,
-scanlines, cut corners, language), Storage (library and database paths),
+**Settings** has Accounts (sessions), Language (interface language or follow
+the system, translation coverage, and number/date/time/file-size formats),
+Updates (check, download, install, the changelog), Theme (background colour
+presets, plate opacity and blur, grid, scanlines, cut corners), Storage
+(library and database paths),
 Network (DNS resolver, proxy, pixiv request rate), Duplicates (dHash distance)
 and About.
 

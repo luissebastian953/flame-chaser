@@ -82,14 +82,21 @@ the source material is Japanese — then `id` Bahasa Indonesia, `zh` 中文,
 `fil` Filipino. Steps:
 
 1. `cp -r src/locales/en src/locales/<code>` and translate file by file.
-2. Flip `ready: true` on that entry in `LOCALES` (label already present;
-   a new code needs a new entry — `LocaleCode` derives from the array).
+2. Flip `ready: true` on that entry in `LOCALES` (`native` + `label`
+   already present; a new code needs a new entry — `LocaleCode` derives
+   from the array). Until then the language shows as "coming soon" in
+   Settings › Language, and `coverage()` reports its key count there —
+   partial folders are visible progress, not hidden.
 3. `src/i18n.test.ts` asserts which locales are `ready` (`['en']` today):
    update that expectation; the test also loads every `en` namespace and
    checks interpolation, so keep `en` complete.
-4. `initial()` auto-selects the locale from `navigator.language` only when
-   `ready`; Settings › Language lists `LOCALES` and calls `setLocale()`
-   (persists `curio.locale`, sets `<html lang>`).
+4. The stored choice (`curio.locale`) is a code or `'system'` (default =
+   follow `navigator.language`); `setLocale()` resolves it and falls back
+   to `en` while the wanted locale is not `ready`, keeping the wish
+   stored so it takes effect the day the language ships.
+   `src/components/LanguagePanel.vue` is the UI (list, follow-system,
+   coverage bars, and the Formats block backed by `stores/formats.ts` —
+   region/date/time/size are separate from the language on purpose).
 5. Check layouts in the browser at 960 px width — chips, buttons and the
    rail wrap differently in longer languages.
 

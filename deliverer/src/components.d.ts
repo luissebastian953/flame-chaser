@@ -13,7 +13,10 @@ declare module 'vue' {
   export interface GlobalComponents {
     AuthBadge: typeof import('./components/AuthBadge.vue')['default']
     AuthGate: typeof import('./components/AuthGate.vue')['default']
+    CheckboxIndicator: typeof import('reka-ui')['CheckboxIndicator']
+    CheckboxRoot: typeof import('reka-ui')['CheckboxRoot']
     DetailAside: typeof import('./components/DetailAside.vue')['default']
+    LanguagePanel: typeof import('./components/LanguagePanel.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SelectContent: typeof import('reka-ui')['SelectContent']
