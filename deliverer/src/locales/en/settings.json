@@ -145,6 +145,8 @@
   },
   "characters": {
     "title": "New characters",
-    "lead": "What a new character's form starts with. Each character can change it in its own form."
+    "lead": "What a new character's form starts with. Each character can change it in its own form.",
+    "identify": "Name the character in every image",
+    "identifyHint": "Two taggers name who is in each kept image — any anime, game, manga or novel character they know. Unsure pictures are marked unidentified; nothing is removed. The first run downloads up to ~1.3 GB."
   }
 }

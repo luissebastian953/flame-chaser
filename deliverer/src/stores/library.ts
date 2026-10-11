@@ -1,4 +1,13 @@
-import type { GalleryKinds, GalleryPage, KindFilter, PostDetail, TagStat, Watch } from '@/lib/types';
+import type {
+  GalleryCharacters,
+  GalleryKinds,
+  GalleryPage,
+  IdentState,
+  KindFilter,
+  PostDetail,
+  TagStat,
+  Watch,
+} from '@/lib/types';
 
 /** Every kind a grid can show, in chip order. */
 export const ALL_KIND_FILTERS: KindFilter[] = [
@@ -22,6 +31,11 @@ export const DEFAULT_KIND_FILTER: KindFilter[] = [...ALL_KIND_FILTERS];
 
 const SHOW_KEY = 'curio.gallery.show';
 
+/** Identified / unidentified / not identified yet, in chip order. */
+export const IDENT_STATES: IdentState[] = ['identified', 'unidentified', 'pending'];
+
+const WHO_KEY = 'curio.gallery.who';
+
 /** Per-viewer convenience, like the theme: localStorage, never the daemon. */
 function loadShow(): KindFilter[] {
   try {
@@ -34,6 +48,19 @@ function loadShow(): KindFilter[] {
   }
 
   return [...DEFAULT_KIND_FILTER];
+}
+
+function loadWho(): IdentState[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(WHO_KEY) ?? 'null');
+    if (Array.isArray(v) && v.length && v.every((k) => IDENT_STATES.includes(k as IdentState))) {
+      return v as IdentState[];
+    }
+  } catch {
+    /* defaults */
+  }
+
+  return [...IDENT_STATES];
 }
 
 export const useLibrary = defineStore('library', {
@@ -50,6 +77,11 @@ export const useLibrary = defineStore('library', {
     detail: null as PostDetail | null,
     show: loadShow(),
     kinds: null as GalleryKinds | null,
+    /** which identification states the grid shows (remembered) */
+    who: loadWho(),
+    /** one character the grid is narrowed to (this gallery only), or null */
+    character: null as string | null,
+    characters: null as GalleryCharacters | null,
   }),
   getters: {
     /** Rail count: sum of what each watch has kept. */
@@ -94,6 +126,9 @@ export const useLibrary = defineStore('library', {
         const can = this.kindsFor(slug);
         const kinds = this.show.filter((k) => can.includes(k));
         q.set('kinds', (kinds.length ? kinds : can).join(','));
+        // a chosen character replaces the identified/unidentified choice
+        if (this.character) q.set('character', this.character);
+        else if (this.who.length && this.who.length < IDENT_STATES.length) q.set('ident', this.who.join(','));
         if (grid.cursor) q.set('cursor', grid.cursor);
         const page = await api.get<GalleryPage>(`/api/gallery/${slug}?${q}`);
         if (this.grid !== grid) return; // reset meanwhile: that load owns the grid now
@@ -116,6 +151,25 @@ export const useLibrary = defineStore('library', {
         /* best effort */
       }
 
+      await this.loadGrid(slug, true);
+    },
+    async loadCharacters(slug: string) {
+      this.characters = await api.get<GalleryCharacters>(`/api/gallery/${slug}/characters`);
+    },
+    /** Change which identification states the grid shows; remembered, and the grid starts over. */
+    async setWho(slug: string, who: IdentState[]) {
+      this.who = IDENT_STATES.filter((k) => who.includes(k));
+      try {
+        localStorage.setItem(WHO_KEY, JSON.stringify(this.who));
+      } catch {
+        /* best effort */
+      }
+
+      await this.loadGrid(slug, true);
+    },
+    /** Narrow the grid to one character (null = everyone); not remembered across galleries. */
+    async setCharacter(slug: string, name: string | null) {
+      this.character = name;
       await this.loadGrid(slug, true);
     },
     async loadTags(slug: string) {

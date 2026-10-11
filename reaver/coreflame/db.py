@@ -459,6 +459,91 @@ class Store:
         ).fetchall()
         return {r["kind"]: r["n"] for r in rows}
 
+    # -- character identity (coreflame/identify.py) ---------------------------
+    def set_identity(self, sha: str, ident: Any) -> None:
+        """The verdict, the candidates, and one row per character named --
+        replaced whole, so a re-identification never leaves a stale name."""
+        with self.tx() as c:
+            c.execute(
+                """INSERT INTO image_identity(sha256,state,candidates,model,identified_at)
+                   VALUES(?,?,?,?,?)
+                   ON CONFLICT(sha256) DO UPDATE SET state=excluded.state,
+                     candidates=excluded.candidates, model=excluded.model,
+                     identified_at=excluded.identified_at""",
+                (
+                    sha,
+                    ident.state,
+                    json.dumps(ident.candidates, ensure_ascii=False),
+                    ident.model,
+                    _now(),
+                ),
+            )
+            c.execute("DELETE FROM image_characters WHERE sha256=?", (sha,))
+            c.executemany(
+                "INSERT INTO image_characters(sha256,name,tag,score,by) VALUES(?,?,?,?,?)",
+                [(sha, h.name, h.tag, h.score, h.by) for h in ident.hits],
+            )
+
+    def unidentified_media(self, model: str, limit: int | None = None) -> list[sqlite3.Row]:
+        """Stored blobs not identified yet, or by a different model. One row per sha."""
+        return self.conn.execute(
+            """SELECT m.sha256, MIN(m.ext) AS ext FROM media m
+               LEFT JOIN image_identity i ON i.sha256=m.sha256
+               WHERE m.state='stored' AND m.sha256 IS NOT NULL
+                 AND (i.sha256 IS NULL OR i.model<>?)
+               GROUP BY m.sha256 ORDER BY MIN(m.rowid) LIMIT ?""",
+            (model, -1 if limit is None else limit),
+        ).fetchall()
+
+    def identity_counts(self, slug: str, model: str, include_r18: bool = False) -> dict[str, Any]:
+        """For one character's gallery, counted exactly as it lists images:
+        identified / unidentified / pending (not identified yet, or by an
+        older model), and how many images name each character."""
+        r18 = "" if include_r18 else "AND p.is_r18=0"
+        listed = """FROM post_watches pw
+                JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
+                JOIN media m ON m.source=p.source AND m.external_id=p.external_id"""
+        rows = self.conn.execute(
+            f"""SELECT COALESCE(i.state,'pending') AS state, count(*) AS n {listed}
+                LEFT JOIN image_identity i ON i.sha256=m.sha256 AND i.model=?
+                WHERE pw.slug=? AND m.state='stored' AND p.state='live' {r18}
+                GROUP BY 1""",
+            (model, slug),
+        ).fetchall()
+        counts = {"identified": 0, "unidentified": 0, "pending": 0}
+        counts.update({r["state"]: r["n"] for r in rows})
+        names = self.conn.execute(
+            f"""SELECT ic.name, count(*) AS n {listed}
+                JOIN image_identity i ON i.sha256=m.sha256 AND i.model=?
+                JOIN image_characters ic ON ic.sha256=m.sha256
+                WHERE pw.slug=? AND m.state='stored' AND p.state='live' {r18}
+                GROUP BY ic.name ORDER BY n DESC, ic.name""",
+            (model, slug),
+        ).fetchall()
+        return {"counts": counts, "characters": [(r["name"], r["n"]) for r in names]}
+
+    def identities(self, shas: list[str]) -> dict[str, dict[str, Any]]:
+        """sha -> {state, characters: [{name, tag, score, by}]} for post detail."""
+        if not shas:
+            return {}
+        marks = ",".join("?" * len(shas))
+        out: dict[str, dict[str, Any]] = {
+            r["sha256"]: {"state": r["state"], "model": r["model"], "characters": []}
+            for r in self.conn.execute(
+                f"SELECT sha256, state, model FROM image_identity WHERE sha256 IN ({marks})", shas
+            )
+        }
+        for r in self.conn.execute(
+            f"""SELECT sha256, name, tag, score, by FROM image_characters
+                WHERE sha256 IN ({marks}) ORDER BY score DESC""",
+            shas,
+        ):
+            if r["sha256"] in out:
+                out[r["sha256"]]["characters"].append(
+                    {"name": r["name"], "tag": r["tag"], "score": r["score"], "by": r["by"]}
+                )
+        return out
+
     def phashes_for_artist(self, artist_id: str) -> list[tuple[str, int]]:
         """Candidate set for near-dupe search, scoped to one artist -- what
         keeps this O(hundreds) instead of O(archive)."""

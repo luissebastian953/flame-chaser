@@ -68,6 +68,8 @@ export interface GalleryItem {
   thumb_url: string;
   /** what the image IS (coreflame/kinds.py); null = not labeled yet */
   kind: ImageKind | null;
+  /** whether its character is named (coreflame/identify.py) */
+  identity: IdentState;
 }
 
 export interface GalleryPage {
@@ -79,6 +81,27 @@ export type ImageKind = 'illustration' | 'photo' | 'render' | 'screencap' | 'oth
 
 /** a gallery filter value: an image kind, or `unlabeled` for images with no label yet */
 export type KindFilter = ImageKind | 'unlabeled';
+
+/** identified = a character is named; unidentified = judged, nobody named; pending = not judged yet */
+export type IdentState = 'identified' | 'unidentified' | 'pending';
+
+/** GET /api/gallery/{slug}/characters */
+export interface GalleryCharacters {
+  counts: Record<IdentState, number>;
+  /** every character named in this gallery, most images first; `name` is the Danbooru tag */
+  characters: { name: string; label: string; count: number }[];
+  /** enabled = Settings switch; available = classifier deps installed; models = files on disk */
+  identifier: { enabled: boolean; available: boolean; models: boolean };
+}
+
+/** One character named in an image; `tag` is the exact form or costume, `name` the character. */
+export interface CharacterHit {
+  name: string;
+  label: string;
+  tag: string;
+  score: number;
+  by: 'wd' | 'camie' | 'both';
+}
 
 /** GET /api/gallery/{slug}/kinds */
 export interface GalleryKinds {
@@ -120,6 +143,8 @@ export interface PostDetail {
     width: number;
     height: number;
     bytes: number | null;
+    /** null = not identified yet */
+    identity: { state: 'identified' | 'unidentified'; characters: CharacterHit[] } | null;
   }[];
   tags: { tag_raw: string; tag_norm: string; translated: string | null }[];
   linked: {

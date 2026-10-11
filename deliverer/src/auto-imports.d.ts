@@ -13,6 +13,7 @@ declare global {
   const DEFAULT_KIND_FILTER: typeof import('./stores/library').DEFAULT_KIND_FILTER
   const EffectScope: typeof import('vue').EffectScope
   const ICON_PATHS: typeof import('./lib/icons').ICON_PATHS
+  const IDENT_STATES: typeof import('./stores/library').IDENT_STATES
   const KIND_FILTERS: typeof import('./stores/library').KIND_FILTERS
   const REGIONS: typeof import('./stores/formats').REGIONS
   const TYPES: typeof import('./lib/api').TYPES
@@ -126,7 +127,7 @@ declare global {
   export type { ApiError, Endpoint, DaemonEvent } from './lib/api'
   import('./lib/api')
   // @ts-ignore
-  export type { Source, Gender, GenderMode, Watch, JobState, Job, LogLine, GalleryItem, GalleryPage, ImageKind, KindFilter, GalleryKinds, TagStat, PostDetail, NameSuggestion, CharacterNames, ProbeResult, SourcesStatus, Health } from './lib/types'
+  export type { Source, Gender, GenderMode, Watch, JobState, Job, LogLine, GalleryItem, GalleryPage, ImageKind, KindFilter, IdentState, GalleryCharacters, CharacterHit, GalleryKinds, TagStat, PostDetail, NameSuggestion, CharacterNames, ProbeResult, SourcesStatus, Health } from './lib/types'
   import('./lib/types')
 }
 
@@ -140,6 +141,7 @@ declare module 'vue' {
     readonly DEFAULT_KIND_FILTER: UnwrapRef<typeof import('./stores/library')['DEFAULT_KIND_FILTER']>
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
     readonly ICON_PATHS: UnwrapRef<typeof import('./lib/icons')['ICON_PATHS']>
+    readonly IDENT_STATES: UnwrapRef<typeof import('./stores/library')['IDENT_STATES']>
     readonly KIND_FILTERS: UnwrapRef<typeof import('./stores/library')['KIND_FILTERS']>
     readonly REGIONS: UnwrapRef<typeof import('./stores/formats')['REGIONS']>
     readonly TYPES: UnwrapRef<typeof import('./lib/api')['TYPES']>

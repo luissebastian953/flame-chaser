@@ -8,7 +8,7 @@ deliverer/
 │   ├── router.ts         hash history; routes → pages/ (hand-written, lazy)
 │   ├── i18n.ts (+ .test.ts)   LOCALES, glob-loaded messages, setLocale
 │   ├── pages/            Gallery · CharacterDetail · Config* · Pipeline · Settings
-│   ├── components/       AuthBadge* · AuthGate · DetailAside · GenderFilter* · Icon* · InfoTip* · KindFilter* · SourceCard* ·
+│   ├── components/       AuthBadge* · AuthGate · DetailAside · GenderFilter* · Icon* · IdentityFilter* · InfoTip* · KindFilter* · SourceCard* ·
 │   │                     UpdateBanner* · UpdatesPanel · WatchForm*   (* = has a .test.ts)
 │   ├── stores/           characterDefaults* · endpoint · jobs* · library* · sources* · theme* · updater*  (Pinia)
 │   ├── lib/api.ts (+ .test.ts)   endpoint discovery, fetch wrapper, mediaUrl, EventSource, heartbeat

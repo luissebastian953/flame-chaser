@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from coreflame import __version__, kinds, people, tags
+from coreflame import __version__, identify, kinds, people, tags
 from coreflame.blobs import BlobStore
 from coreflame.config import Config
 from coreflame.db import Store
@@ -136,6 +136,9 @@ class TagAction(BaseModel):
     action: str  # watch | ignore
 
 
+IDENT_STATES = ("identified", "unidentified", "pending")  # gallery `ident` filter
+
+
 class ConfigIn(BaseModel):
     library_root: str | None = None
     pixiv_rate: float | None = None
@@ -145,6 +148,7 @@ class ConfigIn(BaseModel):
     twitter_search_limit: int | None = None
     resolver: str | None = None
     proxy_url: str | None = None
+    identify_characters: bool | None = None
 
 
 def create_app(state: State, dev: bool = False) -> FastAPI:
@@ -198,6 +202,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             "proxy_url": c.proxy_url,
             "twitter_timeline_limit": c.twitter_timeline_limit,
             "twitter_search_limit": c.twitter_search_limit,
+            "identify_characters": c.identify_characters,
             "pixiv_session": bool(c.pixiv_php_sessid),  # redacted to a bool
             "twitter_cookies": bool(c.twitter_cookies_file or c.twitter_cookies_from_browser),
         }
@@ -229,6 +234,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             "twitter_search_limit",
             "resolver",
             "proxy_url",
+            "identify_characters",
         ):
             v = getattr(body, k)
             if v is not None:
@@ -455,13 +461,17 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         source: str | None = None,
         r18: str = "exclude",
         kinds_: str | None = Query(None, alias="kinds"),
+        ident: str | None = None,
+        character: str | None = None,
         s: Store = Depends(store),
     ) -> dict:
         """Keyset on (posted_at, external_id) -- offset pagination duplicates and
         skips rows when a crawl inserts while the user scrolls. `kinds` is a
-        comma list of image kinds to show (plus `unlabeled`); absent = all."""
+        comma list of image kinds to show (plus `unlabeled`); absent = all.
+        `ident` is a comma list of identified / unidentified / pending (not
+        identified yet); `character` keeps the images naming that character."""
         where = ["pw.slug=?", "m.state='stored'", "p.state='live'"]
-        args: list[Any] = [slug]
+        args: list[Any] = [identify.IDENTIFIER_ID, slug]  # the JOIN's ? comes first
         if source:
             where.append("p.source=?")
             args.append(source)
@@ -472,6 +482,18 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
                 raise HTTPException(400, {"code": "bad_kind", "message": kinds_})
             where.append(f"COALESCE(k.kind,'unlabeled') IN ({','.join('?' * len(want))})")
             args += want
+        if ident is not None:
+            states = [x for x in ident.split(",") if x]
+            if not states or any(x not in IDENT_STATES for x in states):
+                raise HTTPException(400, {"code": "bad_ident", "message": ident})
+            where.append(f"COALESCE(i.state,'pending') IN ({','.join('?' * len(states))})")
+            args += states
+        if character:
+            where.append(
+                "i.state='identified' AND EXISTS (SELECT 1 FROM image_characters ic "
+                "WHERE ic.sha256=m.sha256 AND ic.name=?)"
+            )
+            args.append(character)
         if r18 == "exclude":
             where.append("p.is_r18=0")
         if cursor:
@@ -483,11 +505,13 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             args += [c_posted, c_posted, c_id]
         rows = s.conn.execute(
             f"""SELECT m.sha256, m.source, m.external_id, m.idx, m.width, m.height,
-                       p.posted_at, p.artist_name, p.title, k.kind
+                       p.posted_at, p.artist_name, p.title, k.kind,
+                       COALESCE(i.state,'pending') AS identity
                 FROM post_watches pw
                 JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
                 JOIN media m ON m.source=p.source AND m.external_id=p.external_id
                 LEFT JOIN image_kinds k ON k.sha256=m.sha256
+                LEFT JOIN image_identity i ON i.sha256=m.sha256 AND i.model=?
                 WHERE {" AND ".join(where)}
                 ORDER BY p.posted_at DESC, p.external_id DESC, m.idx
                 LIMIT ?""",
@@ -515,6 +539,24 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             "people": {"pending": s.people_pending(slug, people.TAGGER_ID)},
         }
 
+    @app.get("/api/gallery/{slug}/characters")
+    def gallery_characters(slug: str, r18: str = "exclude", s: Store = Depends(store)) -> dict:
+        """Who is in this character's images (coreflame/identify.py): how many
+        are identified / unidentified / not yet, each character named with its
+        image count, and whether this install identifies at all."""
+        got = s.identity_counts(slug, identify.IDENTIFIER_ID, include_r18=r18 != "exclude")
+        return {
+            "counts": got["counts"],
+            "characters": [
+                {"name": n, "label": identify.label_of(n), "count": c} for n, c in got["characters"]
+            ],
+            "identifier": {
+                "enabled": state.cfg.identify_characters,
+                "available": kinds.runtime_available(),
+                "models": identify.models_present(state.cfg.home),
+            },
+        }
+
     @app.get("/api/gallery/{slug}/tags")
     def gallery_tags(
         slug: str,
@@ -538,6 +580,19 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
                 (source, external_id),
             )
         ]
+        # who each image shows (coreflame/identify.py); null = not identified yet
+        found = s.identities([m["sha256"] for m in media if m["sha256"]])
+        for m in media:
+            got = found.get(m["sha256"] or "")
+            if got is None or got["model"] != identify.IDENTIFIER_ID:
+                m["identity"] = None
+                continue
+            m["identity"] = {
+                "state": got["state"],
+                "characters": [
+                    {**c, "label": identify.label_of(c["name"])} for c in got["characters"]
+                ],
+            }
         tag_rows = [
             dict(r)
             for r in s.conn.execute(

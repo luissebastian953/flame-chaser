@@ -18,6 +18,7 @@ declare module 'vue' {
     DetailAside: typeof import('./components/DetailAside.vue')['default']
     GenderFilter: typeof import('./components/GenderFilter.vue')['default']
     Icon: typeof import('./components/Icon.vue')['default']
+    IdentityFilter: typeof import('./components/IdentityFilter.vue')['default']
     InfoTip: typeof import('./components/InfoTip.vue')['default']
     KindFilter: typeof import('./components/KindFilter.vue')['default']
     LanguagePanel: typeof import('./components/LanguagePanel.vue')['default']

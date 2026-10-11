@@ -236,6 +236,80 @@ def test_gallery_kinds_filter(tmp: Path) -> None:
     print("  gallery kinds:        ok (filter, counts, bad_kind 400, cover, rejected not counted)")
 
 
+def test_gallery_identity_filter(tmp: Path) -> None:
+    """Names label, never delete: `ident` and `character` narrow the grid, the
+    counts feed the chips, and post detail shows who each image is."""
+    import hashlib
+
+    from coreflame import identify
+    from coreflame.identify import Hit, Identity
+
+    client, store, state = boot(tmp / "id")
+    store.upsert_watch(Watch(slug="mei", pixiv_tags=["雷電芽衣"]))
+    named = {
+        "301": [Hit("raiden_mei", "raiden_mei_(herrscher_of_thunder)", 0.95, "both")],
+        "302": [],  # unidentified
+        "303": None,  # not identified yet
+        "304": [
+            Hit("raiden_mei", "raiden_mei", 0.9, "wd"),
+            Hit("kiana_kaslana", "kiana_kaslana", 0.8, "camie"),
+        ],
+    }
+    for i, (eid, hits) in enumerate(named.items(), 1):
+        data = _img(60 + i, (300, 400))
+        store.upsert_post(
+            IllustRecord(
+                source="pixiv",
+                external_id=eid,
+                artist_id="a",
+                posted_at=f"2026-09-0{i}T10:00:00+00:00",
+                media=[{"index": 0, "url": f"https://x/id{i}.png"}],
+            ),
+            "mei",
+        )
+        state.blobs.put(data, "png")
+        sha = hashlib.sha256(data).hexdigest()
+        store.mark_media("pixiv", eid, 0, state="stored", sha=sha, nbytes=len(data), ext="png")
+        if hits is not None:
+            store.set_identity(sha, Identity(hits, {"wd": [], "camie": []}, identify.IDENTIFIER_ID))
+
+    def ids(q: str) -> list[str]:
+        r = client.get(f"/api/gallery/mei{q}")
+        assert r.status_code == 200, r.text
+        return [it["external_id"] for it in r.json()["items"]]
+
+    assert ids("") == ["304", "303", "302", "301"]
+    assert ids("?ident=identified") == ["304", "301"]
+    assert ids("?ident=unidentified,pending") == ["303", "302"]
+    assert ids("?character=kiana_kaslana") == ["304"]
+    assert ids("?character=raiden_mei&ident=identified") == ["304", "301"]
+    states = [it["identity"] for it in client.get("/api/gallery/mei").json()["items"]]
+    assert states == ["identified", "pending", "unidentified", "identified"]
+    for bad in ("?ident=bogus", "?ident=", "?ident=identified,nope"):
+        r = client.get(f"/api/gallery/mei{bad}")
+        assert r.status_code == 400 and r.json()["error"]["code"] == "bad_ident", bad
+
+    c = client.get("/api/gallery/mei/characters").json()
+    assert c["counts"] == {"identified": 2, "unidentified": 1, "pending": 1}
+    assert c["characters"] == [
+        {"name": "raiden_mei", "label": "Raiden Mei", "count": 2},
+        {"name": "kiana_kaslana", "label": "Kiana Kaslana", "count": 1},
+    ]
+    assert c["identifier"]["enabled"] is True and "models" in c["identifier"]
+
+    d = client.get("/api/posts/pixiv/301").json()
+    who = d["media"][0]["identity"]
+    assert who["state"] == "identified" and who["characters"][0]["label"] == "Raiden Mei"
+    assert who["characters"][0]["tag"] == "raiden_mei_(herrscher_of_thunder)"
+    assert client.get("/api/posts/pixiv/303").json()["media"][0]["identity"] is None
+
+    # the Settings switch round-trips through /api/config
+    r = client.put("/api/config", json={"identify_characters": False})
+    assert r.status_code == 200 and r.json()["identify_characters"] is False
+    assert client.get("/api/gallery/mei/characters").json()["identifier"]["enabled"] is False
+    print("  gallery identity:     ok (ident + character filters, counts, detail, switch)")
+
+
 def test_watch_target_and_kind_filter(tmp: Path) -> None:
     client, _, _ = boot(tmp / "w")
     body = {"slug": "mei", "match_terms": ["raiden mei"], "sources": ["twitter"]}
@@ -425,6 +499,7 @@ if __name__ == "__main__":
         test_sse_replay_and_live(tmp)
         test_gallery_keyset_and_media(tmp)
         test_gallery_kinds_filter(tmp)
+        test_gallery_identity_filter(tmp)
         test_watch_target_and_kind_filter(tmp)
         test_post_detail_links_cross_source(tmp)
         test_heartbeat_sleep_guard()

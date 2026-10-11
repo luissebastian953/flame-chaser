@@ -27,6 +27,7 @@ class Config:
     resolver: str = "system"  # system | doh
     doh_endpoints: list[str] | None = None  # defaults to net.DEFAULT_DOH
     proxy_url: str | None = None  # applied to httpx AND gallery-dl
+    identify_characters: bool = True  # name the character in every kept image (identify.py)
 
     def __post_init__(self) -> None:
         self.home = Path(self.home).expanduser()

@@ -35,6 +35,7 @@ function item(sha256: string): GalleryItem {
     title: 't',
     thumb_url: '',
     kind: null,
+    identity: 'pending',
   };
 }
 
@@ -256,6 +257,64 @@ describe('useLibrary kind filter', () => {
 
     expect(api.get).toHaveBeenCalledWith('/api/gallery/kiana/kinds');
     expect(lib.kinds).toEqual(kinds);
+  });
+});
+
+describe('useLibrary identity filter', () => {
+  const KINDS = 'kinds=illustration%2Cscreencap%2Cunlabeled';
+
+  it('shows everyone by default and then sends no ident filter at all', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce(page([], null));
+    const lib = useLibrary();
+
+    expect(lib.who).toEqual(IDENT_STATES);
+    await lib.loadGrid('mei');
+
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}`);
+  });
+
+  it('setWho() keeps chip order, remembers the choice and starts the grid over', async () => {
+    vi.mocked(api.get).mockResolvedValue(page([], null));
+    const lib = useLibrary();
+
+    await lib.setWho('mei', ['pending', 'unidentified']);
+
+    expect(lib.who).toEqual(['unidentified', 'pending']);
+    expect(JSON.parse(localStorage.getItem('curio.gallery.who') ?? '[]')).toEqual(lib.who);
+
+    expect(api.get).toHaveBeenLastCalledWith(
+      `/api/gallery/mei?limit=120&${KINDS}&ident=unidentified%2Cpending`,
+    );
+
+    setActivePinia(createPinia());
+    expect(useLibrary().who).toEqual(['unidentified', 'pending']); // read back at creation
+  });
+
+  it('a chosen character replaces the state filter; null shows everyone again', async () => {
+    vi.mocked(api.get).mockResolvedValue(page([], null));
+    const lib = useLibrary();
+    lib.who = ['unidentified'];
+
+    await lib.setCharacter('mei', 'raiden_mei');
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}&character=raiden_mei`);
+
+    await lib.setCharacter('mei', null);
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}&ident=unidentified`);
+  });
+
+  it('loadCharacters() reads the counts and the cast', async () => {
+    const c = {
+      counts: { identified: 2, unidentified: 1, pending: 0 },
+      characters: [{ name: 'raiden_mei', label: 'Raiden Mei', count: 2 }],
+      identifier: { enabled: true, available: true, models: true },
+    };
+
+    vi.mocked(api.get).mockResolvedValueOnce(c);
+    const lib = useLibrary();
+    await lib.loadCharacters('mei');
+
+    expect(api.get).toHaveBeenCalledWith('/api/gallery/mei/characters');
+    expect(lib.characters).toEqual(c);
   });
 });
 

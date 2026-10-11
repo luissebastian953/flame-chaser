@@ -9,7 +9,14 @@ const suggested = computed(() => lib.tags.filter((t) => t.state === 'suggested')
 const watched = computed(() => lib.tags.filter((t) => t.state === 'watched'));
 
 async function load() {
-  await Promise.all([lib.loadGrid(props.slug, true), lib.loadTags(props.slug), lib.loadKinds(props.slug)]);
+  lib.character = null; // a character choice belongs to the gallery it was made in
+
+  await Promise.all([
+    lib.loadGrid(props.slug, true),
+    lib.loadTags(props.slug),
+    lib.loadKinds(props.slug),
+    lib.loadCharacters(props.slug),
+  ]);
 }
 
 onMounted(async () => {
@@ -88,6 +95,7 @@ watch(() => props.slug, load);
       </span>
     </div>
     <KindFilter :slug="slug" />
+    <IdentityFilter :slug="slug" />
     <div class="masonry">
       <img
         v-for="it in lib.grid.items"

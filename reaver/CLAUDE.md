@@ -22,6 +22,7 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
 │   ├── kinds.py      image kinds; KEEP = illustration + screencap, the rest is never stored; optional [classify]
 │   ├── names.py      a character's names + forms from Danbooru and Wikidata (form suggestions)
 │   ├── people.py     who is in a picture (WD tagger v3): per-character gender filter, full/partial
+│   ├── identify.py   the character's name (WD v3 + Camie v2 vouch for each other) or unidentified; labels only
 │   ├── library.py    hardlink view, gc, import
 │   ├── jobs.py       queue, single worker thread, JobContext (check/stage/progress), interrupted-at-boot
 │   ├── handlers.py   job type -> pipeline function; adapters built per job
@@ -51,6 +52,7 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
     ├── test_names.py     Danbooru/Wikidata names: resolve, merge, entity check, cache (fixtures)
     ├── test_net.py       diagnostic verdicts + the verify=False refusal
     ├── test_people.py    gender rules, tagger input, reject at download, backlog, loosening (fake tagger)
+    ├── test_identify.py  naming rule, form folding, at download (never rejects), backlog, new model (fake)
     └── test_dawnmaker.py the HTTP surface via TestClient (auth layers, routes, SSE)
 ```
 

@@ -86,6 +86,20 @@ async function open(url: string) {
         </div>
         <div>
           <span class="kv ib">
+            <Icon name="users" :size="12" />
+            {{ $t('gallery.aside.characters') }}
+          </span>
+          <span v-if="first?.identity?.state === 'identified'" class="who">
+            <span v-for="c in first.identity.characters" :key="c.name" :title="c.tag">
+              {{ c.label }}
+              <em class="mono">{{ $t('gallery.aside.score', { n: Math.round(c.score * 100) }) }}</em>
+            </span>
+          </span>
+          <span v-else-if="first?.identity" class="kv">{{ $t('gallery.aside.unidentified') }}</span>
+          <span v-else class="kv">{{ $t('gallery.aside.notIdentified') }}</span>
+        </div>
+        <div>
+          <span class="kv ib">
             <Icon name="hash" :size="12" />
             {{ $t('gallery.aside.hash') }}
           </span>
@@ -180,6 +194,18 @@ async function open(url: string) {
   justify-content: space-between;
   padding: 4px 0;
   font-size: 11.5px;
+}
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 10px;
+  text-align: right;
+}
+.who em {
+  font-style: normal;
+  color: var(--dim);
+  margin-left: 3px;
 }
 .linked {
   border: 1px solid color-mix(in oklch, var(--cyan) 45%, transparent);

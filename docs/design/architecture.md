@@ -712,7 +712,8 @@ POST   /heartbeat                    ← {}  every 5s from the shell; no beat fo
 GET    /config                       → Config (secrets redacted to booleans)
 PUT    /config                       ← {library_root?, pixiv_rate?, dupe_threshold?,
                                         twitter_cookies_file?, twitter_timeline_limit?,
-                                        twitter_search_limit?}  -- 0 = never search X
+                                        twitter_search_limit?,  -- 0 = never search X
+                                        identify_characters?}   -- §10.19, default on
 GET    /sources/status               → {pixiv:{authed,user_id,ok,checked_at},
                                         twitter:{gallery_dl:{found,version},
                                                  cookies:{present,expires_at}}}
@@ -812,21 +813,32 @@ GET /gallery                         → [{slug,label,cover_sha,image_count,
                                          post_count,latest_posted_at}]
 GET /gallery/{slug}?cursor=&limit=100&source=&sort=posted|added&r18=exclude
                    &kinds=illustration,unlabeled       (absent = every kind; §10.15)
+                   &ident=identified,unidentified,pending   (absent = all; §10.19)
+                   &character=raiden_mei               (images naming that character)
                                      → {items:[{sha256,source,external_id,idx,
                                                 width,height,posted_at,
                                                 artist_name,thumb_url,
-                                                kind}],        kind: null = unlabeled
+                                                kind, identity}],  kind: null = unlabeled
                                         next_cursor}
-                                       400 bad_kind on an unknown or empty kinds=
-                                       (the UI always sends the kept kinds + unlabeled)
+                                       400 bad_kind on an unknown or empty kinds=,
+                                       400 bad_ident on an unknown or empty ident=
+                                       (the UI always sends the kept kinds + unlabeled;
+                                        `character` replaces `ident` when chosen)
 GET /gallery/{slug}/kinds?r18=exclude → {counts:{illustration,photo,render,
                                           screencap,other,unlabeled},
                                          labeler:{available, models},
                                          people:{pending}}   not yet judged by its
                                                              gender filter (§10.18)
+GET /gallery/{slug}/characters?r18=exclude
+                                     → {counts:{identified,unidentified,pending},
+                                        characters:[{name,label,count}],  most first
+                                        identifier:{enabled,available,models}}
 GET /posts/{source}/{external_id}    → full detail for the aside, including
                                         {linked:[{source,external_id,permalink,
                                                   posted_at,distance}]}
+                                        media[].identity: null (not yet) |
+                                          {state, characters:[{name,label,tag,
+                                                               score,by}]}
 GET /media/{sha256}/thumb?w=400      → image/webp, Cache-Control: immutable
 GET /media/{sha256}/full             → original bytes, supports Range
 GET /gallery/{slug}/tags?state=&limit=40   → ranked observed tags               (§4b.2)
@@ -1428,10 +1440,50 @@ default for new characters (localStorage); each form can change it.
   Kept if *any* of the post's characters accepts it — the kind filter's rule.
 - **Stored per sha** (`image_people`, migration v7): counts, the people tag
   scores ≥ 0.2 (so the cut can move without re-tagging) and character tags ≥
-  0.5 — the groundwork for character recognition (backlogged, §10.15).
+  0.2 — one of the two votes character naming counts (§10.19).
 - **Rejected like kinds:** never stored at download (`error` =
   `gender:girls=N,boys=M`); the `label` job tags the backlog and discards
   (`people.pending` drives the gallery's "Check N images" button). Loosening
   a filter (off, full → partial, the other gender) reopens that character's
   gender rejections only; the kind filter's switch reopens kind rejections
   only.
+
+### 10.19 Character names — who is in each image (`coreflame/identify.py`)
+
+Every kept image is named: one picture in, the character(s) out — any anime,
+game, manga, light-novel or visual-novel character the taggers learned from
+Danbooru — or `unidentified`. Names only label; nothing is ever removed for
+being unidentified. The gallery filters by Identified / Unidentified / Not
+identified yet and by character; the image aside lists who it shows.
+
+- **Two taggers vouch for each other.** WD tagger v3 (§10.18's model: 2,751
+  characters, Danbooru data to Feb 2024) and Camie tagger v2 (Camais03,
+  GPL-3.0, 789 MB ONNX, 26,968 characters — 78.8% of all character tagging
+  on Danbooru, the broadest local model found). A character is named when
+  WD ≥ 0.85 or Camie ≥ 0.5 says it alone, otherwise only when both name the
+  same character at ≥ 0.2. Measured 2026-10-10 on 264 hand-labelled crawled
+  X images (Kiana, Raiden Mei, Firefly): 96.9% right, 2.6% a wrong name,
+  0.5% unidentified. Alone, WD scored 41.9% (it has no Firefly at all) and
+  Camie 92.7% (it calls Raiden Mei Genshin's Raiden Shogun — WD does not).
+  CCIP reference matching scored 79.6% with 10.5% wrong; it is kept for
+  grouping unidentified images later, not for naming.
+- **Names are characters, not costumes.** `fold()` drops a parenthesised
+  group that is not a franchise (Camie's copyright tags) when what remains
+  is a character tag: `raiden_mei_(herrscher_of_thunder)` → `raiden_mei`,
+  `firefly_(jepella_rebellion)_(honkai:_star_rail)` →
+  `firefly_(honkai:_star_rail)`; the exact tag is kept beside it.
+- **When:** at download, after the kind and gender checks, for every stored
+  image (the gender filter's WD read is reused — one WD run per image); the
+  `label` job does the backlog from disk. About 1 s per image on CPU.
+  Settings › Characters switches it off (`identify_characters`); without
+  numpy/onnxruntime it is off and the gallery says how to install it.
+- **Stored per sha** (migration v8): `image_identity` (state, both models'
+  top-5 candidates ≥ 0.05, model id) and `image_characters` (one row per
+  character named: name, tag, score, by wd|camie|both). Candidates are kept so
+  the rule can move without re-running either model; a new model id makes
+  every image pending again, like labels.
+- **Limits:** a character newer than the models' data, or too rare on
+  Danbooru (Camie needs ~40 posts), cannot be named; the rule keeps it
+  `unidentified` rather than guessing a lookalike, but how often an unknown
+  character still draws a confident wrong name is unmeasured. The research
+  and the test table: the "Character Identification Research" doc.

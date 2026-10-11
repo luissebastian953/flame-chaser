@@ -331,3 +331,28 @@ CREATE TABLE IF NOT EXISTS image_people (
 ALTER TABLE watches ADD COLUMN gender TEXT NOT NULL DEFAULT 'any';
 ALTER TABLE watches ADD COLUMN gender_mode TEXT NOT NULL DEFAULT 'full';
 """
+
+
+@migration(8, "character_identity")
+def _v8() -> str:
+    # who the character in each image is (coreflame/identify.py), keyed by the
+    # blob's sha like image_kinds: the verdict + both models' candidates, and one
+    # row per character named -- what the gallery's character filter reads
+    return """
+CREATE TABLE IF NOT EXISTS image_identity (
+    sha256        TEXT PRIMARY KEY,
+    state         TEXT NOT NULL CHECK (state IN ('identified','unidentified')),
+    candidates    TEXT NOT NULL,
+    model         TEXT NOT NULL,
+    identified_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS image_characters (
+    sha256 TEXT NOT NULL,
+    name   TEXT NOT NULL,
+    tag    TEXT NOT NULL,
+    score  REAL NOT NULL,
+    by     TEXT NOT NULL,
+    PRIMARY KEY (sha256, name)
+);
+CREATE INDEX IF NOT EXISTS image_characters_name ON image_characters(name)
+"""

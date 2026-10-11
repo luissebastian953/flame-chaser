@@ -13,9 +13,9 @@ as a minority (2 girls + 1 boy passes, 1 girl + 1 boy does not). An image
 with nobody in it passes neither -- the archive is for the character.
 
 The tag scores are stored per image (image_people), so the rule and its cut
-can change without re-tagging. The character tags it predicts are stored too,
-for character recognition later (backlogged). Needs numpy + onnxruntime, like
-kinds.py; the 467 MB model is fetched on first use, pinned and verified.
+can change without re-tagging. The character tags it predicts are kept too:
+they are one of the two votes identify.py counts. Needs numpy + onnxruntime,
+like kinds.py; the 467 MB model is fetched on first use, pinned and verified.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ MODES: tuple[GenderMode, ...] = ("full", "partial")
 
 THRESHOLD = 0.35  # the tagger's usual cut for general tags
 KEEP_SCORE = 0.2  # people tags stored from here, so the cut can move later
-CHAR_SCORE = 0.5  # character tags stored from here
+CHAR_SCORE = 0.2  # character tags kept from here: identify.BOTH, its lowest vote
 INPUT_PX = 448
 
 REPO, REVISION = "SmilingWolf/wd-swinv2-tagger-v3", "627aef95638667ddcaa3ac8ae625e88ea5b02f51"
@@ -178,6 +178,11 @@ class Tagger:
                 str(model_path(self.home, MODEL)), providers=["CPUExecutionProvider"]
             )
         return self._session
+
+    def characters(self) -> list[tuple[int, str]]:
+        """(index, tag) of every character tag the model knows."""
+        self._load()
+        return self._chars
 
     def people(self, data: bytes) -> People:
         session = self._load()

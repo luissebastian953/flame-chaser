@@ -9,12 +9,14 @@ from typing import Any
 
 from .blobs import BlobStore
 from .config import Config
+from .identify import Identifier, Identifies, make_identifier
 from .jobs import Handler, JobContext, JobRunner
 from .kinds import Labeler, Labels, make_labeler
 from .people import Tagger, Tags, make_tagger
 from .pipeline import (
     RunStats,
     download_pending,
+    identify_pending,
     label_pending,
     people_pending,
     poll_pixiv,
@@ -55,7 +57,8 @@ class Adapters:
     """Built once per worker thread from config; closed with it."""
 
     labeler: Labels | None = None  # None: numpy/onnxruntime not installed
-    tagger: Tags | None = None  # same deps; used only for gender-filtered characters
+    tagger: Tags | None = None  # same deps; the gender filter, and one of the identifier's votes
+    identifier: Identifies | None = None  # None: switched off in Settings, or no deps
 
     def __init__(self, cfg: Config, store: Any) -> None:
         self.pixiv = make_pixiv(cfg, sink=store)
@@ -68,6 +71,9 @@ class Adapters:
         self.blobs = BlobStore(cfg.blob_root)
         self.labeler = make_labeler(cfg)
         self.tagger = make_tagger(cfg)
+        self.identifier = make_identifier(
+            cfg, self.tagger if isinstance(self.tagger, Tagger) else None
+        )
         self.cfg = cfg
 
     def labels_for(self, ctx: JobContext) -> Labels | None:
@@ -82,6 +88,13 @@ class Adapters:
         if isinstance(self.tagger, Tagger):
             self.tagger.log = ctx.log
         return self.tagger
+
+    def identify_for(self, ctx: JobContext) -> Identifies | None:
+        """The identifier with this job's log bound (its first use downloads 789 MB)."""
+        if isinstance(self.identifier, Identifier):
+            self.identifier.log = ctx.log
+            self.identifier.tagger.log = ctx.log
+        return self.identifier
 
     def close(self) -> None:
         self.pixiv.close()
@@ -139,6 +152,7 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                             threshold=a.cfg.dupe_threshold,
                             ctx=ctx,
                             tagger=a.tags_for(ctx),
+                            identifier=a.identify_for(ctx),
                         )
                     )
                 st.merge(
@@ -162,6 +176,7 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                         ctx=ctx,
                         labeler=a.labels_for(ctx),
                         tagger=a.tags_for(ctx),
+                        identifier=a.identify_for(ctx),
                     )
                 )
             return _counters(st)
@@ -193,6 +208,7 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                     ctx=ctx,
                     labeler=a.labels_for(ctx),
                     tagger=a.tags_for(ctx),
+                    identifier=a.identify_for(ctx),
                 )
             )
         finally:
@@ -206,7 +222,8 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
 
     def label(ctx: JobContext) -> dict[str, Any]:
         """Label the backlog: images stored before labels existed, or by an
-        older model. Blobs are read from disk; no source is contacted."""
+        older model -- their kind, who is in them (gender-filtered characters)
+        and the character's name. Blobs are read from disk; no source is contacted."""
         a = make_adapters(ctx)
         try:
             labeler = a.labels_for(ctx)
@@ -223,6 +240,13 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                 out.update(
                     people_pending(
                         ctx.store, a.blobs, tagger, int(limit) if limit else None, ctx=ctx
+                    )
+                )
+            identifier = a.identify_for(ctx)
+            if identifier is not None:  # names for what was stored before (or unnamed)
+                out.update(
+                    identify_pending(
+                        ctx.store, a.blobs, identifier, int(limit) if limit else None, ctx=ctx
                     )
                 )
             return out

@@ -11,11 +11,12 @@ from .blobs import BlobStore
 from .config import Config
 from .db import Store
 from .dedupe import classify
+from .identify import Identifies
 from .jobs import JobContext
 from .kinds import KEEP, Label, LabelError, Labels, ModelError, kept, make_labeler
 from .library import LibraryView, safe_name
 from .models import DiscoverStats, IllustRecord, Watch
-from .people import Tags, accepts
+from .people import People, Tags, accepts
 from .seen import SeenState, SkipReason
 from .sources.pixiv import PixivAdapter
 from .sources.twitter import GalleryDLError, TwitterAdapter
@@ -37,6 +38,7 @@ class RunStats:
     gone: int = 0
     labeled: int = 0  # images given a kind (coreflame/kinds.py) at ingest
     rejected: int = 0  # labelled as a kind the archive does not keep; never stored
+    identified: int = 0  # stored images given character names (coreflame/identify.py)
     notes: list[str] = field(default_factory=list)
 
     def merge(self, other: RunStats) -> RunStats:
@@ -52,6 +54,7 @@ class RunStats:
             "gone",
             "labeled",
             "rejected",
+            "identified",
         ):
             setattr(self, f, getattr(self, f) + getattr(other, f))
         self.notes += other.notes
@@ -351,6 +354,7 @@ PAGE_POSTS = 50  # posts per search page: one gallery-dl run, a few X requests
 SAFETY_FACTOR = 10  # give up after listing this many times the target
 LABELS_OFF = "labels off"  # RunStats note: the classifier failed this run
 TAGS_OFF = "people tags off"  # RunStats note: the tagger failed this run
+IDENT_OFF = "character names off"  # RunStats note: the identifier failed this run
 
 
 @dataclass
@@ -455,10 +459,11 @@ def _drain_downloads(
     st: RunStats,
     ctx: JobContext | None,
     tagger: Tags | None = None,
-) -> tuple[Labels | None, Tags | None]:
-    """Download (and judge) everything pending now. Returns the labeler and
-    tagger, each None once it has proved unusable, so the caller stops
-    handing it over."""
+    identifier: Identifies | None = None,
+) -> tuple[Labels | None, Tags | None, Identifies | None]:
+    """Download (and judge) everything pending now. Returns the labeler,
+    tagger and identifier, each None once it has proved unusable, so the
+    caller stops handing it over."""
     while store.pending_media(1):
         got = download_pending(
             store,
@@ -470,15 +475,18 @@ def _drain_downloads(
             labeler=labeler,
             announce=False,
             tagger=tagger,
+            identifier=identifier,
         )
         st.merge(got)
         if LABELS_OFF in got.notes:
             labeler = None
         if TAGS_OFF in got.notes:
             tagger = None
+        if IDENT_OFF in got.notes:
+            identifier = None
         if not (got.downloaded or got.dupes or got.failed or got.rejected):
             break  # nothing moved: never spin
-    return labeler, tagger
+    return labeler, tagger, identifier
 
 
 def _kept(store: Store, external_id: str) -> bool:
@@ -505,6 +513,7 @@ def search_to_target(
     ctx: JobContext | None = None,
     page_posts: int = PAGE_POSTS,
     tagger: Tags | None = None,
+    identifier: Identifies | None = None,
 ) -> RunStats:
     """Search X for one character until exactly `target` NEW posts are kept --
     posts left holding at least one stored image after the visited gate, the
@@ -552,8 +561,8 @@ def search_to_target(
                     store, tw, rec, ws, st, c, keep_unmatched=False, label=f"search {walk.term}"
                 )
                 if watch.slug in hits:
-                    labeler, tagger = _drain_downloads(
-                        store, blobs, pixiv, tw, labeler, threshold, st, ctx, tagger
+                    labeler, tagger, identifier = _drain_downloads(
+                        store, blobs, pixiv, tw, labeler, threshold, st, ctx, tagger, identifier
                     )
                     if _kept(store, rec.external_id):
                         kept += 1
@@ -592,9 +601,12 @@ def download_pending(
     labeler: Labels | None = None,
     announce: bool = True,
     tagger: Tags | None = None,
+    identifier: Identifies | None = None,
 ) -> RunStats:
     """`announce=False` when a caller interleaves downloads with its own stage
-    (search_to_target): no stage change, and its progress bar is left alone."""
+    (search_to_target): no stage change, and its progress bar is left alone.
+    `identifier` names the character in every image that is stored; it never
+    rejects one."""
     st = RunStats()
     c = _ctx(ctx)
     thumbs = thumbs or ThumbStore(blobs.root.parent / "thumbs")
@@ -682,9 +694,9 @@ def download_pending(
                 image_kind=label.kind,
             )
             continue
+        people: People | None = None  # the WD read, shared with the identifier below
         if tagger is not None and any(g != "any" for g, _ in store.gender_rules(source, eid)):
             # who is in it, for the characters that filter on it -- judged before storage
-            people = None
             try:
                 people = tagger.people(data)
             except LabelError as e:
@@ -735,8 +747,11 @@ def download_pending(
             ext=ext,
         )
         st.downloaded += 1
+        who = ""
+        if identifier is not None:
+            identifier, who = _identify_one(store, identifier, sha, data, people, c, st)
         c.item(
-            f"{source} {eid}#{idx} stored {len(data) // 1024} KB",
+            f"{source} {eid}#{idx} stored {len(data) // 1024} KB{who}",
             source=source,
             external_id=eid,
             action="stored",
@@ -745,6 +760,34 @@ def download_pending(
     if announce:
         c.progress(len(rows), len(rows))
     return st
+
+
+def _identify_one(
+    store: Store,
+    identifier: Identifies,
+    sha: str,
+    data: bytes,
+    people: People | None,
+    c: JobContext,
+    st: RunStats,
+) -> tuple[Identifies | None, str]:
+    """Name the character in one freshly stored image. Returns the identifier
+    (None once it proved unusable: the rest stay pending for the label job)
+    and a suffix for the log line."""
+    try:
+        ident = identifier.identify(data, people)
+    except LabelError as e:
+        c.log(f"identify {sha[:12]}: {e}", level="warning")  # stays pending
+        return identifier, ""
+    except ModelError as e:
+        c.log(f"character names off for this run: {e}", level="warning")
+        st.notes.append(IDENT_OFF)
+        return None, ""
+    if ident.people is not None:  # the WD read it made: the gender filter needs no re-tag
+        store.set_people(sha, ident.people)
+    store.set_identity(sha, ident)
+    st.identified += 1
+    return identifier, " · " + (", ".join(h.name for h in ident.hits) or "unidentified")
 
 
 def _slugs_of(store: Store, source: str, external_id: str) -> list[str]:
@@ -898,6 +941,42 @@ def discard_by_gender(
             )
         c.progress(len(doomed), len(doomed))
     return len(doomed)
+
+
+def identify_pending(
+    store: Store,
+    blobs: BlobStore,
+    identifier: Identifies,
+    limit: int | None = None,
+    ctx: JobContext | None = None,
+) -> dict[str, int]:
+    """Name the character in stored images not identified yet (or by an older
+    model). Reads each blob from disk; never removes an image. A ModelError
+    propagates: nothing in the backlog can be identified without it."""
+    c = _ctx(ctx)
+    rows = store.unidentified_media(identifier.model, limit)
+    out = {"identified": 0, "unidentified": 0, "identify_failed": 0}
+    if not rows:
+        return out
+    c.stage("identify", total=len(rows))  # the backlog count IS an honest total
+    for i, row in enumerate(rows):
+        c.check()
+        c.progress(i, len(rows))
+        sha = row["sha256"]
+        try:
+            ident = identifier.identify(blobs.path_for(sha, row["ext"]).read_bytes())
+        except (OSError, LabelError) as e:
+            out["identify_failed"] += 1
+            c.log(f"identify {sha[:12]}: {e}", level="warning")
+            continue
+        if ident.people is not None:
+            store.set_people(sha, ident.people)
+        store.set_identity(sha, ident)
+        out[ident.state] += 1
+        names = ", ".join(h.name for h in ident.hits) or "unidentified"
+        c.item(f"{sha[:12]} {names}", sha=sha, action=ident.state)
+    c.progress(len(rows), len(rows))
+    return out
 
 
 def label_pending(

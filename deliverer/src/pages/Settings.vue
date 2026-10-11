@@ -45,6 +45,7 @@ interface Config {
   proxy_url: string | null;
   twitter_timeline_limit: number;
   twitter_search_limit: number;
+  identify_characters: boolean;
   pixiv_session: boolean;
   twitter_cookies: boolean;
 }
@@ -84,6 +85,22 @@ async function saveNetwork() {
       twitter_search_limit: draft.twitter_search_limit,
     });
 
+    status.value = t('settings.status.savedNextJob');
+  } catch (e) {
+    status.value = e instanceof Error ? e.message : String(e);
+  }
+}
+
+/** Settings › Characters: name the character in every image (coreflame/identify.py). */
+const identify = computed({
+  get: () => cfg.value?.identify_characters ?? true,
+  set: (v: boolean) => void saveIdentify(v),
+});
+
+async function saveIdentify(on: boolean) {
+  status.value = t('settings.status.saving');
+  try {
+    cfg.value = await api.put<Config>('/api/config', { identify_characters: on });
     status.value = t('settings.status.savedNextJob');
   } catch (e) {
     status.value = e instanceof Error ? e.message : String(e);
@@ -404,6 +421,16 @@ const link = (u: string) =>
             @update:gender="(g) => defaults.set(g, defaults.gender_mode)"
             @update:mode="(m) => defaults.set(defaults.gender, m)"
           />
+        </div>
+        <div v-if="cfg" class="field">
+          <div class="flex items-center gap-10">
+            <SwitchRoot id="identify" v-model="identify" class="rk-switch">
+              <SwitchThumb class="rk-switch-thumb" />
+            </SwitchRoot>
+            <label for="identify" class="text-small">{{ $t('settings.characters.identify') }}</label>
+          </div>
+          <div class="hint">{{ $t('settings.characters.identifyHint') }}</div>
+          <div v-if="status" class="hint">{{ status }}</div>
         </div>
       </div>
     </div>
