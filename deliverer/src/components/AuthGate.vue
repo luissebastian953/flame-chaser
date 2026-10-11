@@ -26,9 +26,13 @@ const src = useSources();
       <div class="foot">
         <span class="data text-small text-dim">{{ $t('auth.gate.foot') }}</span>
         <div class="spacer" />
-        <button class="btn" @click="src.dismiss()">{{ $t('auth.gate.offline') }}</button>
+        <button class="btn" @click="src.dismiss()">
+          <Icon name="eye" :size="14" />
+          {{ $t('auth.gate.offline') }}
+        </button>
         <button v-if="src.anyConnected" class="btn pri" @click="src.dismiss()">
           {{ $t('auth.gate.continue') }}
+          <Icon name="arrow-right" :size="14" />
         </button>
       </div>
     </div>

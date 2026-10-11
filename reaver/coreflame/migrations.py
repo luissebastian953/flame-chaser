@@ -281,3 +281,53 @@ def _v4() -> str:
     return """
 ALTER TABLE watches ADD COLUMN sources TEXT NOT NULL DEFAULT '["pixiv","twitter"]';
 """
+
+
+# ---------------------------------------------------------------- v5
+@migration(5, "image_kinds")
+def _v5() -> str:
+    # what an image IS (illustration, photo, 3D render...), keyed by the blob's
+    # sha: reposts share one row, and a new model is a re-label, not a re-fetch.
+    # No row = not labeled yet, which the gallery shows rather than hides.
+    return """
+CREATE TABLE IF NOT EXISTS image_kinds (
+    sha256     TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL,
+    scores     TEXT NOT NULL,
+    model      TEXT NOT NULL,
+    labeled_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS image_kinds_kind ON image_kinds(kind);
+"""
+
+
+# ---------------------------------------------------------------- v6
+@migration(6, "watch_target_kind_filter")
+def _v6() -> str:
+    # posts per run and the image-kind filter, per character; existing
+    # characters get the defaults the app already used (100, filter on)
+    return """
+ALTER TABLE watches ADD COLUMN target INTEGER NOT NULL DEFAULT 100;
+ALTER TABLE watches ADD COLUMN kind_filter INTEGER NOT NULL DEFAULT 1;
+"""
+
+
+# ---------------------------------------------------------------- v7
+@migration(7, "gender_filter")
+def _v7() -> str:
+    # who is in each image (coreflame/people.py), keyed by the blob's sha like
+    # image_kinds; and each character's gender filter, off for existing ones
+    return """
+CREATE TABLE IF NOT EXISTS image_people (
+    sha256     TEXT PRIMARY KEY,
+    girls      INTEGER NOT NULL,
+    boys       INTEGER NOT NULL,
+    male_focus INTEGER NOT NULL,
+    scores     TEXT NOT NULL,
+    characters TEXT NOT NULL,
+    model      TEXT NOT NULL,
+    tagged_at  TEXT NOT NULL
+);
+ALTER TABLE watches ADD COLUMN gender TEXT NOT NULL DEFAULT 'any';
+ALTER TABLE watches ADD COLUMN gender_mode TEXT NOT NULL DEFAULT 'full';
+"""

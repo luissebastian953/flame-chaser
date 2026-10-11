@@ -1,0 +1,802 @@
+[
+ {
+  "n": "gallery",
+  "c": "Navigation",
+  "t": "grid tiles library",
+  "d": [
+   "M3.5 3.5H8.5L10.5 5.5V10.5H5.5L3.5 8.5Z",
+   "M13.5 3.5H18.5L20.5 5.5V10.5H15.5L13.5 8.5Z",
+   "M3.5 13.5H8.5L10.5 15.5V20.5H5.5L3.5 18.5Z",
+   "M13.5 13.5H18.5L20.5 15.5V20.5H15.5L13.5 18.5Z"
+  ]
+ },
+ {
+  "n": "list",
+  "c": "Navigation",
+  "t": "rows table",
+  "d": [
+   "M9 6H20.5M9 12H20.5M9 18H20.5",
+   "M3.5 5H5.2L6 5.8V7.5H4.3L3.5 6.7Z",
+   "M3.5 11H5.2L6 11.8V13.5H4.3L3.5 12.7Z",
+   "M3.5 17H5.2L6 17.8V19.5H4.3L3.5 18.7Z"
+  ]
+ },
+ {
+  "n": "crawl",
+  "c": "Navigation",
+  "t": "globe web world network",
+  "d": [
+   "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0",
+   "M3.5 12H20.5",
+   "M12 3.5a4 8.5 0 0 1 0 17a4 8.5 0 0 1 0-17"
+  ]
+ },
+ {
+  "n": "pipeline",
+  "c": "Navigation",
+  "t": "workers flow jobs",
+  "d": [
+   "M3 7H9M15 7H21M3 17H9M15 17H21",
+   "M9 4.5H13.5L15 6V9.5H10.5L9 8Z",
+   "M9 14.5H13.5L15 16V19.5H10.5L9 18Z",
+   "M12 9.5V14.5"
+  ]
+ },
+ {
+  "n": "settings",
+  "c": "Navigation",
+  "t": "preferences cog options",
+  "d": [
+   "M19.85 15.25L15.25 19.85L8.75 19.85L4.15 15.25L4.15 8.75L8.75 4.15L15.25 4.15L19.85 8.75Z",
+   "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
+  ]
+ },
+ {
+  "n": "home",
+  "c": "Navigation",
+  "t": "start dashboard",
+  "d": [
+   "M3.5 11L12 3.5L20.5 11",
+   "M5.5 9.5V20.5H18.5V9.5",
+   "M10 20.5V14.5H14V20.5"
+  ]
+ },
+ {
+  "n": "menu",
+  "c": "Navigation",
+  "t": "hamburger bars",
+  "d": [
+   "M4 6H20M4 12H20M4 18H20"
+  ]
+ },
+ {
+  "n": "sidebar",
+  "c": "Navigation",
+  "t": "panel rail layout",
+  "d": [
+   "M3.5 4.5H18.5L20.5 6.5V19.5H5.5L3.5 17.5Z",
+   "M9.5 4.5V19.5"
+  ]
+ },
+ {
+  "n": "search",
+  "c": "Navigation",
+  "t": "find magnify lookup",
+  "d": [
+   "M4 10.5a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0 -13 0",
+   "M15.3 15.3L20.5 20.5"
+  ]
+ },
+ {
+  "n": "filter",
+  "c": "Navigation",
+  "t": "funnel narrow",
+  "d": [
+   "M3.5 4.5H20.5L14 12.5V19.5L10 17.5V12.5Z"
+  ]
+ },
+ {
+  "n": "sort",
+  "c": "Navigation",
+  "t": "order arrange",
+  "d": [
+   "M7 4V20M3.5 16.5L7 20L10.5 16.5",
+   "M17 20V4M13.5 7.5L17 4L20.5 7.5"
+  ]
+ },
+ {
+  "n": "plus",
+  "c": "Actions",
+  "t": "add new create",
+  "d": [
+   "M12 4.5V19.5M4.5 12H19.5"
+  ]
+ },
+ {
+  "n": "minus",
+  "c": "Actions",
+  "t": "remove subtract",
+  "d": [
+   "M4.5 12H19.5"
+  ]
+ },
+ {
+  "n": "close",
+  "c": "Actions",
+  "t": "x cancel dismiss",
+  "d": [
+   "M5.5 5.5L18.5 18.5M18.5 5.5L5.5 18.5"
+  ]
+ },
+ {
+  "n": "check",
+  "c": "Actions",
+  "t": "done confirm tick",
+  "d": [
+   "M4.5 12.5L9.5 17.5L19.5 6.5"
+  ]
+ },
+ {
+  "n": "edit",
+  "c": "Actions",
+  "t": "pencil rename write",
+  "d": [
+   "M4 20V16L15.5 4.5L19.5 8.5L8 20Z",
+   "M13 7L17 11"
+  ]
+ },
+ {
+  "n": "trash",
+  "c": "Actions",
+  "t": "delete remove bin",
+  "d": [
+   "M4 7H20",
+   "M9.5 7V4H14.5V7",
+   "M6.5 7L7.5 20H16.5L17.5 7",
+   "M10 11V16M14 11V16"
+  ]
+ },
+ {
+  "n": "copy",
+  "c": "Actions",
+  "t": "duplicate clone",
+  "d": [
+   "M8.5 8.5H18L20 10.5V20H10.5L8.5 18Z",
+   "M15.5 8.5V4H4V15.5H8.5"
+  ]
+ },
+ {
+  "n": "download",
+  "c": "Actions",
+  "t": "save fetch get",
+  "d": [
+   "M12 4V15",
+   "M7.5 10.5L12 15L16.5 10.5",
+   "M4.5 19.5H19.5"
+  ]
+ },
+ {
+  "n": "upload",
+  "c": "Actions",
+  "t": "import send",
+  "d": [
+   "M12 15V4",
+   "M7.5 8.5L12 4L16.5 8.5",
+   "M4.5 19.5H19.5"
+  ]
+ },
+ {
+  "n": "refresh",
+  "c": "Actions",
+  "t": "reload retry sync",
+  "d": [
+   "M19.5 12a7.5 7.5 0 1 1-2.2-5.3",
+   "M18 3.5V7.5H14"
+  ]
+ },
+ {
+  "n": "play",
+  "c": "Actions",
+  "t": "run start crawl",
+  "d": [
+   "M7 4.5V19.5L19.5 12Z"
+  ]
+ },
+ {
+  "n": "pause",
+  "c": "Actions",
+  "t": "hold suspend",
+  "d": [
+   "M5.5 4.5H8.5L9.5 5.5V19.5H6.5L5.5 18.5Z",
+   "M14.5 4.5H17.5L18.5 5.5V19.5H15.5L14.5 18.5Z"
+  ]
+ },
+ {
+  "n": "stop",
+  "c": "Actions",
+  "t": "halt end",
+  "d": [
+   "M5 5H16.5L19 7.5V19H7.5L5 16.5Z"
+  ]
+ },
+ {
+  "n": "power",
+  "c": "Actions",
+  "t": "shutdown quit off on",
+  "d": [
+   "M12 3.5V11",
+   "M7.5 6.5a7 7 0 1 0 9 0"
+  ]
+ },
+ {
+  "n": "save",
+  "c": "Actions",
+  "t": "disk store",
+  "d": [
+   "M4 4H16.5L20 7.5V20H4Z",
+   "M8 4V9H15V4",
+   "M7.5 20V14H16.5V20"
+  ]
+ },
+ {
+  "n": "external",
+  "c": "Actions",
+  "t": "open new window",
+  "d": [
+   "M13.5 4H20V10.5",
+   "M20 4L11 13",
+   "M17 14V20H4V7H10"
+  ]
+ },
+ {
+  "n": "link",
+  "c": "Actions",
+  "t": "hardlink chain url",
+  "d": [
+   "M10.5 7H7L3.5 10.5V13.5L7 17H10.5",
+   "M13.5 7H17L20.5 10.5V13.5L17 17H13.5",
+   "M8.5 12H15.5"
+  ]
+ },
+ {
+  "n": "more",
+  "c": "Actions",
+  "t": "ellipsis overflow dots",
+  "d": [
+   "M4 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+   "M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+   "M18 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+  ]
+ },
+ {
+  "n": "image",
+  "c": "Media",
+  "t": "picture artwork photo",
+  "d": [
+   "M3.5 4.5H18L20.5 7V19.5H6L3.5 17Z",
+   "M7.4 9.5a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0",
+   "M3.5 17L9 12.5L13 16L16 13.5L20.5 17"
+  ]
+ },
+ {
+  "n": "images",
+  "c": "Media",
+  "t": "pictures stack collection",
+  "d": [
+   "M6.5 7.5H18.5L20.5 9.5V19.5H8.5L6.5 17.5Z",
+   "M3.5 16V4.5H17",
+   "M6.5 17L10.5 13.5L14 16.5L16.5 14.5L20.5 17.5"
+  ]
+ },
+ {
+  "n": "bookmark",
+  "c": "Media",
+  "t": "save mark favourite",
+  "d": [
+   "M6 3.5H18V20.5L12 16L6 20.5Z"
+  ]
+ },
+ {
+  "n": "heart",
+  "c": "Media",
+  "t": "like love favourite",
+  "d": [
+   "M12 20L4.4 12.6a4.6 4.6 0 0 1 7.6-5.2a4.6 4.6 0 0 1 7.6 5.2Z"
+  ]
+ },
+ {
+  "n": "star",
+  "c": "Media",
+  "t": "rate favourite",
+  "d": [
+   "M12.00 3.60L14.29 9.44L20.56 9.82L15.71 13.81L17.29 19.88L12.00 16.50L6.71 19.88L8.29 13.81L3.44 9.82L9.71 9.44Z"
+  ]
+ },
+ {
+  "n": "eye",
+  "c": "Media",
+  "t": "view show visible preview",
+  "d": [
+   "M2.5 12C5 7.5 8.3 5.5 12 5.5S19 7.5 21.5 12C19 16.5 15.7 18.5 12 18.5S5 16.5 2.5 12Z",
+   "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
+  ]
+ },
+ {
+  "n": "eye-off",
+  "c": "Media",
+  "t": "hide hidden invisible",
+  "d": [
+   "M2.5 12C5 7.5 8.3 5.5 12 5.5S19 7.5 21.5 12C19 16.5 15.7 18.5 12 18.5S5 16.5 2.5 12Z",
+   "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0",
+   "M4 4L20 20"
+  ]
+ },
+ {
+  "n": "tag",
+  "c": "Media",
+  "t": "label keyword pixiv",
+  "d": [
+   "M3.5 3.5H11.5L20.5 12.5L12.5 20.5L3.5 11.5Z",
+   "M6.7 8a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0"
+  ]
+ },
+ {
+  "n": "hash",
+  "c": "Media",
+  "t": "hashtag number",
+  "d": [
+   "M9.5 3.5L7.5 20.5M16.5 3.5L14.5 20.5",
+   "M4 9H20.5M3.5 15H20"
+  ]
+ },
+ {
+  "n": "scan",
+  "c": "Media",
+  "t": "recognition face model detect",
+  "d": [
+   "M4 8V4H8M16 4H20V8M20 16V20H16M8 20H4V16",
+   "M9.5 10.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0",
+   "M8 17C8.8 15 10.2 14 12 14S15.2 15 16 17"
+  ]
+ },
+ {
+  "n": "target",
+  "c": "System",
+  "t": "goal aim crosshair",
+  "d": [
+   "M4.5 12a7.5 7.5 0 1 0 15 0a7.5 7.5 0 1 0 -15 0",
+   "M9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0",
+   "M12 2V6M12 18V22M2 12H6M18 12H22"
+  ]
+ },
+ {
+  "n": "server",
+  "c": "System",
+  "t": "host daemon reaverd",
+  "d": [
+   "M4 4H18L20 6V11H6L4 9Z",
+   "M4 13H18L20 15V20H6L4 18Z",
+   "M7.2 7.5a0.8 0.8 0 1 0 1.6 0a0.8 0.8 0 1 0 -1.6 0",
+   "M7.2 16.5a0.8 0.8 0 1 0 1.6 0a0.8 0.8 0 1 0 -1.6 0"
+  ]
+ },
+ {
+  "n": "database",
+  "c": "System",
+  "t": "db sqlite storage",
+  "d": [
+   "M4 6a8 2.8 0 1 0 16 0a8 2.8 0 1 0-16 0",
+   "M4 6V18a8 2.8 0 0 0 16 0V6",
+   "M4 12a8 2.8 0 0 0 16 0"
+  ]
+ },
+ {
+  "n": "layers",
+  "c": "System",
+  "t": "queue stack batch",
+  "d": [
+   "M12 3.5L21 8L12 12.5L3 8Z",
+   "M3 12L12 16.5L21 12",
+   "M3 16L12 20.5L21 16"
+  ]
+ },
+ {
+  "n": "cpu",
+  "c": "System",
+  "t": "worker processor chip",
+  "d": [
+   "M6.5 6.5H15.5L17.5 8.5V17.5H8.5L6.5 15.5Z",
+   "M9.5 9.5H13.5L14.5 10.5V14.5H10.5L9.5 13.5Z",
+   "M9.5 3V6.5M14.5 3V6.5M9.5 17.5V21M14.5 17.5V21M3 9.5H6.5M3 14.5H6.5M17.5 9.5H21M17.5 14.5H21"
+  ]
+ },
+ {
+  "n": "signal",
+  "c": "System",
+  "t": "rate bars strength",
+  "d": [
+   "M5 19V16M10 19V12M15 19V8M20 19V4"
+  ]
+ },
+ {
+  "n": "bolt",
+  "c": "System",
+  "t": "fast energy trigger",
+  "d": [
+   "M13.5 2.5L5 13.5H11.5L10.5 21.5L19 10.5H12.5Z"
+  ]
+ },
+ {
+  "n": "terminal",
+  "c": "System",
+  "t": "console log shell",
+  "d": [
+   "M3.5 4.5H18.5L20.5 6.5V19.5H5.5L3.5 17.5Z",
+   "M7 9.5L10 12L7 14.5",
+   "M12 15H17"
+  ]
+ },
+ {
+  "n": "monitor",
+  "c": "System",
+  "t": "display screen desktop",
+  "d": [
+   "M3 4H19L21 6V16.5H5L3 14.5Z",
+   "M8.5 20.5H15.5M12 16.5V20.5"
+  ]
+ },
+ {
+  "n": "chart",
+  "c": "System",
+  "t": "stats graph metrics",
+  "d": [
+   "M4 3.5V20.5H20.5",
+   "M8 16V12M12.5 16V8M17 16V10.5"
+  ]
+ },
+ {
+  "n": "calendar",
+  "c": "System",
+  "t": "date schedule",
+  "d": [
+   "M3.5 5H18.5L20.5 7V20.5H5.5L3.5 18.5Z",
+   "M3.5 10H20.5",
+   "M8 3V7M16 3V7"
+  ]
+ },
+ {
+  "n": "clock",
+  "c": "System",
+  "t": "time schedule history",
+  "d": [
+   "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0",
+   "M12 7V12L15.5 14"
+  ]
+ },
+ {
+  "n": "loader",
+  "c": "System",
+  "t": "loading spinner busy",
+  "d": [
+   "M12 3.5V7M12 17V20.5M3.5 12H7M17 12H20.5M6 6L8.5 8.5M15.5 15.5L18 18M6 18L8.5 15.5M15.5 8.5L18 6"
+  ]
+ },
+ {
+  "n": "info",
+  "c": "Status",
+  "t": "about help detail",
+  "d": [
+   "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0",
+   "M12 11V16.5",
+   "M11.4 7.8a0.6 0.6 0 1 0 1.2 0a0.6 0.6 0 1 0 -1.2 0"
+  ]
+ },
+ {
+  "n": "warning",
+  "c": "Status",
+  "t": "alert caution",
+  "d": [
+   "M12 3.5L21.5 19.5H2.5Z",
+   "M12 9.5V14",
+   "M11.4 16.8a0.6 0.6 0 1 0 1.2 0a0.6 0.6 0 1 0 -1.2 0"
+  ]
+ },
+ {
+  "n": "error",
+  "c": "Status",
+  "t": "fail stop danger",
+  "d": [
+   "M19.85 15.25L15.25 19.85L8.75 19.85L4.15 15.25L4.15 8.75L8.75 4.15L15.25 4.15L19.85 8.75Z",
+   "M9 9L15 15M15 9L9 15"
+  ]
+ },
+ {
+  "n": "success",
+  "c": "Status",
+  "t": "ok authenticated verified",
+  "d": [
+   "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0",
+   "M8 12.4L11 15.4L16.2 9.4"
+  ]
+ },
+ {
+  "n": "bell",
+  "c": "Status",
+  "t": "notification alert",
+  "d": [
+   "M6 16.5V11a6 6 0 0 1 12 0V16.5L19.5 18H4.5Z",
+   "M10 20.5H14"
+  ]
+ },
+ {
+  "n": "lock",
+  "c": "Status",
+  "t": "secure private r18",
+  "d": [
+   "M5 10.5H17L19 12.5V20.5H7L5 18.5Z",
+   "M8 10.5V7.5a4 4 0 0 1 8 0V10.5"
+  ]
+ },
+ {
+  "n": "unlock",
+  "c": "Status",
+  "t": "open public",
+  "d": [
+   "M5 10.5H17L19 12.5V20.5H7L5 18.5Z",
+   "M8 10.5V7.5a4 4 0 0 1 7.8-1.2"
+  ]
+ },
+ {
+  "n": "shield",
+  "c": "Status",
+  "t": "safe protect filter",
+  "d": [
+   "M12 3L19.5 6V12C19.5 16.5 16 19.5 12 21C8 19.5 4.5 16.5 4.5 12V6Z"
+  ]
+ },
+ {
+  "n": "update",
+  "c": "Status",
+  "t": "upgrade patch new version",
+  "d": [
+   "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0",
+   "M12 7.5V15.5",
+   "M8.5 12L12 15.5L15.5 12"
+  ]
+ },
+ {
+  "n": "folder",
+  "c": "Files",
+  "t": "directory",
+  "d": [
+   "M3.5 5.5H9.5L11.5 7.5H20.5V18.5H3.5Z"
+  ]
+ },
+ {
+  "n": "file",
+  "c": "Files",
+  "t": "document",
+  "d": [
+   "M5.5 3.5H14L18.5 8V20.5H5.5Z",
+   "M14 3.5V8H18.5"
+  ]
+ },
+ {
+  "n": "archive",
+  "c": "Files",
+  "t": "box store backup",
+  "d": [
+   "M3.5 4H19.5L20.5 5V8.5H4.5L3.5 7.5Z",
+   "M5 8.5V20H19V8.5",
+   "M10 12H14"
+  ]
+ },
+ {
+  "n": "drive",
+  "c": "Files",
+  "t": "disk hdd storage blobs",
+  "d": [
+   "M3.5 13H18.5L20.5 15V20H5.5L3.5 18Z",
+   "M3.5 13L6.5 5H17.5L20.5 13",
+   "M15.7 16.5a0.8 0.8 0 1 0 1.6 0a0.8 0.8 0 1 0 -1.6 0"
+  ]
+ },
+ {
+  "n": "user",
+  "c": "Accounts",
+  "t": "person profile character",
+  "d": [
+   "M8 8a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
+   "M4.5 20.5C5.5 16.5 8.5 14.5 12 14.5S18.5 16.5 19.5 20.5"
+  ]
+ },
+ {
+  "n": "users",
+  "c": "Accounts",
+  "t": "people group characters",
+  "d": [
+   "M5.5 8.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0",
+   "M3 19.5C3.8 16.2 6 14.5 9 14.5S14.2 16.2 15 19.5",
+   "M15.5 5.2a3.5 3.5 0 0 1 0 6.6",
+   "M17.5 14.8C19.3 15.5 20.5 17.2 21 19.5"
+  ]
+ },
+ {
+  "n": "key",
+  "c": "Accounts",
+  "t": "token auth password",
+  "d": [
+   "M4 15.5a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
+   "M11 12.5L20 3.5",
+   "M16.5 7L19 9.5M14.5 9L16.5 11"
+  ]
+ },
+ {
+  "n": "login",
+  "c": "Accounts",
+  "t": "sign in authenticate",
+  "d": [
+   "M10 4H19.5V20H10",
+   "M3.5 12H14",
+   "M10.5 8.5L14 12L10.5 15.5"
+  ]
+ },
+ {
+  "n": "logout",
+  "c": "Accounts",
+  "t": "sign out exit",
+  "d": [
+   "M14 4H4.5V20H14",
+   "M9.5 12H20.5",
+   "M17 8.5L20.5 12L17 15.5"
+  ]
+ },
+ {
+  "n": "sliders",
+  "c": "Preferences",
+  "t": "adjust controls tune",
+  "d": [
+   "M4 7H20M4 17H20",
+   "M7 4.5H10L11 5.5V9.5H8L7 8.5Z",
+   "M13 14.5H16L17 15.5V19.5H14L13 18.5Z"
+  ]
+ },
+ {
+  "n": "toggle",
+  "c": "Preferences",
+  "t": "switch on off",
+  "d": [
+   "M2.5 7H18.5L21.5 10V17H5.5L2.5 14Z",
+   "M14 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0"
+  ]
+ },
+ {
+  "n": "palette",
+  "c": "Preferences",
+  "t": "theme colour",
+  "d": [
+   "M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.8c0-1.3-1-1.5-1-2.7c0-1 .8-1.7 1.8-1.7H17a3.5 3.5 0 0 0 3.5-3.5C20.5 6.9 16.7 3.5 12 3.5Z",
+   "M6.6 11a0.9 0.9 0 1 0 1.8 0a0.9 0.9 0 1 0 -1.8 0",
+   "M9.1 7a0.9 0.9 0 1 0 1.8 0a0.9 0.9 0 1 0 -1.8 0",
+   "M13.6 7a0.9 0.9 0 1 0 1.8 0a0.9 0.9 0 1 0 -1.8 0"
+  ]
+ },
+ {
+  "n": "language",
+  "c": "Preferences",
+  "t": "localization translate i18n",
+  "d": [
+   "M3.5 5.5H12.5M8 3.5V5.5",
+   "M11 5.5C10 10 7.5 13 4 15",
+   "M6 9C7.5 11.5 9.5 13 12 14",
+   "M13 20.5L16.5 11.5L20 20.5M14.2 17.5H18.8"
+  ]
+ },
+ {
+  "n": "moon",
+  "c": "Preferences",
+  "t": "dark night mode",
+  "d": [
+   "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"
+  ]
+ },
+ {
+  "n": "sun",
+  "c": "Preferences",
+  "t": "light day mode",
+  "d": [
+   "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
+   "M12 2.5V4.5M12 19.5V21.5M2.5 12H4.5M19.5 12H21.5M5.3 5.3L6.7 6.7M17.3 17.3L18.7 18.7M5.3 18.7L6.7 17.3M17.3 6.7L18.7 5.3"
+  ]
+ },
+ {
+  "n": "arrow-right",
+  "c": "Arrows",
+  "t": "next forward",
+  "d": [
+   "M4 12H20",
+   "M14 6L20 12L14 18"
+  ]
+ },
+ {
+  "n": "arrow-left",
+  "c": "Arrows",
+  "t": "back previous",
+  "d": [
+   "M20 12H4",
+   "M10 6L4 12L10 18"
+  ]
+ },
+ {
+  "n": "arrow-up",
+  "c": "Arrows",
+  "t": "top ascend",
+  "d": [
+   "M12 20V4",
+   "M6 10L12 4L18 10"
+  ]
+ },
+ {
+  "n": "arrow-down",
+  "c": "Arrows",
+  "t": "bottom descend",
+  "d": [
+   "M12 4V20",
+   "M6 14L12 20L18 14"
+  ]
+ },
+ {
+  "n": "chevron-right",
+  "c": "Arrows",
+  "t": "caret next",
+  "d": [
+   "M9 5L16 12L9 19"
+  ]
+ },
+ {
+  "n": "chevron-left",
+  "c": "Arrows",
+  "t": "caret back",
+  "d": [
+   "M15 5L8 12L15 19"
+  ]
+ },
+ {
+  "n": "chevron-up",
+  "c": "Arrows",
+  "t": "caret collapse",
+  "d": [
+   "M5 15L12 8L19 15"
+  ]
+ },
+ {
+  "n": "chevron-down",
+  "c": "Arrows",
+  "t": "caret expand dropdown",
+  "d": [
+   "M5 9L12 16L19 9"
+  ]
+ },
+ {
+  "n": "expand",
+  "c": "Arrows",
+  "t": "maximize fullscreen",
+  "d": [
+   "M14 4H20V10",
+   "M20 4L13.5 10.5",
+   "M10 20H4V14",
+   "M4 20L10.5 13.5"
+  ]
+ },
+ {
+  "n": "collapse",
+  "c": "Arrows",
+  "t": "minimize shrink",
+  "d": [
+   "M20 4L14 10",
+   "M14 5V10H19",
+   "M4 20L10 14",
+   "M5 14H10V19"
+  ]
+ }
+]

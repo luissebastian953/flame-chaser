@@ -1,10 +1,10 @@
 {
   "title": "Crawl configuration",
   "subtitle": "{characters} characters watched · {tags} pixiv tags",
-  "addCharacter": "+ Add character",
-  "runAll": "▶ Run all now",
+  "addCharacter": "Add character",
+  "runAll": "Run all now",
   "edit": "Edit",
-  "run": "▶ Run",
+  "run": "Run",
   "table": {
     "heading": "Watched characters",
     "character": "Character",
@@ -17,7 +17,8 @@
     "r18": "R-18",
     "posts": "Posts",
     "r18On": "on",
-    "r18Off": "—"
+    "r18Off": "—",
+    "perRun": "Per run"
   },
   "empty": "No characters yet. Discovery starts from a pixiv tag.",
   "status": {

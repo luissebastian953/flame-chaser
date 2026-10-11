@@ -6,7 +6,7 @@
     "characterCount": "0 characters | 1 character | {n} characters",
     "noImages": "no images yet",
     "posts": "posts | post | posts",
-    "latest": "· latest {date}",
+    "latest": "latest {date}",
     "empty": "Add a character in Crawl to start."
   },
   "detail": {
@@ -19,7 +19,7 @@
       "watched": "watched",
       "suggested": "suggested"
     },
-    "watch": "+ watch",
+    "watch": "watch",
     "ignore": "ignore",
     "end": "end",
     "loading": "loading…"
@@ -41,5 +41,25 @@
     "hash": "sha256",
     "sameImageOn": "Same image on {source}",
     "openOn": "Open on {source}"
+  },
+  "kinds": {
+    "show": "Show",
+    "name": {
+      "illustration": "Illustrations",
+      "screencap": "Anime screencaps",
+      "photo": "Photos & cosplay",
+      "render": "3D & figures",
+      "other": "Screenshots & other",
+      "unlabeled": "Not labeled yet"
+    },
+    "labelNow": "Label 0 images | Label 1 image | Label {n} images",
+    "removeNow": "Remove 0 images | Remove 1 image | Remove {n} images",
+    "checkPeople": "Check 0 images for the gender filter | Check 1 image for the gender filter | Check {n} images for the gender filter",
+    "policy": "only illustrations and anime screencaps are kept — photos, cosplay, 3D, figures and screenshots are thrown away",
+    "labeling": "Labeling… {done} / {total}",
+    "labelingStarting": "Labeling…",
+    "firstUse": "the first run downloads the classifier (~34 MB)",
+    "unavailable": "Image labels are off: the optional classifier is not installed ({cmd})",
+    "failed": "Labeling failed: {error}"
   }
 }

@@ -6,6 +6,15 @@ person using the app, not for git log.
 
 ## Unreleased
 
+- Changed: one consistent icon set across the app — the side rail and its status lines, Settings tabs and storage rows, every action button (add, run, edit, save, sign in/out, check for updates, download, label), job states and warnings in Pipeline, the image details panel, gallery cards, sign-in badges and the help (i) buttons; a spinner shows while something is working
+- Added: a gender filter per character (Both · Female · Male, Full or Partial) that keeps only art with the right people in it — e.g. drops Genshin's male characters that a “Raiden” search brings in; Settings › Characters sets the default for new characters (the ~467 MB model downloads on first use; the database gains a table and two character settings)
+- Added: suggested tags without signing in to pixiv — a character's names in English, Japanese, Chinese and Korean, and its forms and costumes ranked by how much art they have, from Danbooru and Wikidata; one click adds each as a pixiv tag or an X search term, and short names that match other things are flagged
+- Added: “Posts per run” in each character's form (presets 100 · 300 · 500 · 1000, default 100): each crawl collects that many new posts — after skipping ones already seen and throwing away photos, cosplay, 3D and screenshots — new posts first, then further back in X's history from where the last run stopped. A run-cycle panel shows what run 1, 2 and 3 will collect
+- Added: the recognition filter can be switched off per character; switching it off brings back the images it threw away (the database gains two character settings)
+- Fixed: the X search limit counted images, not posts
+- Changed: “Minimum bookmarks” in the character form is explained in plain words, with a ? for the details, and says when it has no effect (pixiv off)
+- Fixed: Settings sections were cut off in small windows; the page now scrolls
+- Added: only illustrations and anime screencaps are kept — every downloaded image is classified first, and photos (incl. cosplay), 3D renders, figures and screenshots are thrown away before they are saved. Images saved before this can be cleaned up from a character's gallery with one click (the ~34 MB classifier downloads on first use; the database gains an image-labels table)
 - Added: first-launch sign-in gate; pixiv and X sessions from the site's own login page
 - Added: live tag validation, preview strip and suggested tags in the character form
 - Added: in-app updates with a daily check and a rail banner
@@ -13,6 +22,10 @@ person using the app, not for git log.
 - Added: Shutdown button in the rail (desktop)
 - Added: Settings › Language — interface language or follow the system, translation coverage, and number/date/time/file-size formats with a live preview
 - Added: per-character source checkboxes (pixiv, X, or both) in the character form; the crawl skips whatever is unticked
+- Added: X search by match term (images only, through gallery-dl) so an X-only character finds art; `twitter_search_limit` in Settings › Network, 0 turns it off
+- Fixed: the pipeline log now says why a source was skipped (no X artists linked yet, source unticked, gallery-dl missing) instead of finishing silently
+- Added: every job logs the engine's age at start ("engine up 1.8h"), so a daemon running code older than your edits is visible instead of mysterious
+- Fixed: gallery-dl reports refusals (AuthRequired, rate limits) inside its JSON with exit code 0 — those were being read as "no results"; they now fail the stage with the reason
 - Changed: cyber build design — Chakra Petch, magenta ember, square plates by default
 - Added: language setting (English; Japanese, Indonesian, Chinese and Filipino planned)
 - Added: by-character folders are now written during download (hardlinks where the drive allows)

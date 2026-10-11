@@ -6,7 +6,7 @@ const up = useUpdater();
 <template>
   <div v-if="up.phase === 'available'" class="ub">
     <div class="row">
-      <span class="ic">⤓</span>
+      <Icon name="bell" class="ic" :size="16" />
       <div class="flex-1 min-w-0">
         <div class="t">{{ $t('updates.banner.new') }}</div>
         <div class="data text-small text-dim">
@@ -14,7 +14,10 @@ const up = useUpdater();
           <span v-if="up.mb">· {{ up.mb }} MB</span>
         </div>
       </div>
-      <button class="btn cy sm" @click="up.download()">{{ $t('updates.banner.update') }}</button>
+      <button class="btn cy sm" @click="up.download()">
+        <Icon name="download" :size="13" />
+        {{ $t('updates.banner.update') }}
+      </button>
     </div>
   </div>
 
@@ -43,6 +46,7 @@ const up = useUpdater();
         </div>
       </div>
       <button v-if="up.phase === 'ready'" class="btn cy sm" @click="up.install()">
+        <Icon name="refresh" :size="13" />
         {{ $t('updates.banner.restart') }}
       </button>
     </div>
@@ -70,7 +74,6 @@ const up = useUpdater();
 }
 .ic {
   color: var(--cyan);
-  font-size: 16px;
 }
 .pct {
   color: var(--cyan);

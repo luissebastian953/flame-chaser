@@ -19,10 +19,13 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
 │   ├── dedupe.py     two-level classify()
 │   ├── blobs.py      content-addressed store
 │   ├── thumbs.py     400px WebP at ingest, addressed by the original's sha
+│   ├── kinds.py      image kinds; KEEP = illustration + screencap, the rest is never stored; optional [classify]
+│   ├── names.py      a character's names + forms from Danbooru and Wikidata (form suggestions)
+│   ├── people.py     who is in a picture (WD tagger v3): per-character gender filter, full/partial
 │   ├── library.py    hardlink view, gc, import
 │   ├── jobs.py       queue, single worker thread, JobContext (check/stage/progress), interrupted-at-boot
 │   ├── handlers.py   job type -> pipeline function; adapters built per job
-│   ├── pipeline.py   poll → link → poll_twitter → download; drift notes
+│   ├── pipeline.py   poll → link → poll_twitter / search_to_target → download; drift notes
 │   ├── cli.py        watch / watches / poll / link / media / status / doctor / tags / suggest / jobs / net
 │   └── sources/      one file per source, behind the Adapter protocol
 │       ├── base.py   Adapter protocol (name, supports_discovery, discover, fetch_media)
@@ -34,6 +37,7 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
 │   ├── app.py        the API contract (docs/design/architecture.md §6); *In models; Heartbeat; State
 │   ├── auth.py       store / verify / revoke source sessions (pixiv cookie verified before stored)
 │   ├── probe.py      character-form live validation: one search page per tag, cached; preview proxy
+│   ├── names.py      NameFinder: coreflame.names behind a day's cache (POST /api/names)
 │   ├── events.py     EventHub: ring buffer + Last-Event-ID replay + keepalives
 │   └── security.py   LoopbackAuth: bearer token + Host/Origin check + CORS reflection
 └── tests/            plain python3 files, all offline; each has a __main__ block
@@ -42,7 +46,11 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
     ├── test_seen.py      the visited gate
     ├── test_tags.py      observed-tag ranking
     ├── test_jobs.py      make_runner(); queue, cancel, interrupted
+    ├── test_kinds.py     score mapping, model verify, reject at ingest, backlog discard (fake labeler)
+    ├── test_target.py    X search to N kept posts: exact target, catch-up, history end, 10× stop (DeepX)
+    ├── test_names.py     Danbooru/Wikidata names: resolve, merge, entity check, cache (fixtures)
     ├── test_net.py       diagnostic verdicts + the verify=False refusal
+    ├── test_people.py    gender rules, tagger input, reject at download, backlog, loosening (fake tagger)
     └── test_dawnmaker.py the HTTP surface via TestClient (auth layers, routes, SSE)
 ```
 

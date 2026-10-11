@@ -7,3 +7,5 @@ node_modules
 package-lock.json
 src/auto-imports.d.ts
 src/components.d.ts
+# the icon set exactly as the designer delivered it (curio-icons.zip): swap the file to update
+src/assets/icons/icons.json

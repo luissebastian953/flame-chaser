@@ -21,8 +21,41 @@ from coreflame.models import IllustRecord, Watch
 from coreflame.sources.twitter import TwitterAdapter
 
 
+class FakeTwitter(TwitterAdapter):
+    """gallery-dl replaced by a canned search answer: one two-image post that
+    names the character. `available()` is true so the handler runs the X pass."""
+
+    def __init__(self, store: Store) -> None:
+        super().__init__(binary="definitely-not-installed")
+        self.sink = store
+        self.queries: list[str] = []
+
+    def available(self) -> bool:
+        return True
+
+    def _run(self, url: str, limit: int, by_post: bool = False) -> list[dict]:
+        self.queries.append(url)
+        if "/search?" not in url:
+            return []
+        entry = {
+            "tweet_id": 777,
+            "content": "甘雨 sketch #原神",
+            "date": "2026-08-21 03:00:00",
+            "hashtags": ["原神"],
+            "author": {"id": 9, "name": "Artist", "nick": "artist_x"},
+            "width": 1200,
+            "height": 1600,
+        }
+        return self._flatten(
+            [
+                [3, "https://pbs.twimg.com/media/AAA.jpg", {**entry, "num": 1}],
+                [3, "https://pbs.twimg.com/media/BBB.jpg", {**entry, "num": 2}],
+            ]
+        )
+
+
 class FakeAdapters(Adapters):
-    """Real Adapters shape, fake pixiv, gallery-dl reported absent."""
+    """Real Adapters shape, fake pixiv, fake X search (see FakeTwitter)."""
 
     def __init__(self, cfg: Config, store: Store, pixiv=None) -> None:
         self.cfg = cfg
@@ -30,7 +63,8 @@ class FakeAdapters(Adapters):
         self.pixiv.sink = store
         # bytes, not a network round-trip: each url gets a distinct image
         self.pixiv.fetch_media = lambda url, referer=None: _img(hash(url) % 1000, (120, 160))
-        self.twitter = TwitterAdapter(binary="definitely-not-installed")
+        self.twitter = FakeTwitter(store)
+        self.twitter.fetch_media = lambda url, referer=None: _img(hash(url) % 1000, (120, 160))
         self.blobs = BlobStore(cfg.blob_root)
 
     def close(self) -> None:
@@ -59,7 +93,10 @@ def test_poll_job_end_to_end(tmp: Path) -> None:
     assert runner.run_pending(store) == 1
     j = JobRunner.get(store, jid)
     assert j.state == SUCCEEDED, j.error
-    assert j.counters["new_posts"] == 2 and j.counters["listed"] == 2
+    # 2 pixiv artworks; the X search for the slug lists 1 post that names
+    # the character in Japanese only, so it is a NO_MATCH skip, not a post
+    assert j.counters["new_posts"] == 2 and j.counters["listed"] == 3
+    assert j.counters["skipped"] == 1
     stages = [e["message"] for e in events if e["kind"] == "stage"]
     assert stages[0] == "started" and "discover" in stages and stages[-1] == "finished"
     assert JobRunner.tail(store, jid)[-1]["data"]["state"] == "succeeded"
@@ -220,21 +257,32 @@ def test_watch_sources_gate_each_stage(tmp: Path) -> None:
 
     runner, cfg = make_runner(tmp / "s")
     store = Store(cfg.db_path)
-    store.upsert_watch(Watch(slug="ganyu", pixiv_tags=["甘雨"], sources=["twitter"]))
+    store.upsert_watch(
+        Watch(slug="ganyu", pixiv_tags=["甘雨"], match_terms=["甘雨"], sources=["twitter"])
+    )
     assert store.watches()[0].sources == ["twitter"]  # round-trips through v4 column
     jid = JobRunner.submit(store, "poll", {"media": False, "link": False})
     runner.run_pending(store)
     j = JobRunner.get(store, jid)
     assert j.state == SUCCEEDED, j.error
-    assert j.counters.get("new_posts", 0) == 0 and store.stats()["posts"] == 0
+    # X-only: no pixiv request (it would have failed -- the fake is authed but
+    # the point is no pixiv rows), one X search hit archived under the watch
+    rows = store.conn.execute("SELECT source, external_id FROM posts").fetchall()
+    assert [(r[0], r[1]) for r in rows] == [("twitter", "777")]
+    assert store.conn.execute("SELECT slug FROM post_watches").fetchone()[0] == "ganyu"
+    assert store.watermark("twitter", "search:甘雨") == "777"
+    log = " ".join(e["message"] for e in JobRunner.tail(store, jid))
+    assert "'甘雨' · older page" in log and "no linked X artists yet" in log
+    # every job says how old the running engine is -- stale-process detection
+    assert "engine up" in log
 
     store.upsert_watch(Watch(slug="ganyu", pixiv_tags=["甘雨"], sources=["pixiv"]))
     jid = JobRunner.submit(store, "poll", {"media": False, "link": False})
     runner.run_pending(store)
     j = JobRunner.get(store, jid)
     assert j.state == SUCCEEDED, j.error
-    assert store.stats()["posts"] == 2
-    print("  watch sources:        ok (X-only -> no pixiv search; pixiv-only -> 2 posts)")
+    assert store.stats()["posts"] == 3  # + the two pixiv artworks
+    print("  watch sources:        ok (X-only -> 1 search hit, no pixiv; pixiv-only -> +2)")
 
 
 def test_failure_is_data(tmp: Path) -> None:

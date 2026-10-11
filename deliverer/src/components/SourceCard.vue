@@ -13,7 +13,7 @@ const f = ref({ PHPSESSID: '', auth_token: '', ct0: '' });
 const showForm = ref(false);
 const localErr = ref('');
 
-const GLYPH = { pixiv: 'px', twitter: '𝕏', other: '◎' } as const;
+const GLYPH = { pixiv: 'px', twitter: '𝕏', other: '' } as const; // other: an icon, below
 
 const meta = computed(() => ({
   name: t(`auth.source.${props.source}.name`),
@@ -79,7 +79,8 @@ async function submitPaste() {
   <div class="card" :class="{ soon: state === 'soon', on: state === 'on' }">
     <div class="row">
       <div class="glyph" :class="{ cyan: source === 'twitter', ember: source === 'pixiv' }">
-        {{ meta.glyph }}
+        <Icon v-if="source === 'other'" name="more" :size="20" />
+        <template v-else>{{ meta.glyph }}</template>
       </div>
       <div class="flex-1 min-w-0">
         <div class="name">
@@ -102,14 +103,18 @@ async function submitPaste() {
       </template>
       <template v-else-if="state === 'on' || state === 'pending'">
         <button v-if="source === 'pixiv'" class="btn gh sm" :disabled="busy" @click="src.verifyPixiv()">
+          <Icon name="refresh" :size="13" :class="{ spin: state === 'pending' }" />
           {{ $t('auth.source.check') }}
         </button>
         <button class="btn gh sm" :disabled="busy" @click="src.disconnect(source as Source)">
+          <Icon name="logout" :size="13" />
           {{ $t('auth.source.signOut') }}
         </button>
       </template>
       <template v-else>
         <button class="btn pri" :disabled="busy" @click="connect">
+          <Icon v-if="busy" name="loader" class="spin" :size="14" />
+          <Icon v-else name="login" :size="14" />
           {{
             busy
               ? $t('auth.source.busy')
@@ -134,6 +139,7 @@ async function submitPaste() {
             <template #site>{{ meta.name }}</template>
           </i18n-t>
           <button class="link" @click="showForm = !showForm">
+            <Icon name="key" :size="12" />
             {{ showForm ? $t('auth.source.pasteToggleHide') : $t('auth.source.pasteToggleShow') }}
           </button>
         </span>
@@ -174,6 +180,8 @@ async function submitPaste() {
       </template>
       <div v-if="showForm" class="flex gap-10 items-center">
         <button class="btn pri sm" :disabled="busy" @click="submitPaste">
+          <Icon v-if="busy" name="loader" class="spin" :size="13" />
+          <Icon v-else name="save" :size="13" />
           {{ busy ? $t('auth.source.verifying') : $t('auth.source.save') }}
         </button>
         <button class="btn gh sm" @click="paste = false">{{ $t('auth.source.cancel') }}</button>

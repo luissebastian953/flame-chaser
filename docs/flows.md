@@ -137,8 +137,10 @@ flowchart TD
   subgraph lnk["stage link"]
     l1["artists_needing_link"] --> l2["pixiv profile → X handle"] --> l3["set_twitter_handle · follow"]
   end
-  subgraph tw["stage discover · twitter"]
+  subgraph tw["stage discover · twitter (watches with X ticked)"]
+    t0["each match term"] --> t0b["gallery-dl search · filter:images · since watermark"]
     t1["each followed handle"] --> t2["gallery-dl timeline since watermark"]
+    t0b --> t3
     t2 --> t3{"seen_posts allows?"}
     t3 -- yes --> t4{"matches a watch's match terms?"}
     t4 -- no --> t5["mark skipped · no_match"]

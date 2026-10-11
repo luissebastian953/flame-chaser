@@ -12,8 +12,10 @@ from .config import Config
 from .db import Store
 from .dedupe import classify
 from .jobs import JobContext
+from .kinds import KEEP, Label, LabelError, Labels, ModelError, kept, make_labeler
 from .library import LibraryView, safe_name
-from .models import DiscoverStats, Watch
+from .models import DiscoverStats, IllustRecord, Watch
+from .people import Tags, accepts
 from .seen import SeenState, SkipReason
 from .sources.pixiv import PixivAdapter
 from .sources.twitter import GalleryDLError, TwitterAdapter
@@ -33,6 +35,8 @@ class RunStats:
     gated: int = 0  # requests that never happened
     skipped: int = 0
     gone: int = 0
+    labeled: int = 0  # images given a kind (coreflame/kinds.py) at ingest
+    rejected: int = 0  # labelled as a kind the archive does not keep; never stored
     notes: list[str] = field(default_factory=list)
 
     def merge(self, other: RunStats) -> RunStats:
@@ -46,6 +50,8 @@ class RunStats:
             "gated",
             "skipped",
             "gone",
+            "labeled",
+            "rejected",
         ):
             setattr(self, f, getattr(self, f) + getattr(other, f))
         self.notes += other.notes
@@ -107,7 +113,7 @@ def poll_pixiv(
     c = _ctx(ctx)
     ws = [w for w in (watches or store.watches()) if w.wants("pixiv")]
     if not ws:
-        st.notes.append("pixiv: no watch has pixiv enabled -- nothing to discover")
+        c.log("pixiv: no watch has pixiv enabled -- skipped")
         return st
     if not pixiv.authed:
         # pixiv's search endpoint answers 401 anonymously; say it once, up front
@@ -200,7 +206,55 @@ def resolve_artist_links(
     return st
 
 
-# -- x: follow feed -------------------------------------------------------
+# -- x: search + follow feed ----------------------------------------------
+def _ingest_tweet(
+    store: Store,
+    tw: TwitterAdapter,
+    rec: IllustRecord,
+    ws: list[Watch],
+    st: RunStats,
+    c: JobContext,
+    *,
+    keep_unmatched: bool,
+    label: str,
+) -> list[str]:
+    """One timeline/search record -> posts + post_watches, or a NO_MATCH skip.
+    Returns the slugs it was linked to ([] when gated or skipped)."""
+    if not store.seen.should_fetch("twitter", rec.external_id):
+        st.gated += 1
+        return []
+    hits = [w.slug for w in ws if tw.matches(rec, w)]
+    if not hits and not keep_unmatched:
+        # kept out of `posts` on purpose: the phash pass in the download step
+        # can only link images we actually fetched, and fetching every post
+        # from every followed artist is a different (much larger) product
+        # than a character watcher
+        store.seen.mark(
+            "twitter", rec.external_id, SeenState.SKIPPED, reason=SkipReason.NO_MATCH.value
+        )
+        st.skipped += 1
+        return []
+    is_new = store.upsert_post(rec, hits[0] if hits else None)
+    if is_new:
+        st.new_posts += 1
+    else:
+        st.seen_posts += 1
+    store.seen.mark("twitter", rec.external_id, SeenState.INDEXED)
+    c.item(
+        f"{label} {rec.external_id} · @{rec.artist_handle} · {len(rec.media)} image(s)",
+        source="twitter",
+        external_id=rec.external_id,
+        action="new" if is_new else "seen",
+        slug=hits[0] if hits else None,
+    )
+    for extra in hits[1:]:
+        store.conn.execute(
+            "INSERT OR IGNORE INTO post_watches VALUES(?,?,?)",
+            (rec.source, rec.external_id, extra),
+        )
+    return hits
+
+
 def poll_twitter(
     store: Store,
     tw: TwitterAdapter,
@@ -208,17 +262,63 @@ def poll_twitter(
     limit: int = 200,
     keep_unmatched: bool = False,
     ctx: JobContext | None = None,
+    search_limit: int = 50,
 ) -> RunStats:
+    """Two passes, both only for watches with X ticked:
+
+    1. search -- each match term through X search (images only). The only
+       discovery X offers; the request X polices hardest, hence the small
+       per-term limit. `search_limit=0` disables it.
+    2. timelines -- the media feeds of artists linked from pixiv, text-matched
+       against every X watch. Cheap and precise; nothing here without a pixiv
+       poll + link first.
+    """
     st = RunStats()
     c = _ctx(ctx)
     ws = [w for w in (watches or store.watches()) if w.wants("twitter")]
     if not ws:
-        st.notes.append("X: no watch has X enabled -- timelines skipped")
+        c.log("X: no watch has X enabled -- skipped")
         return st
+
+    # ---- 1. search by term
+    terms = [(w, t) for w in ws for t in (w.match_terms or [w.slug])] if search_limit else []
+    if terms:
+        c.stage("discover", source="twitter", mode="search", terms=len(terms))
+        for ti, (w, term) in enumerate(terms):
+            c.check()
+            c.progress(ti, len(terms), term=term)
+            feed = f"search:{term.lower()}"
+            mark = store.watermark("twitter", feed)
+            highest = int(mark or 0)
+            c.log(
+                f"{w.slug} · search {term!r} · watermark {mark or 'none'}", slug=w.slug, term=term
+            )
+            try:
+                records = list(tw.search(term, mark, search_limit))
+            except GalleryDLError as e:
+                st.failed += 1
+                c.log(f"search {term!r}: {e}", level="warning")
+                continue
+            for rec in records:
+                c.check()
+                highest = max(highest, int(rec.external_id))
+                st.listed += 1
+                _ingest_tweet(
+                    store, tw, rec, ws, st, c, keep_unmatched=keep_unmatched, label=f"search {term}"
+                )
+            if highest:
+                store.set_watermark("twitter", feed, str(highest))
+        c.progress(len(terms), len(terms))
+
+    # ---- 2. timelines of linked artists
     handles = store.followed_handles()
-    c.stage("discover", source="twitter", handles=len(handles))
+    c.stage("discover", source="twitter", mode="timelines", handles=len(handles))
     if not handles:
-        st.notes.append("no followed X handles yet -- run `coreflame link` after a pixiv poll")
+        c.log(
+            "no linked X artists yet -- timelines skipped"
+            + ("" if terms or not search_limit else "; add a match term or run a pixiv poll first")
+        )
+        _record_drift(store, tw, "twitter", "twitter_entry", st)
         return st
     for hi, handle in enumerate(handles):
         c.check()
@@ -230,48 +330,252 @@ def poll_twitter(
             records = list(tw.timeline(handle, mark, limit))
         except GalleryDLError as e:
             st.failed += 1
-            st.notes.append(f"@{handle}: {e}")
+            c.log(f"@{handle}: {e}", level="warning")
             continue
         for rec in records:
             c.check()
             highest = max(highest, int(rec.external_id))
             st.listed += 1
-            if not store.seen.should_fetch("twitter", rec.external_id):
-                st.gated += 1
-                continue
-            hits = [w.slug for w in ws if tw.matches(rec, w)]
-            if not hits and not keep_unmatched:
-                # kept out of `posts` on purpose: the phash pass in the
-                # download step can only link images we actually fetched, and
-                # fetching every post from every followed artist is a different
-                # (much larger) product than a character watcher
-                store.seen.mark(
-                    "twitter", rec.external_id, SeenState.SKIPPED, reason=SkipReason.NO_MATCH.value
-                )
-                st.skipped += 1
-                continue
-            is_new = store.upsert_post(rec, hits[0] if hits else None)
-            if is_new:
-                st.new_posts += 1
-            else:
-                st.seen_posts += 1
-            store.seen.mark("twitter", rec.external_id, SeenState.INDEXED)
-            c.item(
-                f"@{handle} {rec.external_id} · {len(rec.media)} image(s)",
-                source="twitter",
-                external_id=rec.external_id,
-                action="new" if is_new else "seen",
-                slug=hits[0] if hits else None,
+            _ingest_tweet(
+                store, tw, rec, ws, st, c, keep_unmatched=keep_unmatched, label=f"@{handle}"
             )
-            for extra in hits[1:]:
-                store.conn.execute(
-                    "INSERT OR IGNORE INTO post_watches VALUES(?,?,?)",
-                    (rec.source, rec.external_id, extra),
-                )
         if highest:
             store.set_watermark("twitter", feed, str(highest))
     c.progress(len(handles), len(handles))
     _record_drift(store, tw, "twitter", "twitter_entry", st)
+    return st
+
+
+# -- X search to a target -------------------------------------------------
+PAGE_POSTS = 50  # posts per search page: one gallery-dl run, a few X requests
+SAFETY_FACTOR = 10  # give up after listing this many times the target
+LABELS_OFF = "labels off"  # RunStats note: the classifier failed this run
+TAGS_OFF = "people tags off"  # RunStats note: the tagger failed this run
+
+
+@dataclass
+class _TermWalk:
+    """The stretch of X search history one term has covered: every post with
+    lo <= id <= hi has been listed. `hi` rises as new posts appear, `lo` falls
+    as crawls walk back; lo == 0 means X has nothing older. Snowflake ids, not
+    timestamps (decision #5), so there is no gap and no double count."""
+
+    term: str
+    hi: int | None
+    lo: int | None
+    cursor: int | None = None  # max_id for the next page of an unfinished catch-up
+    top: int = 0  # newest id this crawl's catch-up has seen
+    caught_up: bool = False
+    stopped: bool = False  # a page failed: leave the term alone for this crawl
+
+    @property
+    def finished(self) -> bool:
+        return self.stopped or (self.caught_up and self.lo == 0)
+
+
+def _load_walk(store: Store, term: str) -> _TermWalk:
+    t = term.lower()
+    hi = store.watermark("twitter", f"search:{t}")
+    lo = store.watermark("twitter", f"search-lo:{t}")
+    hi_i = int(hi) if hi and hi.isdigit() else None
+    lo_i = int(lo) if lo and lo.isdigit() else None
+    if hi_i is None:
+        # never searched: the first page from the newest starts the stretch
+        return _TermWalk(term, None, None, caught_up=True)
+    if lo_i is None:
+        lo_i = hi_i  # searched by the old newest-N poll: walk back from its top
+    return _TermWalk(term, hi_i, lo_i)
+
+
+def _fetch_page(
+    tw: TwitterAdapter, walk: _TermWalk, page_posts: int
+) -> tuple[list[IllustRecord], str, bool]:
+    """One page for one term, newest first, trimmed to posts outside the covered
+    stretch. Catch up on newer posts until the stretch is reached, else go one
+    page further back. Returns (records, direction, reaches_covered)."""
+    if not walk.caught_up:
+        assert walk.hi is not None
+        page = tw.search_page(walk.term, walk.cursor, page_posts)
+        ids = [int(r.external_id) for r in page]
+        if ids:
+            walk.top = max(walk.top, *ids)
+        fresh = [
+            r
+            for r in page
+            if int(r.external_id) > walk.hi
+            and (walk.cursor is None or int(r.external_id) <= walk.cursor)
+        ]
+        # nothing left between the cursor and hi (incl. a page that is only X's
+        # off-by-one post above max_id) also means caught up -- never re-ask it
+        return fresh, "newer", not fresh or min(ids) <= walk.hi
+    page = tw.search_page(walk.term, None if walk.lo is None else walk.lo - 1, page_posts)
+    fresh = [r for r in page if walk.lo is None or int(r.external_id) < walk.lo]
+    return fresh, "older", False
+
+
+def _commit(store: Store, walk: _TermWalk, direction: str, rec_id: int) -> None:
+    """One record fully processed: move the stretch past it, durably. Stopping
+    right after this leaves the rest of the page for the next crawl -- listed
+    again then, never skipped."""
+    t = walk.term.lower()
+    if direction == "newer":
+        walk.cursor = rec_id - 1
+        return
+    if walk.hi is None:  # the very first record of a never-searched term
+        walk.hi = rec_id
+        store.set_watermark("twitter", f"search:{t}", str(rec_id))
+    walk.lo = rec_id
+    store.set_watermark("twitter", f"search-lo:{t}", str(rec_id))
+
+
+def _page_done(
+    store: Store, walk: _TermWalk, direction: str, reaches_covered: bool, empty: bool
+) -> None:
+    """A whole page was processed: the catch-up may have met the covered
+    stretch, or the walk back may have found nothing older."""
+    t = walk.term.lower()
+    if direction == "newer":
+        if reaches_covered:
+            walk.caught_up = True
+            if walk.hi is not None and walk.top > walk.hi:
+                walk.hi = walk.top
+                store.set_watermark("twitter", f"search:{t}", str(walk.hi))
+    elif empty:
+        walk.lo = 0
+        store.set_watermark("twitter", f"search-lo:{t}", "0")
+
+
+def _drain_downloads(
+    store: Store,
+    blobs: BlobStore,
+    pixiv: PixivAdapter,
+    tw: TwitterAdapter,
+    labeler: Labels | None,
+    threshold: int,
+    st: RunStats,
+    ctx: JobContext | None,
+    tagger: Tags | None = None,
+) -> tuple[Labels | None, Tags | None]:
+    """Download (and judge) everything pending now. Returns the labeler and
+    tagger, each None once it has proved unusable, so the caller stops
+    handing it over."""
+    while store.pending_media(1):
+        got = download_pending(
+            store,
+            blobs,
+            pixiv,
+            tw,
+            threshold=threshold,
+            ctx=ctx,
+            labeler=labeler,
+            announce=False,
+            tagger=tagger,
+        )
+        st.merge(got)
+        if LABELS_OFF in got.notes:
+            labeler = None
+        if TAGS_OFF in got.notes:
+            tagger = None
+        if not (got.downloaded or got.dupes or got.failed or got.rejected):
+            break  # nothing moved: never spin
+    return labeler, tagger
+
+
+def _kept(store: Store, external_id: str) -> bool:
+    return (
+        store.conn.execute(
+            "SELECT 1 FROM media WHERE source='twitter' AND external_id=? AND state='stored' LIMIT 1",
+            (external_id,),
+        ).fetchone()
+        is not None
+    )
+
+
+def search_to_target(
+    store: Store,
+    tw: TwitterAdapter,
+    blobs: BlobStore,
+    pixiv: PixivAdapter,
+    watch: Watch,
+    ws: list[Watch],
+    target: int,
+    *,
+    labeler: Labels | None = None,
+    threshold: int = 6,
+    ctx: JobContext | None = None,
+    page_posts: int = PAGE_POSTS,
+    tagger: Tags | None = None,
+) -> RunStats:
+    """Search X for one character until exactly `target` NEW posts are kept --
+    posts left holding at least one stored image after the visited gate, the
+    text match and the image kinds (kinds.KEEP) have had their say. Newer posts
+    first, then further back, one page per term in turn; each post is
+    downloaded and judged before the next is counted, so the count is exact.
+    Stops at the target, when every term has run out of history, or after
+    listing SAFETY_FACTOR x target posts. `ws` = every X-enabled watch, so a
+    post naming two characters is linked to both."""
+    st = RunStats()
+    c = _ctx(ctx)
+    walks = [_load_walk(store, t) for t in (watch.match_terms or [watch.slug])]
+    cap = SAFETY_FACTOR * target
+    kept = 0
+    c.stage("discover", source="twitter", mode="target", slug=watch.slug, target=target)
+    c.progress(0, target)  # kept posts against the target IS an honest total
+
+    def done() -> bool:
+        return kept >= target or st.listed >= cap
+
+    while not done():
+        active = [w for w in walks if not w.finished]
+        if not active:
+            c.log(
+                f"{watch.slug}: X has nothing older for any term -- history complete "
+                f"({kept}/{target} kept this crawl)"
+            )
+            break
+        for walk in active:  # take turns: one page per term
+            c.check()
+            try:
+                recs, direction, reaches = _fetch_page(tw, walk, page_posts)
+            except GalleryDLError as e:
+                st.failed += 1
+                walk.stopped = True
+                c.log(f"search {walk.term!r}: {e}", level="warning")
+                continue
+            new_here = 0
+            for rec in recs:
+                if done():  # checked BEFORE a record: a page whose last record hits
+                    break  # the target still counts as fully processed below
+                c.check()
+                st.listed += 1
+                hits = _ingest_tweet(
+                    store, tw, rec, ws, st, c, keep_unmatched=False, label=f"search {walk.term}"
+                )
+                if watch.slug in hits:
+                    labeler, tagger = _drain_downloads(
+                        store, blobs, pixiv, tw, labeler, threshold, st, ctx, tagger
+                    )
+                    if _kept(store, rec.external_id):
+                        kept += 1
+                        new_here += 1
+                        c.progress(kept, target)
+                _commit(store, walk, direction, int(rec.external_id))
+            else:  # the whole page was processed
+                _page_done(store, walk, direction, reaches, empty=not recs)
+            c.log(
+                f"{watch.slug} · {walk.term!r} · {direction} page · {new_here} kept "
+                f"· {kept}/{target}",
+                slug=watch.slug,
+                term=walk.term,
+            )
+            if done():
+                break
+    if st.listed >= cap and kept < target:
+        c.log(
+            f"{watch.slug}: stopped after listing {st.listed} posts with only {kept} kept "
+            f"-- a search term probably matches mostly other things",
+            level="warning",
+        )
     return st
 
 
@@ -285,7 +589,12 @@ def download_pending(
     threshold: int = 6,
     ctx: JobContext | None = None,
     thumbs: ThumbStore | None = None,
+    labeler: Labels | None = None,
+    announce: bool = True,
+    tagger: Tags | None = None,
 ) -> RunStats:
+    """`announce=False` when a caller interleaves downloads with its own stage
+    (search_to_target): no stage change, and its progress bar is left alone."""
     st = RunStats()
     c = _ctx(ctx)
     thumbs = thumbs or ThumbStore(blobs.root.parent / "thumbs")
@@ -293,10 +602,12 @@ def download_pending(
     # filesystem allows, else symlinks, else copies. Rebuildable, never truth.
     view = LibraryView(blobs.root.parent)
     rows = store.pending_media(batch)
-    c.stage("download", total=len(rows))  # pending count IS an honest total
+    if announce:
+        c.stage("download", total=len(rows))  # pending count IS an honest total
     for i, row in enumerate(rows):
         c.check()
-        c.progress(i, len(rows))
+        if announce:
+            c.progress(i, len(rows))
         source, eid, idx, url = (row["source"], row["external_id"], row["idx"], row["url"])
         post = store.conn.execute(
             "SELECT artist_id, artist_handle, permalink FROM posts "
@@ -340,17 +651,78 @@ def download_pending(
             continue
 
         ext = _ext_for(url)
+        # judged BEFORE a byte is written: a kind the archive does not keep never
+        # becomes a blob, a thumbnail or a by-character name
+        label = None
+        if labeler is not None:
+            try:
+                label = _label_one(store, labeler, sha, data, c, st)
+            except ModelError as e:
+                c.log(f"image labels off for this run: {e}", level="warning")
+                st.notes.append(LABELS_OFF)  # lets a caller that calls again stop asking too
+                labeler = None  # unusable classifier: keep the rest unlabeled, don't retry
+        if label is not None and not kept(label.kind) and store.kind_filter_applies(source, eid):
+            store.mark_media(
+                source,
+                eid,
+                idx,
+                state="rejected",
+                sha=sha,
+                phash=verdict.phash,
+                nbytes=len(data),
+                ext=ext,
+                error=label.kind,
+            )
+            st.rejected += 1
+            c.item(
+                f"{source} {eid}#{idx} not kept ({label.kind})",
+                source=source,
+                external_id=eid,
+                action="rejected",
+                image_kind=label.kind,
+            )
+            continue
+        if tagger is not None and any(g != "any" for g, _ in store.gender_rules(source, eid)):
+            # who is in it, for the characters that filter on it -- judged before storage
+            people = None
+            try:
+                people = tagger.people(data)
+            except LabelError as e:
+                c.log(f"people {sha[:12]}: {e}", level="warning")  # can't judge -> keep
+            except ModelError as e:
+                c.log(f"gender filter off for this run: {e}", level="warning")
+                st.notes.append(TAGS_OFF)
+                tagger = None
+            if people is not None:
+                store.set_people(sha, people)
+                if not _passes_gender(
+                    store, source, eid, people.girls, people.boys, people.male_focus
+                ):
+                    reason = _gender_reason(people.girls, people.boys)
+                    store.mark_media(
+                        source,
+                        eid,
+                        idx,
+                        state="rejected",
+                        sha=sha,
+                        phash=verdict.phash,
+                        nbytes=len(data),
+                        ext=ext,
+                        error=reason,
+                    )
+                    st.rejected += 1
+                    c.item(
+                        f"{source} {eid}#{idx} not kept ({reason})",
+                        source=source,
+                        external_id=eid,
+                        action="rejected",
+                    )
+                    continue
         _, blob_path, _ = blobs.put(data, ext)
         thumbs.make(sha, data)  # at ingest, never on request
         # one readable name per character the post belongs to
-        slugs = [
-            r["slug"]
-            for r in store.conn.execute(
-                "SELECT slug FROM post_watches WHERE source=? AND external_id=?", (source, eid)
-            )
-        ]
         fname = safe_name(artist_key or source, eid, f"p{idx}", ext=ext)
-        for slug in slugs:
+        for slug in _slugs_of(store, source, eid):
             view.place(blob_path, slug, fname)
         store.mark_media(
             source,
@@ -370,8 +742,196 @@ def download_pending(
             action="stored",
             sha=sha,
         )
-    c.progress(len(rows), len(rows))
+    if announce:
+        c.progress(len(rows), len(rows))
     return st
+
+
+def _slugs_of(store: Store, source: str, external_id: str) -> list[str]:
+    return [
+        r["slug"]
+        for r in store.conn.execute(
+            "SELECT slug FROM post_watches WHERE source=? AND external_id=?", (source, external_id)
+        )
+    ]
+
+
+def _label_one(
+    store: Store, labeler: Labels, sha: str, data: bytes, c: JobContext, st: RunStats
+) -> Label | None:
+    """Give one fresh image its kind. None = this image could not be judged, so
+    it is kept unlabeled. A ModelError (classifier unusable) propagates."""
+    try:
+        lab = labeler.label(data)
+    except LabelError as e:
+        c.log(f"label {sha[:12]}: {e}", level="warning")
+        return None
+    store.set_kind(sha, lab.kind, lab.scores, lab.model)
+    st.labeled += 1
+    return lab
+
+
+def discard_unkept(
+    store: Store,
+    blobs: BlobStore,
+    thumbs: ThumbStore | None = None,
+    ctx: JobContext | None = None,
+) -> int:
+    """Throw away stored images labelled as a kind the archive does not keep:
+    the bytes, the thumbnail and every by-character name go. The media row
+    stays -- `rejected`, kind in `error`, url intact -- so it can be audited and
+    undone by re-downloading. One row per step: a cancel lands between rows."""
+    c = _ctx(ctx)
+    thumbs = thumbs or ThumbStore(blobs.root.parent / "thumbs")
+    view = LibraryView(blobs.root.parent)
+    rows = store.stored_not_kept(KEEP)
+    if not rows:
+        return 0
+    c.stage("discard", total=len(rows))
+    for i, row in enumerate(rows):
+        c.check()
+        c.progress(i, len(rows))
+        _discard_row(store, blobs, thumbs, view, row, row["kind"], c)
+    c.progress(len(rows), len(rows))
+    return len(rows)
+
+
+def _discard_row(
+    store: Store,
+    blobs: BlobStore,
+    thumbs: ThumbStore,
+    view: LibraryView,
+    row: Any,
+    reason: str,
+    c: JobContext,
+) -> None:
+    """Throw one stored image away: its by-character names, then (once no
+    stored row needs the bytes) blob and thumbnail. The row stays `rejected`
+    with `reason` in `error` and its url, so it can be undone by re-downloading."""
+    source, eid, idx, sha, ext = (
+        row["source"],
+        row["external_id"],
+        row["idx"],
+        row["sha256"],
+        row["ext"],
+    )
+    artist_key = row["artist_handle"] or row["artist_id"] or ""
+    fname = safe_name(artist_key or source, eid, f"p{idx}", ext=ext)
+    for slug in _slugs_of(store, source, eid):
+        view.remove(slug, fname)
+    store.mark_media(source, eid, idx, state="rejected", error=reason)
+    if not store.sha_exists(sha):  # no other stored row still needs these bytes
+        blobs.path_for(sha, ext).unlink(missing_ok=True)
+        thumbs.path_for(sha).unlink(missing_ok=True)
+    c.item(
+        f"{source} {eid}#{idx} removed ({reason})",
+        source=source,
+        external_id=eid,
+        action="rejected",
+    )
+
+
+def _gender_reason(girls: int, boys: int) -> str:
+    return f"gender:girls={girls},boys={boys}"
+
+
+def _passes_gender(store: Store, source: str, eid: str, girls: int, boys: int, focus: bool) -> bool:
+    """Kept unless EVERY character the post belongs to rejects it (a
+    character without a gender filter accepts everything)."""
+    rules = store.gender_rules(source, eid)
+    return not rules or any(accepts(girls, boys, focus, g, m) for g, m in rules)
+
+
+def people_pending(
+    store: Store,
+    blobs: BlobStore,
+    tagger: Tags,
+    limit: int | None = None,
+    ctx: JobContext | None = None,
+) -> dict[str, int]:
+    """Tag who is in each stored image of a gender-filtered character (from
+    disk, never a re-fetch), then throw away what no character accepts."""
+    c = _ctx(ctx)
+    rows = store.untagged_people(tagger.model, limit)
+    out = {"tagged": 0, "tag_failed": 0}
+    if rows:
+        c.stage("people", total=len(rows))
+        for i, row in enumerate(rows):
+            c.check()
+            c.progress(i, len(rows))
+            sha = row["sha256"]
+            try:
+                p = tagger.people(blobs.path_for(sha, row["ext"]).read_bytes())
+            except (OSError, LabelError) as e:
+                out["tag_failed"] += 1
+                c.log(f"people {sha[:12]}: {e}", level="warning")
+                continue
+            store.set_people(sha, p)
+            out["tagged"] += 1
+        c.progress(len(rows), len(rows))
+    out["removed_gender"] = discard_by_gender(store, blobs, ctx=ctx)
+    return out
+
+
+def discard_by_gender(
+    store: Store, blobs: BlobStore, thumbs: ThumbStore | None = None, ctx: JobContext | None = None
+) -> int:
+    """Throw away stored images that no character they belong to accepts
+    under its gender filter. Same removal as discard_unkept."""
+    c = _ctx(ctx)
+    thumbs = thumbs or ThumbStore(blobs.root.parent / "thumbs")
+    view = LibraryView(blobs.root.parent)
+    doomed = [
+        r
+        for r in store.stored_people()
+        if not _passes_gender(
+            store, r["source"], r["external_id"], r["girls"], r["boys"], bool(r["male_focus"])
+        )
+    ]
+    if doomed:
+        c.stage("discard", total=len(doomed))
+        for i, row in enumerate(doomed):
+            c.check()
+            c.progress(i, len(doomed))
+            _discard_row(
+                store, blobs, thumbs, view, row, _gender_reason(row["girls"], row["boys"]), c
+            )
+        c.progress(len(doomed), len(doomed))
+    return len(doomed)
+
+
+def label_pending(
+    store: Store,
+    blobs: BlobStore,
+    labeler: Labels,
+    limit: int | None = None,
+    ctx: JobContext | None = None,
+) -> dict[str, int]:
+    """Label stored images that have no kind yet, or one from an older model,
+    then throw away every stored image whose kind the archive does not keep.
+    Reads each blob from disk -- a label never costs a request to a source. A
+    ModelError propagates: nothing in the backlog can be labelled without it."""
+    c = _ctx(ctx)
+    rows = store.unlabeled_media(labeler.model, limit)
+    c.stage("label", total=len(rows))  # unlabeled count IS an honest total
+    out: dict[str, int] = {"labeled": 0, "failed": 0}
+    for i, row in enumerate(rows):
+        c.check()
+        c.progress(i, len(rows))
+        sha = row["sha256"]
+        try:
+            lab = labeler.label(blobs.path_for(sha, row["ext"]).read_bytes())
+        except (OSError, LabelError) as e:
+            out["failed"] += 1
+            c.log(f"label {sha[:12]}: {e}", level="warning")
+            continue
+        store.set_kind(sha, lab.kind, lab.scores, lab.model)
+        out["labeled"] += 1
+        out[lab.kind] = out.get(lab.kind, 0) + 1
+        c.item(f"{sha[:12]} {lab.kind}", sha=sha, action="labeled", image_kind=lab.kind)
+    c.progress(len(rows), len(rows))
+    out["removed"] = discard_unkept(store, blobs, ctx=ctx)
+    return out
 
 
 def run_all(
@@ -409,7 +969,16 @@ def run_all(
         elif do_twitter:
             total.notes.append("gallery-dl not installed; skipped X")
         if do_media:
-            total.merge(download_pending(store, blobs, pixiv, tw, threshold=cfg.dupe_threshold))
+            total.merge(
+                download_pending(
+                    store,
+                    blobs,
+                    pixiv,
+                    tw,
+                    threshold=cfg.dupe_threshold,
+                    labeler=make_labeler(cfg),
+                )
+            )
     finally:
         pixiv.close()
         tw.close()

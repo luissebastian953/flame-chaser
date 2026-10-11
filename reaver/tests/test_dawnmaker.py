@@ -174,6 +174,82 @@ def test_gallery_keyset_and_media(tmp: Path) -> None:
     )
 
 
+def test_gallery_kinds_filter(tmp: Path) -> None:
+    """Labels hide, never delete: the filter narrows the grid, the counts feed
+    the chips, and the cover skips a newer photo for an illustration."""
+    import hashlib
+
+    client, store, state = boot(tmp / "k")
+    store.upsert_watch(Watch(slug="ganyu", pixiv_tags=["甘雨"]))
+    shas: dict[str, str] = {}
+    for i, kind in [(1, None), (2, "illustration"), (3, "photo")]:  # 203 is the newest
+        data = _img(40 + i, (300, 400))
+        store.upsert_post(
+            IllustRecord(
+                source="pixiv",
+                external_id=str(200 + i),
+                artist_id="a",
+                posted_at=f"2026-09-0{i}T10:00:00+00:00",
+                media=[{"index": 0, "url": f"https://x/k{i}.png"}],
+            ),
+            "ganyu",
+        )
+        state.blobs.put(data, "png")
+        sha = hashlib.sha256(data).hexdigest()
+        store.mark_media(
+            "pixiv", str(200 + i), 0, state="stored", sha=sha, nbytes=len(data), ext="png"
+        )
+        if kind:
+            store.set_kind(sha, kind, {"real": 0.9 if kind == "photo" else 0.1}, "m1")
+        shas[str(200 + i)] = sha
+
+    def ids(q: str) -> list[str]:
+        r = client.get(f"/api/gallery/ganyu{q}")
+        assert r.status_code == 200, r.text
+        return [it["external_id"] for it in r.json()["items"]]
+
+    assert ids("") == ["203", "202", "201"]  # no filter = everything, as before
+    assert ids("?kinds=illustration,unlabeled") == ["202", "201"]
+    assert ids("?kinds=photo") == ["203"]
+    kinds_ = [it["kind"] for it in client.get("/api/gallery/ganyu").json()["items"]]
+    assert kinds_ == ["photo", "illustration", None]
+    for bad in ("?kinds=bogus", "?kinds=", "?kinds=photo,nope"):
+        r = client.get(f"/api/gallery/ganyu{bad}")
+        assert r.status_code == 400 and r.json()["error"]["code"] == "bad_kind", bad
+    k = client.get("/api/gallery/ganyu/kinds").json()
+    assert k["counts"] == {
+        "illustration": 1,
+        "photo": 1,
+        "render": 0,
+        "screencap": 0,
+        "other": 0,
+        "unlabeled": 1,
+    }
+    assert isinstance(k["labeler"]["available"], bool) and k["labeler"]["models"] is False
+    cards = client.get("/api/gallery").json()
+    assert cards[0]["cover_sha"] == shas["202"]  # newest illustration, not the newer photo
+    assert cards[0]["post_count"] == 3
+    # 203's only image thrown away (kinds.KEEP): the post is no longer counted or listed
+    store.mark_media("pixiv", "203", 0, state="rejected", error="photo")
+    assert client.get("/api/gallery").json()[0]["post_count"] == 2
+    assert ids("") == ["202", "201"]
+    print("  gallery kinds:        ok (filter, counts, bad_kind 400, cover, rejected not counted)")
+
+
+def test_watch_target_and_kind_filter(tmp: Path) -> None:
+    client, _, _ = boot(tmp / "w")
+    body = {"slug": "mei", "match_terms": ["raiden mei"], "sources": ["twitter"]}
+    w = client.post("/api/watches", json=body).json()
+    assert (w["target"], w["kind_filter"]) == (100, True)  # defaults
+    w = client.patch("/api/watches/mei", json={**body, "target": 300, "kind_filter": False}).json()
+    assert (w["target"], w["kind_filter"]) == (300, False)
+    listed = client.get("/api/watches").json()[0]
+    assert (listed["target"], listed["kind_filter"]) == (300, False)
+    for bad in (0, 1001):
+        assert client.patch("/api/watches/mei", json={**body, "target": bad}).status_code == 422
+    print("  watch target/filter:  ok (defaults 100/on, round-trip, 1..1000 enforced)")
+
+
 def test_post_detail_links_cross_source(tmp: Path) -> None:
     client, store, _ = boot(tmp / "e")
     store.upsert_post(
@@ -348,6 +424,8 @@ if __name__ == "__main__":
         test_watches_and_jobs_api(tmp)
         test_sse_replay_and_live(tmp)
         test_gallery_keyset_and_media(tmp)
+        test_gallery_kinds_filter(tmp)
+        test_watch_target_and_kind_filter(tmp)
         test_post_detail_links_cross_source(tmp)
         test_heartbeat_sleep_guard()
         test_config_rejects_sync_folder(tmp)

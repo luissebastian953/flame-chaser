@@ -8,8 +8,12 @@
 // biome-ignore lint: disable
 export {}
 declare global {
+  const ALL_KIND_FILTERS: typeof import('./stores/library').ALL_KIND_FILTERS
   const ApiError: typeof import('./lib/api').ApiError
+  const DEFAULT_KIND_FILTER: typeof import('./stores/library').DEFAULT_KIND_FILTER
   const EffectScope: typeof import('vue').EffectScope
+  const ICON_PATHS: typeof import('./lib/icons').ICON_PATHS
+  const KIND_FILTERS: typeof import('./stores/library').KIND_FILTERS
   const REGIONS: typeof import('./stores/formats').REGIONS
   const TYPES: typeof import('./lib/api').TYPES
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
@@ -81,6 +85,7 @@ declare global {
   const triggerRef: typeof import('vue').triggerRef
   const unref: typeof import('vue').unref
   const useAttrs: typeof import('vue').useAttrs
+  const useCharacterDefaults: typeof import('./stores/characterDefaults').useCharacterDefaults
   const useCssModule: typeof import('vue').useCssModule
   const useCssVars: typeof import('vue').useCssVars
   const useEndpoint: typeof import('./stores/endpoint').useEndpoint
@@ -121,7 +126,7 @@ declare global {
   export type { ApiError, Endpoint, DaemonEvent } from './lib/api'
   import('./lib/api')
   // @ts-ignore
-  export type { Source, Watch, JobState, Job, LogLine, GalleryItem, GalleryPage, TagStat, PostDetail, ProbeResult, SourcesStatus, Health } from './lib/types'
+  export type { Source, Gender, GenderMode, Watch, JobState, Job, LogLine, GalleryItem, GalleryPage, ImageKind, KindFilter, GalleryKinds, TagStat, PostDetail, NameSuggestion, CharacterNames, ProbeResult, SourcesStatus, Health } from './lib/types'
   import('./lib/types')
 }
 
@@ -130,8 +135,12 @@ import { UnwrapRef } from 'vue'
 declare module 'vue' {
   interface GlobalComponents {}
   interface ComponentCustomProperties {
+    readonly ALL_KIND_FILTERS: UnwrapRef<typeof import('./stores/library')['ALL_KIND_FILTERS']>
     readonly ApiError: UnwrapRef<typeof import('./lib/api')['ApiError']>
+    readonly DEFAULT_KIND_FILTER: UnwrapRef<typeof import('./stores/library')['DEFAULT_KIND_FILTER']>
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
+    readonly ICON_PATHS: UnwrapRef<typeof import('./lib/icons')['ICON_PATHS']>
+    readonly KIND_FILTERS: UnwrapRef<typeof import('./stores/library')['KIND_FILTERS']>
     readonly REGIONS: UnwrapRef<typeof import('./stores/formats')['REGIONS']>
     readonly TYPES: UnwrapRef<typeof import('./lib/api')['TYPES']>
     readonly acceptHMRUpdate: UnwrapRef<typeof import('pinia')['acceptHMRUpdate']>
@@ -203,6 +212,7 @@ declare module 'vue' {
     readonly triggerRef: UnwrapRef<typeof import('vue')['triggerRef']>
     readonly unref: UnwrapRef<typeof import('vue')['unref']>
     readonly useAttrs: UnwrapRef<typeof import('vue')['useAttrs']>
+    readonly useCharacterDefaults: UnwrapRef<typeof import('./stores/characterDefaults')['useCharacterDefaults']>
     readonly useCssModule: UnwrapRef<typeof import('vue')['useCssModule']>
     readonly useCssVars: UnwrapRef<typeof import('vue')['useCssVars']>
     readonly useEndpoint: UnwrapRef<typeof import('./stores/endpoint')['useEndpoint']>

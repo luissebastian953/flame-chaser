@@ -75,7 +75,7 @@ watch(
               <span class="data text-small text-dim">{{ l.label }}</span>
               <span class="spacer" />
               <span v-if="!l.ready" class="chip off">{{ $t('settings.language.soon') }}</span>
-              <span v-else-if="highlighted === l.code" class="check">✓</span>
+              <Icon v-else-if="highlighted === l.code" name="check" class="check" :size="16" />
             </button>
           </div>
         </div>
@@ -104,6 +104,7 @@ watch(
         <span class="data text-small text-dim ml-10">{{ $t('settings.language.coverage.sub') }}</span>
         <div class="spacer" />
         <button class="btn gh sm" @click="link(CONTRIBUTE)">
+          <Icon name="external" :size="13" />
           {{ $t('settings.language.coverage.contribute') }}
         </button>
       </div>
@@ -133,7 +134,10 @@ watch(
         <span class="ptitle">{{ $t('settings.language.formats.title') }}</span>
         <span class="data text-small text-dim ml-10">{{ $t('settings.language.formats.sub') }}</span>
         <div class="spacer" />
-        <button class="btn gh sm" @click="fm.reset()">{{ $t('settings.language.formats.reset') }}</button>
+        <button class="btn gh sm" @click="fm.reset()">
+          <Icon name="refresh" :size="13" />
+          {{ $t('settings.language.formats.reset') }}
+        </button>
       </div>
       <div class="p-15 fgrid">
         <div class="flex flex-col gap-15">
@@ -142,7 +146,7 @@ watch(
             <SelectRoot v-model="fm.region">
               <SelectTrigger class="btn gh rk-select-trigger">
                 <SelectValue />
-                <span class="text-dim">▾</span>
+                <Icon name="chevron-down" :size="14" class="text-dim" />
               </SelectTrigger>
               <SelectPortal>
                 <SelectContent class="rk-select-content" position="popper" :side-offset="4">

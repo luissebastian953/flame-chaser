@@ -2,6 +2,7 @@
 import type { Watch } from '@/lib/types';
 
 const lib = useLibrary();
+const defaults = useCharacterDefaults();
 const { t } = useI18n();
 const jobs = useJobs();
 const router = useRouter();
@@ -20,6 +21,10 @@ function add() {
     min_bookmarks: 0,
     include_r18: false,
     sources: ['pixiv', 'twitter'],
+    target: 100,
+    kind_filter: true,
+    gender: defaults.gender,
+    gender_mode: defaults.gender_mode,
   };
 
   isNew.value = true;
@@ -43,6 +48,7 @@ async function saved(w: Watch, runNow: boolean) {
   if (runNow) await run(w.slug);
 }
 
+/** Each character crawls to its own posts-per-run (set in its form). */
 async function run(slug?: string) {
   await jobs.submit('poll', slug ? { watches: [slug] } : {});
   router.push('/pipeline');
@@ -64,8 +70,14 @@ async function run(slug?: string) {
     </div>
     <div class="spacer" />
     <span v-if="status.msg" class="kv">{{ status.msg }}</span>
-    <button class="btn gh" @click="add">{{ $t('crawl.addCharacter') }}</button>
-    <button class="btn pri" :disabled="!lib.watches.length" @click="run()">{{ $t('crawl.runAll') }}</button>
+    <button class="btn gh" @click="add">
+      <Icon name="plus" :size="14" />
+      {{ $t('crawl.addCharacter') }}
+    </button>
+    <button class="btn pri" :disabled="!lib.watches.length" @click="run()">
+      <Icon name="play" :size="14" />
+      {{ $t('crawl.runAll') }}
+    </button>
   </div>
   <div class="body">
     <div class="panel">
@@ -82,6 +94,7 @@ async function run(slug?: string) {
             <th>{{ $t('crawl.table.bookmarks') }}</th>
             <th>{{ $t('crawl.table.r18') }}</th>
             <th>{{ $t('crawl.table.posts') }}</th>
+            <th>{{ $t('crawl.table.perRun') }}</th>
             <th></th>
           </tr>
         </thead>
@@ -116,9 +129,16 @@ async function run(slug?: string) {
             <td class="num">{{ w.min_bookmarks }}</td>
             <td>{{ w.include_r18 ? $t('crawl.table.r18On') : $t('crawl.table.r18Off') }}</td>
             <td class="num">{{ w.post_count ?? 0 }}</td>
+            <td class="num">{{ w.target ?? 100 }}</td>
             <td style="text-align: right; white-space: nowrap">
-              <button class="btn gh sm" @click="edit(w)">{{ $t('crawl.edit') }}</button>
-              <button class="btn gh sm" @click="run(w.slug)">{{ $t('crawl.run') }}</button>
+              <button class="btn gh sm" @click="edit(w)">
+                <Icon name="edit" :size="13" />
+                {{ $t('crawl.edit') }}
+              </button>
+              <button class="btn gh sm" @click="run(w.slug)">
+                <Icon name="play" :size="13" />
+                {{ $t('crawl.run') }}
+              </button>
             </td>
           </tr>
         </tbody>

@@ -46,6 +46,21 @@ Event = dict[str, Any]
 Handler = Callable[["JobContext"], dict[str, Any]]  # returns counters
 
 
+_ENGINE_STARTED = time.time()  # import time of this module = process start
+
+
+def _human_age(sec: float) -> str:
+    if sec < 90:
+        return f"{int(sec)}s"
+    if sec < 5400:
+        return f"{int(sec // 60)}m"
+    return f"{sec / 3600:.1f}h"
+
+
+def _stamp(t: float) -> str:
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%H:%M:%S")
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -331,6 +346,16 @@ class JobRunner:
         with self._lock:
             self._current = ctx
         ctx.emit("stage", "started", type=job.type, params=job.params)
+        # The running process's own age. A daemon older than the code on disk is
+        # running the old code -- invisible otherwise, and the cause of every
+        # "I changed it and nothing happened" during development.
+        age = time.time() - _ENGINE_STARTED
+        ctx.log(
+            f"engine up {_human_age(age)} (started {_stamp(_ENGINE_STARTED)}) · "
+            f"restart the daemon to pick up edited code",
+            engine_started_at=_ENGINE_STARTED,
+            engine_uptime_s=round(age),
+        )
         state, error, counters = SUCCEEDED, None, {}
         t0 = time.monotonic()
         try:

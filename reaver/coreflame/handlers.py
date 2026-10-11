@@ -10,15 +10,22 @@ from typing import Any
 from .blobs import BlobStore
 from .config import Config
 from .jobs import Handler, JobContext, JobRunner
+from .kinds import Labeler, Labels, make_labeler
+from .people import Tagger, Tags, make_tagger
 from .pipeline import (
     RunStats,
     download_pending,
+    label_pending,
+    people_pending,
     poll_pixiv,
     poll_twitter,
     resolve_artist_links,
+    search_to_target,
 )
 from .sources.pixiv import PixivAdapter
 from .sources.twitter import TwitterAdapter
+
+TARGET_MAX = 1000  # posts per character per crawl; the UI offers up to this
 
 
 def _counters(st: RunStats) -> dict[str, Any]:
@@ -47,6 +54,9 @@ def make_pixiv(cfg: Config, sink: Any = None) -> PixivAdapter:
 class Adapters:
     """Built once per worker thread from config; closed with it."""
 
+    labeler: Labels | None = None  # None: numpy/onnxruntime not installed
+    tagger: Tags | None = None  # same deps; used only for gender-filtered characters
+
     def __init__(self, cfg: Config, store: Any) -> None:
         self.pixiv = make_pixiv(cfg, sink=store)
         self.twitter = TwitterAdapter(
@@ -56,7 +66,22 @@ class Adapters:
             sink=store,
         )
         self.blobs = BlobStore(cfg.blob_root)
+        self.labeler = make_labeler(cfg)
+        self.tagger = make_tagger(cfg)
         self.cfg = cfg
+
+    def labels_for(self, ctx: JobContext) -> Labels | None:
+        """The labeler with this job's log bound, so a first-use model
+        download shows up in the pipeline instead of as a silent pause."""
+        if isinstance(self.labeler, Labeler):
+            self.labeler.log = ctx.log
+        return self.labeler
+
+    def tags_for(self, ctx: JobContext) -> Tags | None:
+        """The tagger with this job's log bound (its first use downloads 467 MB)."""
+        if isinstance(self.tagger, Tagger):
+            self.tagger.log = ctx.log
+        return self.tagger
 
     def close(self) -> None:
         self.pixiv.close()
@@ -75,10 +100,55 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
             st = poll_pixiv(ctx.store, a.pixiv, watches, ctx=ctx)
             if ctx.job.params.get("link", True):
                 st.merge(resolve_artist_links(ctx.store, a.pixiv, ctx=ctx))
-            if ctx.job.params.get("twitter", True) and a.twitter.available():
+            if not ctx.job.params.get("twitter", True):
+                ctx.log("X: disabled for this job (params.twitter=false)")
+            elif not a.twitter.available():
+                ctx.log(
+                    f"X: skipped -- {a.twitter.binary} not found on PATH (pip install gallery-dl)",
+                    level="warning",
+                )
+            elif a.cfg.twitter_search_limit == 0:
+                ctx.log("X search is off (search limit 0 in Settings) -- timelines only")
                 st.merge(
                     poll_twitter(
-                        ctx.store, a.twitter, watches, limit=a.cfg.twitter_timeline_limit, ctx=ctx
+                        ctx.store,
+                        a.twitter,
+                        watches,
+                        limit=a.cfg.twitter_timeline_limit,
+                        search_limit=0,
+                        ctx=ctx,
+                    )
+                )
+            else:
+                # search each character until its posts-per-run are KEPT (params.target
+                # overrides every character's own), then linked artists' timelines
+                override = ctx.job.params.get("target")
+                every_x = [w for w in ctx.store.watches() if w.wants("twitter")]
+                for w in [w for w in watches if w.wants("twitter")]:
+                    target = max(1, min(int(override or w.target), TARGET_MAX))
+                    st.merge(
+                        search_to_target(
+                            ctx.store,
+                            a.twitter,
+                            a.blobs,
+                            a.pixiv,
+                            w,
+                            every_x,
+                            target,
+                            labeler=a.labels_for(ctx),
+                            threshold=a.cfg.dupe_threshold,
+                            ctx=ctx,
+                            tagger=a.tags_for(ctx),
+                        )
+                    )
+                st.merge(
+                    poll_twitter(
+                        ctx.store,
+                        a.twitter,
+                        watches,
+                        limit=a.cfg.twitter_timeline_limit,
+                        search_limit=0,
+                        ctx=ctx,
                     )
                 )
             if ctx.job.params.get("media", True):
@@ -90,6 +160,8 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                         a.twitter,
                         threshold=a.cfg.dupe_threshold,
                         ctx=ctx,
+                        labeler=a.labels_for(ctx),
+                        tagger=a.tags_for(ctx),
                     )
                 )
             return _counters(st)
@@ -119,6 +191,8 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                     batch=int(ctx.job.params.get("batch", 200)),
                     threshold=a.cfg.dupe_threshold,
                     ctx=ctx,
+                    labeler=a.labels_for(ctx),
+                    tagger=a.tags_for(ctx),
                 )
             )
         finally:
@@ -130,7 +204,32 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
         ctx.stage("tags")
         return {"rows": _tags.rebuild(ctx.store)}
 
-    return {"poll": poll, "link": link, "media": media, "tags": tags}
+    def label(ctx: JobContext) -> dict[str, Any]:
+        """Label the backlog: images stored before labels existed, or by an
+        older model. Blobs are read from disk; no source is contacted."""
+        a = make_adapters(ctx)
+        try:
+            labeler = a.labels_for(ctx)
+            if labeler is None:
+                raise RuntimeError(
+                    "image labels need numpy + onnxruntime: pip install 'reaver[classify]'"
+                )
+            limit = ctx.job.params.get("limit")
+            out: dict[str, Any] = dict(
+                label_pending(ctx.store, a.blobs, labeler, int(limit) if limit else None, ctx=ctx)
+            )
+            tagger = a.tags_for(ctx)
+            if tagger is not None:  # the gender filter's backlog, same deps as labels
+                out.update(
+                    people_pending(
+                        ctx.store, a.blobs, tagger, int(limit) if limit else None, ctx=ctx
+                    )
+                )
+            return out
+        finally:
+            a.close()
+
+    return {"poll": poll, "link": link, "media": media, "tags": tags, "label": label}
 
 
 def default_runner(cfg: Config) -> JobRunner:

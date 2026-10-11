@@ -56,92 +56,39 @@ onMounted(async () => {
       </div>
       <nav class="nav">
         <RouterLink to="/config">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="ic"
-          >
-            <circle cx="12" cy="12" r="9" />
-            <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-          </svg>
+          <Icon name="crawl" class="ic" />
           {{ $t('app.nav.crawl') }}
           <span class="ct">{{ lib.watches.length || '' }}</span>
         </RouterLink>
         <RouterLink to="/pipeline">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="ic"
-          >
-            <path d="M4 7h16M4 12h16M4 17h16" />
-            <circle cx="9" cy="7" r="1.6" fill="currentColor" />
-            <circle cx="15" cy="12" r="1.6" fill="currentColor" />
-            <circle cx="8" cy="17" r="1.6" fill="currentColor" />
-          </svg>
+          <Icon name="pipeline" class="ic" />
           {{ $t('app.nav.pipeline') }}
           <span class="ct">{{ jobs.queued.length + (jobs.running ? 1 : 0) || '' }}</span>
         </RouterLink>
         <RouterLink to="/gallery">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="ic"
-          >
-            <rect x="4" y="4" width="6.5" height="6.5" />
-            <rect x="13.5" y="4" width="6.5" height="6.5" />
-            <rect x="4" y="13.5" width="6.5" height="6.5" />
-            <rect x="13.5" y="13.5" width="6.5" height="6.5" />
-          </svg>
+          <Icon name="gallery" class="ic" />
           {{ $t('app.nav.gallery') }}
           <span class="ct">{{ lib.totalPosts ? lib.totalPosts.toLocaleString() : '' }}</span>
         </RouterLink>
         <RouterLink to="/settings" class="mt-10">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="ic"
-          >
-            <circle cx="12" cy="12" r="3" />
-            <path
-              d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"
-            />
-          </svg>
+          <Icon name="settings" class="ic" />
           {{ $t('app.nav.settings') }}
         </RouterLink>
       </nav>
       <div class="railbottom">
         <UpdateBanner />
         <button v-if="src.inTauri" class="btn danger shutdown" @click="shutdown">
-          <span class="ic">⏻</span>
+          <Icon name="power" class="ic" :size="14" />
           {{ armed ? $t('app.shutdown.armed') : $t('app.shutdown.label') }}
         </button>
         <div class="railfoot">
           <div>
-            <span class="dot" :style="{ background: ep.ready ? 'var(--moss)' : 'var(--rose)' }" />
+            <Icon
+              name="server"
+              class="fi"
+              :size="12"
+              :style="{ color: ep.ready ? 'var(--moss)' : 'var(--rose)' }"
+            />
             {{
               ep.ready
                 ? $t('app.status.daemon', { version: ep.health?.version })
@@ -151,11 +98,13 @@ onMounted(async () => {
             }}
           </div>
           <div v-if="ep.health">
-            <span class="dot" :style="{ background: ep.health.idle ? 'var(--dim)' : 'var(--ember)' }" />
+            <Icon v-if="ep.health.idle" name="cpu" class="fi" :size="12" />
+            <Icon v-else name="loader" class="fi spin" :size="12" style="color: var(--ember)" />
             {{ ep.health.idle ? $t('app.status.idle') : $t('app.status.crawling') }}
           </div>
           <div v-if="src.status">
-            <span class="dot" :style="{ background: src.pixivOk ? 'var(--moss)' : 'var(--line)' }" />
+            <Icon v-if="src.pixivOk" name="unlock" class="fi" :size="12" style="color: var(--moss)" />
+            <Icon v-else name="lock" class="fi" :size="12" />
             {{
               $t('app.status.pixiv', {
                 state: src.pixivOk
@@ -169,7 +118,8 @@ onMounted(async () => {
             }}
           </div>
           <div v-if="src.status">
-            <span class="dot" :style="{ background: src.twitterOk ? 'var(--moss)' : 'var(--line)' }" />
+            <Icon v-if="src.twitterOk" name="unlock" class="fi" :size="12" style="color: var(--moss)" />
+            <Icon v-else name="lock" class="fi" :size="12" />
             {{
               $t('app.status.x', {
                 state: src.twitterOk ? $t('app.status.connected') : $t('app.status.notLinked'),

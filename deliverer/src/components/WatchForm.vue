@@ -5,7 +5,7 @@
  * the daemon. The slug is derived from the name and frozen after the first
  * save: folder names and post_watches rows key off it.
  */
-import type { ProbeResult, Source, Watch } from '@/lib/types';
+import type { CharacterNames, NameSuggestion, ProbeResult, Source, Watch } from '@/lib/types';
 
 const props = defineProps<{ watch: Watch; isNew: boolean }>();
 const emit = defineEmits<{ save: [w: Watch, run: boolean]; close: [] }>();
@@ -27,6 +27,10 @@ const w = reactive<Watch>({
   pixiv_tags: [...props.watch.pixiv_tags],
   match_terms: [...props.watch.match_terms],
   sources: [...(props.watch.sources ?? ['pixiv', 'twitter'])],
+  target: props.watch.target ?? 100,
+  kind_filter: props.watch.kind_filter ?? true,
+  gender: props.watch.gender ?? 'any',
+  gender_mode: props.watch.gender_mode ?? 'full',
 });
 
 // ---- sources: which of pixiv / X this character is crawled from ------------
@@ -114,38 +118,101 @@ watch(
 
 onBeforeUnmount(() => {
   if (timer) clearTimeout(timer);
+  if (namesTimer) clearTimeout(namesTimer);
 });
 
 const suggestions = computed(() =>
   (probe.value?.suggestions ?? []).filter((s) => !w.pixiv_tags.includes(s.tag_raw)),
 );
 
-const estimate = computed(() => {
+// ---- names from Danbooru + Wikidata (debounced; no pixiv session needed) -----
+const names = ref<CharacterNames | null>(null);
+const looking = ref(false);
+const showAll = reactive({ name: false, form: false });
+const GROUP_N = 6;
+let namesTimer: ReturnType<typeof setTimeout> | null = null;
+
+const norm = (x: string) => x.normalize('NFKC').toLowerCase().trim();
+const have = computed(() => new Set([...w.pixiv_tags, ...w.match_terms].map(norm)));
+
+/** the display name first: it is what Danbooru and Wikidata know best */
+const nameQueries = computed(() =>
+  [...new Set([w.label, ...w.pixiv_tags, ...w.match_terms].map((x) => x.trim()).filter(Boolean))].slice(0, 8),
+);
+
+async function lookUpNames() {
+  const queries = nameQueries.value;
+  if (!queries.length) {
+    names.value = null;
+    return;
+  }
+  looking.value = true;
+  try {
+    names.value = await api.post<CharacterNames>('/api/names', { queries });
+  } catch {
+    names.value = null; // the panel just shows no names; the form still works
+  } finally {
+    looking.value = false;
+  }
+}
+
+watch(
+  () => nameQueries.value.join('\u0000'),
+  () => {
+    if (namesTimer) clearTimeout(namesTimer);
+    namesTimer = setTimeout(lookUpNames, 600);
+  },
+  { immediate: true },
+);
+
+const fresh = (kind: NameSuggestion['kind']) =>
+  (names.value?.suggestions ?? []).filter((x) => x.kind === kind && !have.value.has(norm(x.text)));
+
+const nameRows = computed(() => fresh('name'));
+const formRows = computed(() => fresh('form'));
+
+const visible = (rows: NameSuggestion[], kind: 'name' | 'form') =>
+  showAll[kind] ? rows : rows.slice(0, GROUP_N);
+
+const downSources = computed(() => Object.keys(names.value?.errors ?? {}));
+
+function addAsTag(text: string) {
+  if (!w.pixiv_tags.includes(text)) w.pixiv_tags.push(text);
+}
+
+function addAsTerm(text: string) {
+  if (!w.match_terms.includes(text)) w.match_terms.push(text);
+}
+
+// ---- crawl target: posts per run, and what the next runs will do ------------
+const PRESETS = [100, 300, 500, 1000];
+const TARGET_MAX = 1000; // the daemon enforces the same range
+const clampTarget = (n: number) => Math.min(TARGET_MAX, Math.max(1, Math.round(Number(n)) || 100));
+
+/** posts this character already holds: run 1 continues after them */
+const kept = computed(() => props.watch.post_count ?? 0);
+
+/** pixiv reports how many artworks the tags hold (an upper bound: tags
+ * overlap); X search reports no totals, so an X-only character has none */
+const total = computed(() => (uses('pixiv') && probe.value?.estimate?.artworks) || null);
+const left = computed(() => (total.value === null ? null : Math.max(0, total.value - kept.value - w.target)));
+const pct = (n: number) => `${total.value ? Math.min(100, (n / total.value) * 100) : 0}%`;
+
+function duration(seconds: number) {
+  const m = Math.round(seconds / 60);
+
+  return m < 1
+    ? t('character.estimate.underMinute')
+    : m < 90
+      ? t('character.estimate.aboutMinutes', { m })
+      : t('character.estimate.aboutHours', { h: (m / 60).toFixed(1) });
+}
+
+// this run's share of the probe's whole-backfill estimate
+const runTime = computed(() => {
   const e = probe.value?.estimate;
-  if (!e || !e.artworks) return null;
-  const m = Math.round(e.seconds / 60);
-  return {
-    artworks: e.artworks,
-    time:
-      m < 1
-        ? t('character.estimate.underMinute')
-        : m < 90
-          ? t('character.estimate.aboutMinutes', { m })
-          : t('character.estimate.aboutHours', { h: (m / 60).toFixed(1) }),
-  };
-});
 
-// ---- bookmarks slider (log-ish steps so 0..5000 is usable) -----------------
-const STEPS = [0, 10, 25, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 5000];
-
-const stepIdx = computed({
-  get: () => {
-    const i = STEPS.findIndex((s) => s >= w.min_bookmarks);
-    return [i < 0 ? STEPS.length - 1 : i];
-  },
-  set: (v) => {
-    w.min_bookmarks = STEPS[v[0] ?? 0] ?? 0;
-  },
+  return e?.artworks ? duration(e.seconds * Math.min(1, w.target / e.artworks)) : null;
 });
 
 // ---- submit ----------------------------------------------------------------
@@ -182,6 +249,7 @@ function validate(): boolean {
 }
 
 function submit(run: boolean) {
+  w.target = clampTarget(w.target);
   if (validate()) {
     emit(
       'save',
@@ -203,7 +271,9 @@ function submit(run: boolean) {
           <div class="data text-small text-dim">{{ $t('character.title.tagline') }}</div>
         </div>
         <div class="spacer" />
-        <button class="btn gh sm" :aria-label="$t('character.close')" @click="emit('close')">✕</button>
+        <button class="btn gh sm" :aria-label="$t('character.close')" @click="emit('close')">
+          <Icon name="close" :size="14" />
+        </button>
       </div>
 
       <div class="cols">
@@ -274,6 +344,7 @@ function submit(run: boolean) {
                   </template>
                   <template v-else-if="tagStatus(tag)!.ok">
                     <span class="ok">
+                      <Icon name="check" :size="13" />
                       {{
                         $t(
                           'character.tags.artworks',
@@ -285,11 +356,13 @@ function submit(run: boolean) {
                   </template>
                   <template v-else-if="tagStatus(tag)!.error">
                     <span class="err">
+                      <Icon name="warning" :size="13" />
                       {{ $t('character.tags.error', { error: tagStatus(tag)!.error }) }}
                     </span>
                   </template>
                   <template v-else>
                     <span class="err">
+                      <Icon name="warning" :size="13" />
                       {{ $t('character.tags.warning', { warning: tagStatus(tag)!.warning }) }}
                     </span>
                   </template>
@@ -299,7 +372,7 @@ function submit(run: boolean) {
                   :aria-label="$t('character.tags.remove')"
                   @click="w.pixiv_tags.splice(i, 1)"
                 >
-                  ✕
+                  <Icon name="close" :size="13" />
                 </button>
               </div>
               <input
@@ -345,7 +418,7 @@ function submit(run: boolean) {
                   :aria-label="$t('character.terms.remove')"
                   @click="w.match_terms.splice(i, 1)"
                 >
-                  ✕
+                  <Icon name="close" :size="11" />
                 </button>
               </span>
               <input
@@ -358,45 +431,98 @@ function submit(run: boolean) {
             </div>
           </div>
 
-          <div class="grid2 align-start">
-            <div class="field">
-              <label>
-                {{ $t('character.bookmarks.label') }}
-                <span class="hint">{{ $t('character.bookmarks.hint') }}</span>
-              </label>
-              <div class="flex items-center gap-15">
-                <input v-model.number="w.min_bookmarks" type="number" min="0" class="data w-100 text-right" />
-                <SliderRoot
-                  v-model="stepIdx"
-                  :min="0"
-                  :max="STEPS.length - 1"
-                  :step="1"
-                  class="rk-slider flex-1"
-                >
-                  <SliderTrack class="rk-slider-track"><SliderRange class="rk-slider-range" /></SliderTrack>
-                  <SliderThumb class="rk-slider-thumb" :aria-label="$t('character.bookmarks.slider')" />
-                </SliderRoot>
-              </div>
-              <div class="hint">{{ $t('character.bookmarks.note') }}</div>
+          <div class="sec">
+            <div class="sec-h">
+              <span class="n">3</span>
+              <b>{{ $t('character.crawl.heading') }}</b>
             </div>
-            <div class="field">
-              <label>
-                {{ $t('character.r18.label') }}
-                <span class="hint">{{ $t('character.r18.hint') }}</span>
-              </label>
-              <div class="flex items-center gap-10 h-30">
+            <div class="hint">{{ $t('character.crawl.hint') }}</div>
+            <div class="target-grid">
+              <div class="field">
+                <label for="posts-per-run">{{ $t('character.crawl.perRun') }}</label>
+                <div class="flex items-center gap-10 flex-wrap">
+                  <input
+                    id="posts-per-run"
+                    v-model.number="w.target"
+                    type="number"
+                    min="1"
+                    :max="TARGET_MAX"
+                    class="data w-100 text-right"
+                    @change="w.target = clampTarget(w.target)"
+                  />
+                  <span class="text-small text-dim">{{ $t('character.crawl.posts') }}</span>
+                  <button
+                    v-for="n in PRESETS"
+                    :key="n"
+                    type="button"
+                    class="chip preset data"
+                    :class="{ on: w.target === n }"
+                    :aria-pressed="w.target === n"
+                    @click="w.target = n"
+                  >
+                    {{ n }}
+                  </button>
+                </div>
+              </div>
+              <div class="field" :class="{ inert: !uses('pixiv') }">
+                <label for="min-bookmarks">
+                  {{ $t('character.bookmarks.label') }}
+                  <span class="hint">{{ $t('character.bookmarks.hint') }}</span>
+                  <InfoTip :label="$t('character.bookmarks.helpLabel')">
+                    <p>{{ $t('character.bookmarks.help.what') }}</p>
+                    <p>{{ $t('character.bookmarks.help.rule') }}</p>
+                    <p>{{ $t('character.bookmarks.help.raise') }}</p>
+                    <p>{{ $t('character.bookmarks.help.lower') }}</p>
+                    <p>{{ $t('character.bookmarks.help.x') }}</p>
+                  </InfoTip>
+                </label>
+                <input
+                  id="min-bookmarks"
+                  v-model.number="w.min_bookmarks"
+                  type="number"
+                  min="0"
+                  class="data w-100 text-right"
+                />
+                <div class="hint">
+                  {{ uses('pixiv') ? $t('character.bookmarks.note') : $t('character.bookmarks.pixivOff') }}
+                </div>
+              </div>
+            </div>
+            <div class="grid2 align-start">
+              <div class="toggle">
+                <SwitchRoot id="kind-filter" v-model="w.kind_filter" class="rk-switch">
+                  <SwitchThumb class="rk-switch-thumb" />
+                </SwitchRoot>
+                <label for="kind-filter">
+                  <span class="text-small">{{ $t('character.recognition.label') }}</span>
+                  <span class="hint">
+                    {{ w.kind_filter ? $t('character.recognition.on') : $t('character.recognition.off') }}
+                  </span>
+                </label>
+              </div>
+              <div class="toggle">
                 <SwitchRoot id="r18" v-model="w.include_r18" class="rk-switch">
                   <SwitchThumb class="rk-switch-thumb" />
                 </SwitchRoot>
-                <label for="r18" class="text-small">
-                  {{ w.include_r18 ? $t('character.r18.on') : $t('character.r18.off') }}
+                <label for="r18">
+                  <span class="text-small">
+                    {{ $t('character.r18.label') }}
+                  </span>
+                  <span class="hint">
+                    {{ w.include_r18 ? $t('character.r18.on') : $t('character.r18.off') }}
+                  </span>
                 </label>
               </div>
+            </div>
+            <div class="field">
+              <label>{{ $t('character.gender.label') }}</label>
+              <GenderFilter v-model:gender="w.gender" v-model:mode="w.gender_mode" />
             </div>
           </div>
 
           <div v-if="probe?.preview.length" class="sec preview">
             <div class="sec-h">
+              <Icon name="eye" :size="14" class="text-dim" />
               <b>{{ $t('character.preview.heading') }}</b>
               <span class="hint">{{ $t('character.preview.lead', { tag: w.pixiv_tags[0] }) }}</span>
             </div>
@@ -419,28 +545,161 @@ function submit(run: boolean) {
         <aside class="side-col">
           <div class="ptitle">{{ $t('character.suggestions.heading') }}</div>
           <div class="hint">{{ $t('character.suggestions.lead') }}</div>
-          <div v-if="suggestions.length" class="sug">
-            <div v-for="s in suggestions" :key="s.tag_norm" class="sug-row" :class="{ low: s.score < 0.3 }">
-              <span class="jp">{{ s.tag_raw }}</span>
-              <span class="data text-small text-right">
-                <span :class="s.score >= 0.3 ? 'text-ember' : 'text-dim'">{{ s.score.toFixed(2) }}</span>
-                <br />
-                <span class="text-dim">{{ Math.round(s.share * 100) }}%</span>
-              </span>
-              <button v-if="s.score >= 0.3" class="add" @click="addSuggested(s.tag_raw)">
-                {{ $t('character.suggestions.add') }}
-              </button>
-              <span v-else class="text-dim">—</span>
+          <!-- a fixed-height box that scrolls, so the run cycle stays in view -->
+          <div class="sug-scroll">
+            <div v-if="downSources.length" class="hint err">
+              <Icon name="warning" :size="12" />
+              {{ $t('character.suggestions.sourceDown', { source: downSources.join(' + ') }) }}
             </div>
+
+            <template v-for="group in ['name', 'form'] as const" :key="group">
+              <div v-if="(group === 'name' ? nameRows : formRows).length" class="nm-group">
+                <div class="nm-h">
+                  {{
+                    group === 'name' ? $t('character.suggestions.names') : $t('character.suggestions.forms')
+                  }}
+                </div>
+                <div
+                  v-for="s in visible(group === 'name' ? nameRows : formRows, group)"
+                  :key="s.text"
+                  class="nm-row"
+                  :class="{ risky: s.risky }"
+                >
+                  <div class="nm-text">
+                    <span class="jp">{{ s.text }}</span>
+                    <span class="nm-meta data">
+                      <span v-if="s.lang" class="lang">{{ $t(`character.suggestions.lang.${s.lang}`) }}</span>
+                      <span v-if="s.posts">
+                        {{ $t('character.suggestions.posts', { n: s.posts.toLocaleString() }, s.posts) }}
+                      </span>
+                      <span v-if="s.risky" class="warn">{{ $t('character.suggestions.risky') }}</span>
+                    </span>
+                  </div>
+                  <div class="nm-add">
+                    <button
+                      v-if="uses('pixiv')"
+                      type="button"
+                      class="add"
+                      :aria-label="$t('character.suggestions.addPixivLabel', { text: s.text })"
+                      @click="addAsTag(s.text)"
+                    >
+                      <Icon name="plus" :size="11" />
+                      {{ $t('character.suggestions.addPixiv') }}
+                    </button>
+                    <button
+                      v-if="uses('twitter')"
+                      type="button"
+                      class="add"
+                      :aria-label="$t('character.suggestions.addXLabel', { text: s.text })"
+                      @click="addAsTerm(s.text)"
+                    >
+                      <Icon name="plus" :size="11" />
+                      {{ $t('character.suggestions.addX') }}
+                    </button>
+                  </div>
+                </div>
+                <button
+                  v-if="(group === 'name' ? nameRows : formRows).length > GROUP_N"
+                  type="button"
+                  class="more"
+                  @click="showAll[group] = !showAll[group]"
+                >
+                  <Icon v-if="showAll[group]" name="chevron-up" :size="12" />
+                  <Icon v-else name="chevron-down" :size="12" />
+                  {{
+                    showAll[group]
+                      ? $t('character.suggestions.less')
+                      : $t('character.suggestions.more', {
+                          n: (group === 'name' ? nameRows : formRows).length - GROUP_N,
+                        })
+                  }}
+                </button>
+              </div>
+            </template>
+
+            <div v-if="suggestions.length" class="nm-group">
+              <div class="nm-h">{{ $t('character.suggestions.pixiv') }}</div>
+              <div class="sug">
+                <div
+                  v-for="s in suggestions"
+                  :key="s.tag_norm"
+                  class="sug-row"
+                  :class="{ low: s.score < 0.3 }"
+                >
+                  <span class="jp">{{ s.tag_raw }}</span>
+                  <span class="data text-small text-right">
+                    <span :class="s.score >= 0.3 ? 'text-ember' : 'text-dim'">{{ s.score.toFixed(2) }}</span>
+                    <br />
+                    <span class="text-dim">{{ Math.round(s.share * 100) }}%</span>
+                  </span>
+                  <button v-if="s.score >= 0.3" class="add" @click="addSuggested(s.tag_raw)">
+                    <Icon name="plus" :size="11" />
+                    {{ $t('character.suggestions.add') }}
+                  </button>
+                  <span v-else class="text-dim">—</span>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="!nameRows.length && !formRows.length && !suggestions.length" class="hint mt-15">
+              {{
+                looking
+                  ? $t('character.suggestions.looking')
+                  : probing
+                    ? $t('character.suggestions.checking')
+                    : !nameQueries.length
+                      ? $t('character.suggestions.empty')
+                      : names
+                        ? $t('character.suggestions.nothing')
+                        : $t('character.suggestions.none')
+              }}
+            </div>
+            <div v-else-if="looking" class="hint">{{ $t('character.suggestions.looking') }}</div>
           </div>
-          <div v-else class="hint mt-15">
-            {{
-              probing
-                ? $t('character.suggestions.checking')
-                : w.pixiv_tags.length
-                  ? $t('character.suggestions.none')
-                  : $t('character.suggestions.empty')
-            }}
+          <div class="cycle">
+            <div class="flex items-center">
+              <span class="ptitle">{{ $t('character.cycle.heading') }}</span>
+              <span class="spacer" />
+              <span class="data text-small text-dim">
+                {{ $t('character.cycle.perRun', { n: w.target }) }}
+              </span>
+            </div>
+            <div v-if="total" class="cycle-bar">
+              <span class="done" :style="{ width: pct(kept) }" />
+              <span class="now" :style="{ width: pct(w.target) }" />
+            </div>
+            <div class="legend text-small">
+              <span>
+                <i class="dot now" />
+                {{ $t('character.cycle.thisRun', { n: w.target }) }}
+              </span>
+              <span>
+                <i class="dot" />
+                {{
+                  left === null
+                    ? $t('character.cycle.leftUnknown')
+                    : $t('character.cycle.left', { n: left.toLocaleString() })
+                }}
+              </span>
+            </div>
+            <div class="runs">
+              <div class="run-row first">
+                <span class="data">{{ $t('character.cycle.run', { n: 1 }) }}</span>
+                <span>{{ $t('character.cycle.posts', { from: kept + 1, to: kept + w.target }) }}</span>
+                <span class="text-dim">{{ $t('character.cycle.onSave') }}</span>
+              </div>
+              <div class="run-row">
+                <span class="data">{{ $t('character.cycle.run', { n: 2 }) }}</span>
+                <span>{{ $t('character.cycle.next', { n: w.target }) }}</span>
+                <span class="text-dim">{{ $t('character.cycle.skipsOne', { n: 1 }) }}</span>
+              </div>
+              <div class="run-row">
+                <span class="data">{{ $t('character.cycle.run', { n: 3 }) }}</span>
+                <span>{{ $t('character.cycle.next', { n: w.target }) }}</span>
+                <span class="text-dim">{{ $t('character.cycle.skipsRange', { from: 1, to: 2 }) }}</span>
+              </div>
+            </div>
+            <div class="hint">{{ $t('character.cycle.note') }}</div>
           </div>
           <div class="spacer" />
           <div class="hint">{{ $t('character.suggestions.refresh') }}</div>
@@ -448,18 +707,32 @@ function submit(run: boolean) {
       </div>
 
       <div class="foot">
-        <i18n-t v-if="estimate" keypath="character.estimate.line" tag="span" class="data text-small text-dim">
+        <i18n-t v-if="total" keypath="character.run.line" tag="span" class="data text-small text-dim">
           <template #n>
-            <b class="text-tx">{{ estimate.artworks.toLocaleString() }}</b>
+            <b class="text-tx">{{ w.target }}</b>
+          </template>
+          <template #total>
+            <b class="text-tx">{{ total.toLocaleString() }}</b>
           </template>
           <template #time>
-            <b class="text-tx">{{ estimate.time }}</b>
+            <b class="text-tx">{{ runTime }}</b>
+          </template>
+        </i18n-t>
+        <i18n-t v-else keypath="character.run.lineNoTotal" tag="span" class="data text-small text-dim">
+          <template #n>
+            <b class="text-tx">{{ w.target }}</b>
           </template>
         </i18n-t>
         <div class="spacer" />
         <button class="btn gh" @click="emit('close')">{{ $t('character.actions.cancel') }}</button>
-        <button class="btn" @click="submit(false)">{{ $t('character.actions.saveOnly') }}</button>
-        <button class="btn pri" @click="submit(true)">{{ $t('character.actions.saveRun') }}</button>
+        <button class="btn" @click="submit(false)">
+          <Icon name="save" :size="14" />
+          {{ $t('character.actions.saveOnly') }}
+        </button>
+        <button class="btn pri" @click="submit(true)">
+          <Icon name="play" :size="14" />
+          {{ $t('character.actions.saveRun', { n: w.target }) }}
+        </button>
       </div>
     </div>
   </div>
@@ -536,6 +809,159 @@ function submit(run: boolean) {
 .sec.off > :not(.sec-h) {
   opacity: 0.55;
 }
+.sug-scroll {
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.nm-group {
+  display: flex;
+  flex-direction: column;
+}
+.nm-h {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 6px 0 4px;
+}
+.nm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.nm-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.nm-text .jp {
+  overflow-wrap: anywhere;
+}
+.nm-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  font-size: 10px;
+  color: var(--dim);
+}
+.nm-meta .lang {
+  color: var(--mut);
+}
+.nm-meta .warn {
+  color: var(--rose);
+}
+.nm-row.risky .jp {
+  color: var(--mut);
+}
+.nm-add {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.more {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 11px;
+  color: var(--mut);
+  cursor: pointer;
+}
+.target-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: start;
+}
+.preset {
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.toggle label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+.cycle {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+.cycle-bar {
+  display: flex;
+  height: 4px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.cycle-bar .done {
+  background: var(--mut);
+}
+.cycle-bar .now {
+  background: var(--ember);
+  min-width: 3px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--mut);
+}
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: var(--dim);
+}
+.dot.now {
+  background: var(--ember);
+}
+.runs {
+  display: flex;
+  flex-direction: column;
+}
+.run-row {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+  color: var(--mut);
+}
+.run-row.first {
+  color: var(--tx);
+}
+.run-row.first .data {
+  color: var(--ember);
+}
+/* a pixiv-only setting while pixiv is off: still editable, visibly idle */
+.field.inert > :not(label) {
+  opacity: 0.55;
+}
 .sec.off .n {
   color: var(--dim);
   border-color: var(--line);
@@ -591,10 +1017,13 @@ function submit(run: boolean) {
   font-size: 12px;
 }
 .x {
+  display: inline-flex;
+  align-items: center;
   background: none;
   border: none;
   color: var(--dim);
   padding: 0 0 0 4px;
+  cursor: pointer;
 }
 .strip {
   display: grid;
@@ -630,12 +1059,17 @@ function submit(run: boolean) {
   color: var(--dim);
   background: transparent;
 }
-.sug-row .add {
+.sug-row .add,
+.nm-add .add {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   background: none;
   border: 0;
   color: var(--moss);
   font: 600 12px var(--font);
   padding: 0;
+  cursor: pointer;
 }
 .foot {
   display: flex;

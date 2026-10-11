@@ -177,6 +177,16 @@ class Watch(BaseModel):
     # discovers, X only filters the timelines of artists already found, so an
     # X-only watch matches against whoever the other watches have surfaced.
     sources: list[Source] = Field(default_factory=lambda: list(ALL_SOURCES))
+    # posts per run: how many NEW kept posts one crawl collects for this
+    # character (pipeline.search_to_target); the next run continues further back
+    target: int = Field(default=100, ge=1, le=1000)
+    # the image-kind filter (kinds.KEEP) for this character's posts: off keeps
+    # photos, cosplay, 3D and screenshots too
+    kind_filter: bool = True
+    # who may be in the picture (coreflame/people.py): any, or female / male
+    # with full = only that gender, partial = the other one as a minority
+    gender: Literal["any", "female", "male"] = "any"
+    gender_mode: Literal["full", "partial"] = "full"
 
     @field_validator("sources", mode="before")
     @classmethod

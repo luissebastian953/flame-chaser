@@ -10,13 +10,13 @@ import base64
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from coreflame import __version__, tags
+from coreflame import __version__, kinds, people, tags
 from coreflame.blobs import BlobStore
 from coreflame.config import Config
 from coreflame.db import Store
@@ -26,6 +26,7 @@ from coreflame.thumbs import ThumbStore
 
 from .auth import Auth
 from .events import EventHub
+from .names import NameFinder
 from .probe import Prober
 from .security import LoopbackAuth
 
@@ -73,10 +74,12 @@ class State:
         token: str,
         port: int,
         prober: Prober | None = None,
+        names: NameFinder | None = None,
     ) -> None:
         self.cfg, self.runner, self.hub, self.token, self.port = cfg, runner, hub, token, port
         self.heartbeat = Heartbeat()
         self.prober = prober or Prober(cfg)
+        self.names = names or NameFinder(cfg)
         self.auth = Auth(cfg)
         self.blobs = BlobStore(cfg.blob_root)
         self.thumbs = ThumbStore(Path(cfg.blob_root).parent / "thumbs")
@@ -111,6 +114,16 @@ class WatchIn(BaseModel):
     min_bookmarks: int = 0
     include_r18: bool = False
     sources: list[str] = Field(default_factory=lambda: ["pixiv", "twitter"])
+    target: int = Field(100, ge=1, le=1000)
+    kind_filter: bool = True
+    gender: Literal["any", "female", "male"] = "any"
+    gender_mode: Literal["full", "partial"] = "full"
+
+
+class NamesIn(BaseModel):
+    """The display name first, then the character's pixiv tags and X terms."""
+
+    queries: list[str] = Field(default_factory=list, max_length=8)
 
 
 class JobIn(BaseModel):
@@ -129,6 +142,7 @@ class ConfigIn(BaseModel):
     dupe_threshold: int | None = None
     twitter_cookies_file: str | None = None
     twitter_timeline_limit: int | None = None
+    twitter_search_limit: int | None = None
     resolver: str | None = None
     proxy_url: str | None = None
 
@@ -183,6 +197,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             "resolver": c.resolver,
             "proxy_url": c.proxy_url,
             "twitter_timeline_limit": c.twitter_timeline_limit,
+            "twitter_search_limit": c.twitter_search_limit,
             "pixiv_session": bool(c.pixiv_php_sessid),  # redacted to a bool
             "twitter_cookies": bool(c.twitter_cookies_file or c.twitter_cookies_from_browser),
         }
@@ -211,6 +226,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             "dupe_threshold",
             "twitter_cookies_file",
             "twitter_timeline_limit",
+            "twitter_search_limit",
             "resolver",
             "proxy_url",
         ):
@@ -250,6 +266,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         except PermissionError as e:
             raise HTTPException(401, {"code": "session_rejected", "message": str(e)}) from e
         state.prober.reset()
+        state.names.reset()
         return _sources()
 
     @app.post("/api/auth/pixiv/verify")
@@ -261,6 +278,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
     def auth_pixiv_clear() -> None:
         state.auth.clear_pixiv()
         state.prober.reset()
+        state.names.reset()
 
     @app.post("/api/auth/twitter")
     def auth_twitter(body: TwitterAuthIn) -> dict:
@@ -297,18 +315,28 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
     def list_watches(s: Store = Depends(store)) -> list[dict]:
         out = []
         for w in s.watches():
+            # a post whose every image was thrown away (coreflame/kinds.py KEEP)
+            # is not something the archive holds, so it is not counted
             r = s.conn.execute(
                 """SELECT count(*) n, max(p.posted_at) latest FROM post_watches pw
                    JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
-                   WHERE pw.slug=?""",
+                   WHERE pw.slug=? AND NOT (
+                     EXISTS (SELECT 1 FROM media m WHERE m.source=p.source
+                               AND m.external_id=p.external_id)
+                     AND NOT EXISTS (SELECT 1 FROM media m WHERE m.source=p.source
+                               AND m.external_id=p.external_id AND m.state<>'rejected'))""",
                 (w.slug,),
             ).fetchone()
+            # newest illustration (or not-yet-labelled image); a screencap only
+            # when there is no illustration at all
             cover = s.conn.execute(
                 """SELECT m.sha256 FROM post_watches pw
                    JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
                    JOIN media m ON m.source=p.source AND m.external_id=p.external_id
+                   LEFT JOIN image_kinds k ON k.sha256=m.sha256
                    WHERE pw.slug=? AND m.state='stored' AND p.state='live'
-                   ORDER BY p.posted_at DESC, p.external_id DESC, m.idx LIMIT 1""",
+                   ORDER BY COALESCE(k.kind,'illustration')<>'illustration',
+                            p.posted_at DESC, p.external_id DESC, m.idx LIMIT 1""",
                 (w.slug,),
             ).fetchone()
             out.append(
@@ -347,6 +375,13 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         """One search page per tag (cached). Spends pixiv requests -- the form
         debounces; the daemon caps it at 8 tags per call."""
         return state.prober.probe(s, body.tags, body.include_r18)
+
+    @app.post("/api/names")
+    def names(body: NamesIn) -> dict:
+        """Names and forms from Danbooru and Wikidata for the character form's
+        suggestions -- no pixiv session needed. Sources that fail are listed in
+        `errors`; the rest still answer (coreflame/names.py)."""
+        return state.names.find(body.queries)
 
     @app.get("/api/preview/{illust_id}/thumb")
     def preview_thumb(illust_id: str) -> Response:
@@ -419,15 +454,24 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         limit: int = Query(100, le=500),
         source: str | None = None,
         r18: str = "exclude",
+        kinds_: str | None = Query(None, alias="kinds"),
         s: Store = Depends(store),
     ) -> dict:
         """Keyset on (posted_at, external_id) -- offset pagination duplicates and
-        skips rows when a crawl inserts while the user scrolls."""
+        skips rows when a crawl inserts while the user scrolls. `kinds` is a
+        comma list of image kinds to show (plus `unlabeled`); absent = all."""
         where = ["pw.slug=?", "m.state='stored'", "p.state='live'"]
         args: list[Any] = [slug]
         if source:
             where.append("p.source=?")
             args.append(source)
+        if kinds_ is not None:
+            want = [k for k in kinds_.split(",") if k]
+            bad = [k for k in want if k not in (*kinds.KINDS, kinds.UNLABELED)]
+            if bad or not want:
+                raise HTTPException(400, {"code": "bad_kind", "message": kinds_})
+            where.append(f"COALESCE(k.kind,'unlabeled') IN ({','.join('?' * len(want))})")
+            args += want
         if r18 == "exclude":
             where.append("p.is_r18=0")
         if cursor:
@@ -439,10 +483,11 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             args += [c_posted, c_posted, c_id]
         rows = s.conn.execute(
             f"""SELECT m.sha256, m.source, m.external_id, m.idx, m.width, m.height,
-                       p.posted_at, p.artist_name, p.title
+                       p.posted_at, p.artist_name, p.title, k.kind
                 FROM post_watches pw
                 JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
                 JOIN media m ON m.source=p.source AND m.external_id=p.external_id
+                LEFT JOIN image_kinds k ON k.sha256=m.sha256
                 WHERE {" AND ".join(where)}
                 ORDER BY p.posted_at DESC, p.external_id DESC, m.idx
                 LIMIT ?""",
@@ -454,6 +499,21 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             last = rows[limit - 1]
             nxt = _cursor_enc(last["posted_at"], last["external_id"])
         return {"items": items, "next_cursor": nxt}
+
+    @app.get("/api/gallery/{slug}/kinds")
+    def gallery_kinds(slug: str, r18: str = "exclude", s: Store = Depends(store)) -> dict:
+        """Image count per kind (what the gallery's filter chips show) and
+        whether this install can label at all."""
+        counts = s.kind_counts(slug, include_r18=r18 != "exclude")
+        return {
+            "counts": {k: counts.get(k, 0) for k in (*kinds.KINDS, kinds.UNLABELED)},
+            "labeler": {
+                "available": kinds.runtime_available(),
+                "models": kinds.models_present(state.cfg.home),
+            },
+            # images its gender filter still has to judge (coreflame/people.py)
+            "people": {"pending": s.people_pending(slug, people.TAGGER_ID)},
+        }
 
     @app.get("/api/gallery/{slug}/tags")
     def gallery_tags(

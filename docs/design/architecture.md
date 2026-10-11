@@ -336,7 +336,7 @@ with its own budget.
 ```
 job = { id, type, params, state, progress, counters, started_at, finished_at, error }
 
-type   : poll | link | media | backfill | reindex
+type   : poll | link | media | tags | label | backfill | reindex
 state  : queued → running → (succeeded | failed | cancelled)
 ```
 
@@ -689,6 +689,12 @@ not a route change, so browser-back closes it via a history entry.
 The cross-source link is the payoff of the phash work and should be visible:
 "also posted on X · 2026-08-21" with a link.
 
+A **Show** row of chips above the grid narrows it between the kinds the
+archive keeps (§10.15): Illustrations, Anime screencaps, and Not labeled yet
+while anything is unlabeled, each with its count, the choice remembered per
+viewer. For images stored before the keep rule the row offers "Label N
+images" / "Remove N images", which runs a `label` job and redraws when it ends.
+
 ---
 
 ## 6. API contract
@@ -705,7 +711,8 @@ POST   /heartbeat                    ← {}  every 5s from the shell; no beat fo
                                         30s (monotonic, sleep-aware) → daemon exits
 GET    /config                       → Config (secrets redacted to booleans)
 PUT    /config                       ← {library_root?, pixiv_rate?, dupe_threshold?,
-                                        twitter_cookies_file?, twitter_timeline_limit?}
+                                        twitter_cookies_file?, twitter_timeline_limit?,
+                                        twitter_search_limit?}  -- 0 = never search X
 GET    /sources/status               → {pixiv:{authed,user_id,ok,checked_at},
                                         twitter:{gallery_dl:{found,version},
                                                  cookies:{present,expires_at}}}
@@ -733,6 +740,9 @@ GET    /watches                      → [{slug,label,pixiv_tags,match_terms,
                                          min_bookmarks,include_r18,
                                          sources:["pixiv","twitter"],  -- per-watch;
                                            poll skips an unticked source
+                                         target:100,       -- posts per run, 1..1000 (§10.16)
+                                         kind_filter:true, -- image-kind filter (§10.15)
+                                         gender:any|female|male, gender_mode:full|partial (§10.18)
                                          post_count,image_count,last_polled_at,
                                          cover_sha}]
 POST   /watches                      ← {slug,label,pixiv_tags,match_terms,...}
@@ -756,12 +766,21 @@ POST   /pixiv/probe                  ← {tags:[≤8], include_r18}
 GET    /preview/{illust_id}/thumb?token=   → image/jpeg|png, private, max-age 900
                                         proxied from i.pximg.net with Referer; only ids a
                                         probe returned (else 404 not_probed); ?token= accepted
+POST   /names                        ← {queries:[≤8]}   display name first, then tags/terms
+                                     → {danbooru_tag, wikidata_id, label,
+                                        suggestions:[{text, kind:name|form, lang, sources,
+                                                      posts, form, risky}],
+                                        errors:{danbooru?, wikidata?}}
+                                        no pixiv session needed; cached a day per queries,
+                                        answers with an error are not cached (§10.17)
 ```
 
 ### Jobs & events
 
 ```
-POST   /jobs                         ← {type, params:{watches?:[slug], limit?}}
+POST   /jobs                         ← {type, params:{watches?:[slug], limit?,
+                                               target?}}   poll: overrides every character's
+                                               own posts per run (Watch.target, §10.16)
                                      → 202 {job_id}
 GET    /jobs?state=&limit=50         → [job]
 GET    /jobs/{id}                    → job + last 200 log lines
@@ -792,10 +811,19 @@ buffer so a reconnect during a long crawl does not lose the pipeline view.
 GET /gallery                         → [{slug,label,cover_sha,image_count,
                                          post_count,latest_posted_at}]
 GET /gallery/{slug}?cursor=&limit=100&source=&sort=posted|added&r18=exclude
+                   &kinds=illustration,unlabeled       (absent = every kind; §10.15)
                                      → {items:[{sha256,source,external_id,idx,
                                                 width,height,posted_at,
-                                                artist_name,thumb_url}],
+                                                artist_name,thumb_url,
+                                                kind}],        kind: null = unlabeled
                                         next_cursor}
+                                       400 bad_kind on an unknown or empty kinds=
+                                       (the UI always sends the kept kinds + unlabeled)
+GET /gallery/{slug}/kinds?r18=exclude → {counts:{illustration,photo,render,
+                                          screencap,other,unlabeled},
+                                         labeler:{available, models},
+                                         people:{pending}}   not yet judged by its
+                                                             gender filter (§10.18)
 GET /posts/{source}/{external_id}    → full detail for the aside, including
                                         {linked:[{source,external_id,permalink,
                                                   posted_at,distance}]}
@@ -1244,3 +1272,166 @@ ruff on reaver) and `commit-msg`. `pnpm check` at the root = deliverer
   first, then the process; with a job running it asks for a second click.
 - `docker-compose.yml`'s header comment still says `npm run tauri dev`; the
   command is `pnpm tauri dev` (`deliverer/CLAUDE.md`).
+
+### 10.15 Image kinds — only illustrations and anime screencaps are kept (`coreflame/kinds.py`)
+
+X search returns whatever *mentions* a name: soccer results for "kiana",
+League of Legends for 키아나, cosplay, figure unboxings, leaderboard
+screenshots. Full-name terms fix *who*; nothing in a search fixes *what*. On a
+hand-labelled set of 213 X posts, 39% were illustrations.
+
+Two small ONNX classifiers from deepghs on Hugging Face (4M params, 17 MB
+each, ~0.1 s per image on CPU together) label every downloaded image:
+`anime_real_cls` (anime vs real photo, OpenRAIL) and `anime_classification`
+(illustration / comic / 3d / bangumi / not_painting, MIT). `p(real) ≥ 0.5` →
+`photo`, else `illustration` (incl. comic), `render`, `screencap`, `other`. On
+the 213 posts the pair called 72/84 illustrations `illustration` and let 6/129
+of the rest through; most misses were work-in-progress screenshots, phone
+photos of paper sketches and in-game renders, plus one plain illustration
+called a photo. The WD tagger was tried and rejected: 9× slower, and its
+`cosplay`/`photo` tags almost never fired.
+
+- **The archive keeps `KEEP = (illustration, screencap)`; everything else is
+  thrown away.** At ingest the image is labelled *before* a byte is written:
+  a photo (incl. cosplay), 3D render / figure or screenshot never becomes a
+  blob, a thumbnail or a by-character name. This was first built as
+  hide-in-the-gallery and changed on request: the archive is for the art.
+- **The row stays.** A thrown-away image keeps its `media` row — state
+  `rejected`, its kind in `error`, `url`, `sha256`, `phash` — so the call is
+  auditable (`/api/stats` `media_rejected`) and reversible by re-downloading
+  while the post still exists. A post whose every image was rejected is not
+  counted in `post_count` and has nothing in the grid. `seen_posts` is
+  untouched: the post was visited, which is what the gate records.
+- **Labels are keyed by sha** (`image_kinds`, migration v5): reposts share one
+  row, and a change of `MODEL_ID` re-queues the still-stored images for the
+  `label` job — a re-label from disk, never a re-fetch.
+- **The backlog** (images stored before the rule): the `label` job labels
+  what is unlabeled, then `discard_unkept()` removes every stored image whose
+  label is not kept — blob and thumb only once no stored row needs the bytes,
+  and the by-character hardlinks explicitly, since a hardlink outlives its blob.
+- **Per character** (`Watch.kind_filter`, migration v6, the form's
+  "Recognition filter"): a not-kept image is thrown away only if *every*
+  character its post belongs to has the filter on; the cleanup skips posts
+  of a character with it off. Switching it off reopens that character's
+  `rejected` rows (back to `pending`, counted in `reopened`), and the next
+  download keeps them — the same shape as lowering min bookmarks.
+- **Backlogged: character recognition** ("is this *this* character", e.g.
+  the WD tagger's `kiana_kaslana` ≥ 0.80). Measured on Kiana it found her in
+  about half of her illustrations at 0.85, so as a filter it would drop many
+  real posts; it needs its own evaluation before it gets a switch.
+- **Can't judge → keep.** An undecodable image, or no classifier at all, is
+  stored unlabeled rather than lost. An unusable classifier (download or
+  verification failed) logs one warning per poll and the poll carries on.
+- **Optional dependency.** `pip install 'reaver[classify]'` (numpy +
+  onnxruntime). Without it `/gallery/{slug}/kinds` reports
+  `available: false`, nothing is labelled or removed, and the engine still
+  imports. The preprocessing is reimplemented in 20 lines (alpha over white,
+  RGB, bilinear 384², [-1, 1]) and matches deepghs' `imgutils` to 5e-7;
+  `imgutils` itself is not a dependency.
+- **Models on first use, pinned.** Fetched through `SourceClient` (so DoH and
+  the proxy apply) from a commit, not a branch, into `~/.reaver/models/`, and
+  refused unless they hash to the pinned sha256. Not bundled: OpenRAIL's use
+  restrictions would travel with a redistributed copy.
+
+### 10.16 Posts per crawl — X search to a target (`pipeline.search_to_target`)
+
+The first X search design took the newest *N images* per term, once: a
+term's watermark then only ever moved forward, so everything older than the
+first crawl was never requested. A character with thousands of posts on X got
+~36. Changed at the owner's request (load-bearing decision #1 updated):
+
+- **Posts per run is per character** (`Watch.target`, 1..1000, default 100,
+  migration v6), set in section 3 of the character form, which also shows
+  the run cycle: run 1 = posts k+1…k+N after the k it already has, each
+  later run the next N new; "left" only when pixiv's tag totals give one (X
+  search reports none). Run / Run all send no number; `params.target`
+  overrides every character's own (API, tests).
+- **The unit is kept posts.** A poll searches each character until exactly
+  N *new* posts are kept — visited gate passed, text
+  matched, at least one image kept by §10.15. Each post is downloaded and
+  judged before the next is counted, so "300" returns 300, whatever the image
+  count. Per character: Run all gives every character its own N.
+- **Each term covers one stretch of history, by snowflake id**
+  (`poll_state` `search:<term>` = hi, `search-lo:<term>` = lo; lo 0 = X has
+  nothing older). A crawl first catches up on newer posts until it meets the
+  stretch, then walks back from lo with `max_id:`, one page (`--post-range`,
+  50 posts) per term in turn. Progress is committed per post, so stopping at
+  N leaves the rest of the page for the next crawl — listed again, never
+  skipped. X answers `max_id` inclusively plus the post just above it; ids
+  are filtered locally, and a catch-up page with nothing new counts as
+  caught up (no re-asking loop). A term with only the old newest-N watermark
+  catches up above it, then walks back from it.
+- **Stops:** at N; when every term's history is exhausted ("history
+  complete" in the log); or after listing 10×N posts (a term that matches
+  mostly other things — logged as a warning). `twitter_search_limit` 0 still
+  switches search off; otherwise it only sizes crawls started without a
+  target (CLI), and now counts posts too.
+- **Cost:** at the ~1-in-4 keep rate seen for Raiden Mei, 100 kept ≈ 400
+  listed ≈ 20 search requests; gallery-dl waits out X's rate-limit windows.
+  Presets in the form: 100 · 300 · 500 · 1000.
+- Progress during the search stage is `kept / N`; the later timeline and
+  download stages report their own.
+
+### 10.17 Name suggestions from Danbooru and Wikidata (`coreflame/names.py`)
+
+The form's suggestions came only from pixiv (tags co-occurring in a probe),
+so without a pixiv session there were none, and pixiv only knows the
+spellings pixiv users type. Two public sources know characters by name:
+
+- **Danbooru** (anime-art tags). `autocomplete.json` resolves a name typed
+  in any language to the character tag (キアナ → `kiana_kaslana`); the
+  tag's wiki gives its "other names" (琪亚娜·卡斯兰娜, キアナ・カスラナ,
+  RaidenMei…); `tags.json?name_matches=<tag>_(*` gives its forms and
+  costumes ranked by post count (Herrscher of Thunder 1,648), and the top
+  three forms' wikis give their Japanese/Chinese names. Documented limit:
+  10 req/s bursts, ~1 req/s sustained.
+- **Wikidata** labels per language (en, ja, ko, zh-hans, zh-hant) and
+  aliases, CC0 — it is where Korean comes from (라이덴 메이, 키아나·카스라나).
+  An item is accepted only if its label matches a query and, when Danbooru
+  named the character, it shares a name with Danbooru's — a same-named
+  person or place never slips in.
+
+Only names are read, never images or posts. Each source has its own
+`SourceClient` (1 req/s, burst 3, two tries, the configured DoH/proxy) and a
+User-Agent with an `https://` contact URL — Wikimedia's robot policy answers
+403 to one without the scheme (seen live; `test_names` guards it). A lookup is ~4–6 requests,
+4–6 s, cached a day in the daemon (`dawnmaker/names.py`); a failing source is
+reported in `errors` and the other still answers. Suggestions are merged per
+text (NFKC, case-insensitive) — `・` and `·` stay separate, since they are
+different pixiv tags — with an explicit source language kept over a script
+guess, and one short word (`Kiana`, `芽衣`, `메이`) flagged `risky` as an X
+term. The form groups them as Names / Forms & costumes, each row with
+"+ pixiv" / "+ X" for the sources the character uses; pixiv's co-occurring
+tags join as a third group when pixiv is signed in.
+
+### 10.18 Gender filter per character (`coreflame/people.py`)
+
+A search for a name brings art of other characters too — Mei's `raiden`
+also matched Genshin's Raiden Shogun fandom (Scaramouche, Wanderer). A
+character can say who may be in its pictures: `gender` any | female | male,
+`gender_mode` full (only that gender) | partial (the other gender allowed as
+a strict minority: 2 girls + 1 boy passes, 1 + 1 and `male_focus` do not).
+An image with nobody in it passes no filter. Settings › Characters sets the
+default for new characters (localStorage); each form can change it.
+
+- **Model:** WD tagger v3, SwinV2 (SmilingWolf, Apache-2.0, 467 MB, pinned
+  revision + sha256, fetched on first use like the kind models). Its Danbooru
+  counting tags (`1girl` 5.1M posts, `1boy` 1.1M, `multiple_boys`,
+  `male_focus`, …) give girls/boys counts at the usual 0.35 cut. On 144
+  archived images: boys-only 5/5, mixed ~7/9, girls-only 47/48 (the miss
+  scored `1boy` 0.27). Hugging Face's dedicated "anime gender" models have
+  ~26 downloads and no published accuracy — not used. Preprocessing is
+  reimplemented (white square pad, bicubic 448², BGR, 0–255) after deepghs'
+  imgutils; ~0.6 s per image on CPU.
+- **Only when needed:** an image is tagged only if a character its post
+  belongs to has a filter, after the kind check (a photo is never tagged).
+  Kept if *any* of the post's characters accepts it — the kind filter's rule.
+- **Stored per sha** (`image_people`, migration v7): counts, the people tag
+  scores ≥ 0.2 (so the cut can move without re-tagging) and character tags ≥
+  0.5 — the groundwork for character recognition (backlogged, §10.15).
+- **Rejected like kinds:** never stored at download (`error` =
+  `gender:girls=N,boys=M`); the `label` job tags the backlog and discards
+  (`people.pending` drives the gallery's "Check N images" button). Loosening
+  a filter (off, full → partial, the other gender) reopens that character's
+  gender rejections only; the kind filter's switch reopens kind rejections
+  only.

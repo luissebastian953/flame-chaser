@@ -59,6 +59,14 @@ export shows up there after the next `dev`/`build`/`vitest` run.
   .danger`), `.panel` (`.poly .scan`), `.chip` (`.on .off .err`), `.phead`,
   `.ptitle`, `.field`, `.bar`, `.rk-*`. Panels are square (`--radius-*` reset;
   only `rounded-chip` = 2px); buttons and chips are cut top-right + bottom-left.
+- **Icons:** `<Icon name="crawl" :size="14" />` from the Curio set
+  (`assets/icons/icons.json`, verbatim from the designer's zip; `lib/icons.ts`
+  looks names up). Stroked with `currentColor`, so colour comes from the text.
+  No emoji or text glyphs (✕ ▶ ‹ ✓ ⚠ +) as icons, and none inside i18n
+  strings — the icon goes in the template beside `$t()`. Decorative by
+  default; pass `label` when the icon alone names a control (or put
+  `aria-label` on the button). `lib/icons.test.ts` fails on an unknown name.
+  To update the set, replace the JSON (it is in `.prettierignore`).
 - Reka UI for behaviour only (focus, keyboard, aria); skin with `.rk-*`.
   Never install shadcn-vue. `.jp` switches to Noto Sans JP for Japanese text.
 

@@ -31,10 +31,14 @@ const sub = computed(() =>
           <b>{{ w.label || w.slug }}</b>
           <span class="jp kv">{{ w.pixiv_tags[0] }}</span>
         </div>
-        <div class="kv">
-          <span class="num">{{ w.post_count ?? 0 }}</span>
-          {{ $t('gallery.gallery.posts', w.post_count ?? 0) }}
+        <div class="kv stats">
+          <span>
+            <Icon name="images" :size="13" />
+            <span class="num">{{ w.post_count ?? 0 }}</span>
+            {{ $t('gallery.gallery.posts', w.post_count ?? 0) }}
+          </span>
           <span v-if="w.latest_posted_at">
+            <Icon name="calendar" :size="13" />
             {{ $t('gallery.gallery.latest', { date: w.latest_posted_at.slice(0, 10) }) }}
           </span>
         </div>
@@ -73,5 +77,15 @@ const sub = computed(() =>
   display: flex;
   align-items: baseline;
   gap: 7px;
+}
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.stats > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 </style>

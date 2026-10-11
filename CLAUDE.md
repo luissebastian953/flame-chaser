@@ -35,12 +35,22 @@ were already considered and rejected for a stated reason.
 Undoing any of these silently breaks something. If you think one is wrong, say
 so and stop — don't just change it.
 
-1. **pixiv discovers, X follows.** A character is a first-class *tag* on pixiv
-   (`s_mode=s_tag_full` matches exactly). X has no character metadata and no
-   free search tier since Feb 2026. So pixiv finds artworks → artworks give
-   artists → artist pixiv profiles give X handles → X supplies those artists'
-   timelines. `TwitterAdapter.supports_discovery` is `False` and
-   `discover()` raises on purpose.
+1. **pixiv discovers, X follows (and searches, carefully).** A character is a
+   first-class *tag* on pixiv (`s_mode=s_tag_full` matches exactly). X has no
+   character metadata and no free API search since Feb 2026. So pixiv finds
+   artworks → artworks give artists → artist pixiv profiles give X handles → X
+   supplies those artists' timelines. X *search* exists only through
+   `gallery-dl` (`TwitterAdapter.search_page`, `filter:images`, limits count
+   posts) — it is what X polices hardest. Changed 2026-09-29 by the owner:
+   search is **target-driven**, not capped small. Each character's posts per
+   run N (`Watch.target`; `params.target` overrides) makes a crawl
+   (`pipeline.search_to_target`) search that character until exactly N new
+   posts are *kept* (after the visited gate and the image kinds), walking each
+   term's covered stretch of history (`search:` / `search-lo:` snowflake
+   cursors) newer-first then further back, and stops at N, at 10×N listed, or
+   when history runs out. `twitter_search_limit` 0 still turns search off.
+   Each `Watch.sources` picks pixiv / X / both; an unticked source is never
+   requested.
 2. **Check the visited set before spending a request.** The search listing hands
    over `illustId` for free; `seen_posts` is consulted there, not after the
    detail fetch. `posts` is NOT the gate — it only holds what we kept.
@@ -72,8 +82,10 @@ so and stop — don't just change it.
 
 - **Python ≥ 3.10** (`requires-python` in `reaver/pyproject.toml`): no
   `datetime.UTC`, no `StrEnum`. Engine deps: `httpx`, `Pillow`, `gallery-dl`,
-  `pydantic`, `glom`. Daemon adds `fastapi`, `uvicorn`. Keep the engine
-  importable without the daemon's deps.
+  `pydantic`, `glom`. Daemon adds `fastapi`, `uvicorn`. The optional
+  `classify` extra adds `numpy` + `onnxruntime` for image kinds
+  (`coreflame/kinds.py`), imported lazily. Keep the engine importable without
+  the daemon's deps or the classifier's.
 - **IDs are `str`, always.** Snowflakes exceed JS safe-integer range.
 - **Datetimes are tz-aware UTC** at the adapter edge. Never naive.
 - **Tags keep two forms:** `tag_raw` (what pixiv matches on) and `tag_norm`

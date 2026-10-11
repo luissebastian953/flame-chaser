@@ -9,6 +9,7 @@
     "storage": "Storage",
     "network": "Network",
     "duplicates": "Duplicates",
+    "characters": "Characters",
     "about": "About"
   },
   "language": {
@@ -120,7 +121,11 @@
     "pixivRate": "pixiv rate",
     "pixivRateAria": "pixiv rate",
     "rateValue": "{n} req/s",
-    "rateHint": "Conservative on purpose — this is a private archive, not a mirror."
+    "rateHint": "Conservative on purpose — this is a private archive, not a mirror.",
+    "xSearch": "X search depth",
+    "xSearchValue": "{n} posts per term",
+    "xSearchOff": "off — X never searches, only follows linked artists",
+    "xSearchHint": "For crawls started from the command line. Crawls from the app search until each character's “Posts per run”. Search is the request X rate-limits and suspends for. 0 turns X search off everywhere."
   },
   "duplicates": {
     "title": "Duplicates",
@@ -137,5 +142,9 @@
     "blurb": "A private archive. Attribution is kept on every record; nothing here is meant to be redistributed.",
     "pixiv": "pixiv",
     "repository": "repository"
+  },
+  "characters": {
+    "title": "New characters",
+    "lead": "What a new character's form starts with. Each character can change it in its own form."
   }
 }

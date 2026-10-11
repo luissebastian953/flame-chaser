@@ -15,12 +15,18 @@ the whole shape of the pipeline:
     anti-automation targets. A hand-rolled client here is a guaranteed
     maintenance treadmill and an account-suspension risk.
 
-So this adapter does not search. It walks the media timelines of artists you
-already found on pixiv, and it delegates the actual protocol work to
-`gallery-dl`, which tracks X's GraphQL changes as a full-time job and which you
-can update with `pip install -U` when something breaks. Our code owns the
-policy (who to follow, what to keep, dedupe); the fragile part stays in a
-library that is somebody else's problem.
+So this adapter never speaks GraphQL itself. It delegates the protocol work to
+`gallery-dl`, which tracks X's changes as a full-time job and which you can
+update with `pip install -U` when something breaks. Our code owns the policy
+(who to follow, what to keep, dedupe); the fragile part stays in a library that
+is somebody else's problem. Two feeds, both through gallery-dl:
+
+  * `timeline()` -- the media timeline of an artist already found on pixiv.
+    Cheap, precise, the default.
+  * `search()` -- X's own search for a match term, images only. This is the
+    only way a watch with pixiv switched off finds anything, and it is the
+    traffic X polices hardest: keep the per-term limit small, keep the rate
+    conservative, use a throwaway account.
 
 Auth: export cookies for x.com from a logged-in browser to cookies.txt, or
 point gallery-dl at the browser directly (`--cookies-from-browser firefox`).
@@ -35,6 +41,7 @@ import shutil
 import subprocess
 from collections.abc import Iterator
 from typing import Any
+from urllib.parse import quote_plus
 
 from pydantic import ValidationError
 
@@ -51,7 +58,7 @@ class GalleryDLError(RuntimeError):
 
 class TwitterAdapter:
     name = "twitter"
-    supports_discovery = False  # <- the whole point of the docstring
+    supports_discovery = True  # by search term, through gallery-dl; see docstring
 
     def __init__(
         self,
@@ -78,7 +85,9 @@ class TwitterAdapter:
         return shutil.which(self.binary) is not None
 
     # -- metadata ---------------------------------------------------------
-    def _run(self, url: str, limit: int) -> list[dict]:
+    def _run(self, url: str, limit: int, by_post: bool = False) -> list[dict]:
+        """`limit` counts image FILES (`--range`) unless `by_post`, when it
+        counts posts (`--post-range`) -- a 4-image post is one post."""
         if not self.available():
             raise GalleryDLError(f"{self.binary} not found on PATH (pip install gallery-dl)")
         cmd = [
@@ -86,7 +95,7 @@ class TwitterAdapter:
             "--dump-json",
             "--no-download",
             "-q",
-            "--range",
+            "--post-range" if by_post else "--range",
             f"1-{limit}",
             "-o",
             "extractor.twitter.videos=false",
@@ -113,9 +122,35 @@ class TwitterAdapter:
                 f"gallery-dl failed ({proc.returncode}): {proc.stderr.strip()[:400]}"
             )
         try:
-            return self._flatten(json.loads(proc.stdout or "[]"))
+            payload = json.loads(proc.stdout or "[]")
         except json.JSONDecodeError as e:
             raise GalleryDLError(f"unparseable gallery-dl output: {e}") from e
+        # gallery-dl exits 0 and reports refusals INSIDE the json, as
+        # [-1, {"error": ...}]. Left to _flatten those look exactly like an
+        # empty result -- which is how an expired cookie file spent a month
+        # looking like "this character has no art on X". Raise instead.
+        if err := self._error(payload):
+            raise GalleryDLError(err)
+        return self._flatten(payload)
+
+    @staticmethod
+    def _error(payload: Any) -> str | None:
+        """gallery-dl's own error entries, if any. Cookie problems land here
+        as AuthRequired, and its warnings go to stderr, not this list."""
+        for entry in payload or []:
+            if isinstance(entry, list) and len(entry) >= 2 and isinstance(entry[1], dict):
+                e = entry[1]
+                if "error" in e:
+                    msg = str(e.get("message") or "").strip()
+                    kind = str(e["error"])
+                    if kind == "AuthRequired":
+                        return (
+                            "X refused: the session is not signed in "
+                            "(cookies missing, expired, or logged out elsewhere) -- "
+                            "reconnect X in Settings > Accounts"
+                        )
+                    return f"X refused ({kind}){': ' + msg if msg else ''}"
+        return None
 
     @staticmethod
     def _flatten(payload: Any) -> list[dict]:
@@ -142,12 +177,46 @@ class TwitterAdapter:
         Snowflake tweet ids are monotonically increasing, so the watermark is
         an integer comparison here too.
         """
+        yield from self._posts(f"https://x.com/{handle}/media", since_id, limit, handle)
+
+    def search(
+        self, term: str, since_id: str | None = None, limit: int = 50
+    ) -> Iterator[IllustRecord]:
+        """X search for one term, images only, newest first, stopped at the
+        watermark. `filter:images` keeps text posts out of the request budget
+        entirely; retweets/replies are dropped by the extractor options."""
+        q = quote_plus(f"{term} filter:images -filter:retweets")
+        yield from self._posts(
+            f"https://x.com/search?q={q}&src=typed_query&f=live", since_id, limit, by_post=True
+        )
+
+    def search_page(
+        self, term: str, max_id: int | None = None, limit: int = 50
+    ) -> list[IllustRecord]:
+        """One page of X search for `term`, newest first, at or below `max_id`
+        (None = from the newest). `limit` counts POSTS. X treats max_id as
+        inclusive and has been seen to return the post just above it, so the
+        caller filters ids itself; this only narrows the window."""
+        q = f"{term} filter:images -filter:retweets"
+        if max_id is not None:
+            q += f" max_id:{max_id}"
+        url = f"https://x.com/search?q={quote_plus(q)}&src=typed_query&f=live"
+        return list(self._posts(url, None, limit, by_post=True))
+
+    def _posts(
+        self,
+        url: str,
+        since_id: str | None,
+        limit: int,
+        handle: str | None = None,
+        by_post: bool = False,
+    ) -> Iterator[IllustRecord]:
         floor = int(since_id) if since_id and since_id.isdigit() else 0
         # gallery-dl emits one entry per IMAGE with the post fields repeated;
         # regroup into one record per post, then build each record ONCE
         posts: dict[str, dict] = {}
         media: dict[str, list[dict]] = {}
-        for meta in self._run(f"https://x.com/{handle}/media", limit):
+        for meta in self._run(url, limit, by_post):
             fields = extract(TWITTER_ENTRY, meta)
             tid = str(fields.get("external_id") or "")
             if not tid or (floor and int(tid) <= floor):
@@ -155,18 +224,21 @@ class TwitterAdapter:
             if tid not in posts:
                 if self.sink:
                     fields["raw_sha"] = self.sink.put_raw("twitter", "twitter_entry", meta, tid)
-                fields.setdefault("artist_id", handle)
-                fields.setdefault("artist_handle", handle)
-                fields["permalink"] = f"https://x.com/{handle}/status/{tid}"
+                # a timeline knows its author from the url; search results carry it in the entry
+                author = fields.get("artist_handle") or handle or str(fields.get("artist_id") or "")
+                fields["artist_handle"] = author
+                if not fields.get("artist_id"):
+                    fields["artist_id"] = author
+                fields["permalink"] = f"https://x.com/{author}/status/{tid}"
                 posts[tid] = fields
                 media[tid] = []
                 self.extracted.append(fields)
-            url = fields.get("_media_url") or ""
-            if url:
+            url_ = fields.get("_media_url") or ""
+            if url_:
                 media[tid].append(
                     dict(
                         index=int(fields.get("_media_num") or len(media[tid]) + 1) - 1,
-                        url=url,
+                        url=url_,
                         width=int(fields.get("_width") or 0),
                         height=int(fields.get("_height") or 0),
                     )
@@ -181,7 +253,11 @@ class TwitterAdapter:
                 log.warning("tweet %s failed validation: %s", tid, e.errors()[0]["msg"])
 
     def discover(self, watch: Watch, since: str | None = None) -> Iterator[IllustRecord]:
-        raise NotImplementedError("X has no free character search; poll followed artists instead")
+        """Search every match term of a watch. The pipeline calls search()
+        per term so each term keeps its own watermark; this is the
+        convenience form for the CLI and tests."""
+        for term in watch.match_terms or [watch.slug]:
+            yield from self.search(term, since)
 
     def matches(self, rec: IllustRecord, watch: Watch) -> bool:
         """Text-match a timeline post against a watch.

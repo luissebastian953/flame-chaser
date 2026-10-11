@@ -34,19 +34,25 @@ async function open(url: string) {
         :aria-label="$t('gallery.aside.close')"
         @click="emit('close')"
       >
-        ✕
+        <Icon name="close" :size="14" />
       </button>
     </div>
     <div class="content">
       <img v-if="first?.sha256" :src="mediaUrl(first.sha256)" alt="" />
       <div class="jp title">{{ post.title || $t('gallery.aside.untitled') }}</div>
       <div class="row">
-        <b>{{ post.artist_name || post.artist_handle || post.artist_id }}</b>
+        <b class="ib">
+          <Icon name="user" :size="13" />
+          {{ post.artist_name || post.artist_handle || post.artist_id }}
+        </b>
         <span class="chip" :style="post.source === 'pixiv' ? 'color:var(--ember)' : 'color:var(--cyan)'">
           {{ srcLabel(post.source) }}
         </span>
         <div class="spacer" />
-        <span class="kv mono">{{ (post.posted_at ?? '').slice(0, 10) }}</span>
+        <span class="kv mono ib">
+          <Icon name="calendar" :size="12" />
+          {{ (post.posted_at ?? '').slice(0, 10) }}
+        </span>
       </div>
       <div v-if="post.state === 'gone'" class="kv" style="color: oklch(0.72 0.1 300)">
         {{ $t('gallery.aside.gone') }}
@@ -56,33 +62,49 @@ async function open(url: string) {
       </div>
       <div class="meta">
         <div>
-          <span class="kv">{{ $t('gallery.aside.dimensions') }}</span>
+          <span class="kv ib">
+            <Icon name="image" :size="12" />
+            {{ $t('gallery.aside.dimensions') }}
+          </span>
           <span class="mono">{{ first?.width }} × {{ first?.height }}</span>
         </div>
         <div>
-          <span class="kv">{{ $t('gallery.aside.file') }}</span>
+          <span class="kv ib">
+            <Icon name="file" :size="12" />
+            {{ $t('gallery.aside.file') }}
+          </span>
           <span class="mono">
             {{ first?.bytes ? $t('gallery.aside.fileSize', { n: (first.bytes / 1048576).toFixed(2) }) : '—' }}
           </span>
         </div>
         <div v-if="post.source === 'pixiv'">
-          <span class="kv">{{ $t('gallery.aside.bookmarks') }}</span>
+          <span class="kv ib">
+            <Icon name="bookmark" :size="12" />
+            {{ $t('gallery.aside.bookmarks') }}
+          </span>
           <span class="mono">{{ post.bookmark_count }}</span>
         </div>
         <div>
-          <span class="kv">{{ $t('gallery.aside.hash') }}</span>
+          <span class="kv ib">
+            <Icon name="hash" :size="12" />
+            {{ $t('gallery.aside.hash') }}
+          </span>
           <span class="mono">{{ first?.sha256?.slice(0, 12) }}…</span>
         </div>
       </div>
       <div v-if="post.linked.length" class="linked">
         <div class="ltitle">
-          {{ $t('gallery.aside.sameImageOn', { source: srcLabel(post.linked[0]?.source ?? '') }) }}
+          <span class="ib">
+            <Icon name="link" :size="13" />
+            {{ $t('gallery.aside.sameImageOn', { source: srcLabel(post.linked[0]?.source ?? '') }) }}
+          </span>
           <span class="mono">{{ post.linked[0]?.reason }}</span>
         </div>
         <a href="#" @click.prevent="open(post.linked[0]!.permalink)">{{ post.linked[0]?.permalink }}</a>
       </div>
       <div class="row">
         <button class="btn" @click="open(post.permalink)">
+          <Icon name="external" :size="13" />
           {{ $t('gallery.aside.openOn', { source: srcLabel(post.source) }) }}
         </button>
       </div>
@@ -137,6 +159,11 @@ async function open(url: string) {
   display: flex;
   align-items: center;
   gap: 9px;
+}
+.ib {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .chips {
   display: flex;

@@ -7,12 +7,14 @@ deliverer/
 │   ├── App.vue           rail, AuthGate, UpdateBanner, theme apply
 │   ├── router.ts         hash history; routes → pages/ (hand-written, lazy)
 │   ├── i18n.ts (+ .test.ts)   LOCALES, glob-loaded messages, setLocale
-│   ├── pages/            Gallery · CharacterDetail · Config · Pipeline · Settings
-│   ├── components/       AuthBadge* · AuthGate · DetailAside · SourceCard* · UpdateBanner* ·
-│   │                     UpdatesPanel · WatchForm            (* = has a .test.ts)
-│   ├── stores/           endpoint · jobs* · library* · sources* · theme* · updater*  (Pinia)
+│   ├── pages/            Gallery · CharacterDetail · Config* · Pipeline · Settings
+│   ├── components/       AuthBadge* · AuthGate · DetailAside · GenderFilter* · Icon* · InfoTip* · KindFilter* · SourceCard* ·
+│   │                     UpdateBanner* · UpdatesPanel · WatchForm*   (* = has a .test.ts)
+│   ├── stores/           characterDefaults* · endpoint · jobs* · library* · sources* · theme* · updater*  (Pinia)
 │   ├── lib/api.ts (+ .test.ts)   endpoint discovery, fetch wrapper, mediaUrl, EventSource, heartbeat
 │   ├── lib/types.ts      the API shapes — keep in step with dawnmaker/app.py
+│   ├── lib/icons.ts (+ .test.ts)   the icon set's lookup; the test checks every name a template uses
+│   ├── assets/icons/icons.json   the Curio icon set, verbatim from curio-icons.zip (86 line icons)
 │   ├── locales/en/       app auth character crawl gallery pipeline settings updates .json
 │   ├── test/             Vitest setup.ts + utils.ts (mountWithPlugins, setTauri)
 │   ├── styles.css        Tailwind v4 entry: @theme tokens + @utility + component classes

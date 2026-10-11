@@ -8,21 +8,32 @@
 const { t } = useI18n();
 const ep = useEndpoint();
 const theme = useTheme();
+const defaults = useCharacterDefaults();
 const src = useSources();
 
-type Tab = 'accounts' | 'language' | 'updates' | 'theme' | 'storage' | 'network' | 'duplicates' | 'about';
+type Tab =
+  | 'accounts'
+  | 'language'
+  | 'updates'
+  | 'theme'
+  | 'storage'
+  | 'network'
+  | 'duplicates'
+  | 'characters'
+  | 'about';
 
 const tab = ref<Tab>('accounts');
 
-const tabs: { id: Tab; label: string }[] = [
-  { id: 'accounts', label: 'settings.tabs.accounts' },
-  { id: 'language', label: 'settings.tabs.language' },
-  { id: 'updates', label: 'settings.tabs.updates' },
-  { id: 'theme', label: 'settings.tabs.theme' },
-  { id: 'storage', label: 'settings.tabs.storage' },
-  { id: 'network', label: 'settings.tabs.network' },
-  { id: 'duplicates', label: 'settings.tabs.duplicates' },
-  { id: 'about', label: 'settings.tabs.about' },
+const tabs: { id: Tab; label: string; icon: string }[] = [
+  { id: 'accounts', label: 'settings.tabs.accounts', icon: 'user' },
+  { id: 'language', label: 'settings.tabs.language', icon: 'language' },
+  { id: 'updates', label: 'settings.tabs.updates', icon: 'update' },
+  { id: 'theme', label: 'settings.tabs.theme', icon: 'palette' },
+  { id: 'storage', label: 'settings.tabs.storage', icon: 'drive' },
+  { id: 'network', label: 'settings.tabs.network', icon: 'signal' },
+  { id: 'duplicates', label: 'settings.tabs.duplicates', icon: 'layers' },
+  { id: 'characters', label: 'settings.tabs.characters', icon: 'users' },
+  { id: 'about', label: 'settings.tabs.about', icon: 'info' },
 ];
 
 /** Mirrors dawnmaker GET/PUT /api/config. Secrets arrive as booleans. */
@@ -33,6 +44,7 @@ interface Config {
   resolver: 'system' | 'doh';
   proxy_url: string | null;
   twitter_timeline_limit: number;
+  twitter_search_limit: number;
   pixiv_session: boolean;
   twitter_cookies: boolean;
 }
@@ -44,6 +56,7 @@ const draft = reactive({
   resolver: 'system' as Config['resolver'],
   dupe_threshold: 6,
   pixiv_rate: 1,
+  twitter_search_limit: 50,
 });
 
 const status = ref('');
@@ -55,6 +68,7 @@ onMounted(async () => {
     draft.resolver = cfg.value.resolver;
     draft.dupe_threshold = cfg.value.dupe_threshold;
     draft.pixiv_rate = cfg.value.pixiv_rate;
+    draft.twitter_search_limit = cfg.value.twitter_search_limit ?? 50;
   } catch (e) {
     status.value = e instanceof Error ? e.message : String(e);
   }
@@ -67,6 +81,7 @@ async function saveNetwork() {
       proxy_url: draft.proxy_url || null,
       resolver: draft.resolver,
       pixiv_rate: draft.pixiv_rate,
+      twitter_search_limit: draft.twitter_search_limit,
     });
 
     status.value = t('settings.status.savedNextJob');
@@ -118,14 +133,17 @@ const link = (u: string) =>
     <span v-if="status" class="kv">{{ status }}</span>
   </div>
 
-  <div class="body flex gap-20">
-    <nav class="nav subnav w-200 shrink-0 flex flex-col gap-3">
+  <!-- items-start: a tab is as tall as its content and .body scrolls; stretched to the
+       window height, a .panel (overflow: hidden, for the cut corners) clipped it -->
+  <div class="body flex items-start gap-20">
+    <nav class="nav subnav w-200 shrink-0 flex flex-col gap-3 sticky top-0">
       <button
         v-for="tb in tabs"
         :key="tb.id"
         :class="{ 'router-link-active': tab === tb.id }"
         @click="tab = tb.id"
       >
+        <Icon :name="tb.icon" class="ic" />
         {{ $t(tb.label) }}
       </button>
     </nav>
@@ -157,7 +175,10 @@ const link = (u: string) =>
       <div class="phead">
         <span class="ptitle">{{ $t('settings.theme.title') }}</span>
         <div class="spacer" />
-        <button class="btn gh sm" @click="theme.reset()">{{ $t('settings.theme.reset') }}</button>
+        <button class="btn gh sm" @click="theme.reset()">
+          <Icon name="refresh" :size="13" />
+          {{ $t('settings.theme.reset') }}
+        </button>
       </div>
       <div class="p-15 flex flex-col gap-20">
         <div class="field">
@@ -242,21 +263,33 @@ const link = (u: string) =>
       <table v-if="cfg">
         <tbody>
           <tr>
-            <td class="kv">{{ $t('settings.storage.library') }}</td>
+            <td class="kv">
+              <Icon name="folder" :size="13" class="mr-5" />
+              {{ $t('settings.storage.library') }}
+            </td>
             <td class="data text-small">{{ cfg.library_root }}</td>
           </tr>
           <tr>
-            <td class="kv">{{ $t('settings.storage.database') }}</td>
+            <td class="kv">
+              <Icon name="database" :size="13" class="mr-5" />
+              {{ $t('settings.storage.database') }}
+            </td>
             <td class="data text-small">{{ ep.health?.db_path }}</td>
           </tr>
           <tr>
-            <td class="kv">{{ $t('settings.storage.schema') }}</td>
+            <td class="kv">
+              <Icon name="list" :size="13" class="mr-5" />
+              {{ $t('settings.storage.schema') }}
+            </td>
             <td class="data text-small">
               {{ $t('settings.storage.schemaValue', { n: ep.health?.schema_version }) }}
             </td>
           </tr>
           <tr>
-            <td class="kv">{{ $t('settings.storage.layout') }}</td>
+            <td class="kv">
+              <Icon name="archive" :size="13" class="mr-5" />
+              {{ $t('settings.storage.layout') }}
+            </td>
             <td class="data text-small">{{ $t('settings.storage.layoutValue') }}</td>
           </tr>
         </tbody>
@@ -270,7 +303,10 @@ const link = (u: string) =>
       <div class="phead">
         <span class="ptitle">{{ $t('settings.network.title') }}</span>
         <div class="spacer" />
-        <button class="btn pri sm" @click="saveNetwork">{{ $t('settings.network.save') }}</button>
+        <button class="btn pri sm" @click="saveNetwork">
+          <Icon name="save" :size="13" />
+          {{ $t('settings.network.save') }}
+        </button>
       </div>
       <div v-if="cfg" class="p-15 flex flex-col gap-15">
         <div class="field">
@@ -278,7 +314,7 @@ const link = (u: string) =>
           <SelectRoot v-model="draft.resolver">
             <SelectTrigger class="btn gh rk-select-trigger">
               <SelectValue />
-              <span class="text-dim">▾</span>
+              <Icon name="chevron-down" :size="14" class="text-dim" />
             </SelectTrigger>
             <SelectPortal>
               <SelectContent class="rk-select-content" position="popper" :side-offset="4">
@@ -324,16 +360,62 @@ const link = (u: string) =>
           </SliderRoot>
           <div class="hint">{{ $t('settings.network.rateHint') }}</div>
         </div>
+        <div class="field">
+          <label>
+            {{ $t('settings.network.xSearch') }}
+            <span class="data text-tx ml-5">
+              {{
+                draft.twitter_search_limit
+                  ? $t('settings.network.xSearchValue', { n: draft.twitter_search_limit })
+                  : $t('settings.network.xSearchOff')
+              }}
+            </span>
+          </label>
+          <SliderRoot
+            :model-value="[draft.twitter_search_limit]"
+            :min="0"
+            :max="200"
+            :step="10"
+            class="rk-slider"
+            @update:model-value="(v) => (draft.twitter_search_limit = v?.[0] ?? 50)"
+          >
+            <SliderTrack class="rk-slider-track"><SliderRange class="rk-slider-range" /></SliderTrack>
+            <SliderThumb class="rk-slider-thumb" :aria-label="$t('settings.network.xSearch')" />
+          </SliderRoot>
+          <div class="hint">{{ $t('settings.network.xSearchHint') }}</div>
+        </div>
       </div>
       <div v-else class="empty">{{ status || $t('settings.status.loading') }}</div>
     </div>
 
     <!-- DUPLICATES -->
+    <!-- CHARACTERS: what a new character's form starts with -->
+    <div v-else-if="tab === 'characters'" class="panel flex-1">
+      <div class="phead">
+        <span class="ptitle">{{ $t('settings.characters.title') }}</span>
+      </div>
+      <div class="p-15 flex flex-col gap-15">
+        <div class="hint">{{ $t('settings.characters.lead') }}</div>
+        <div class="field">
+          <label>{{ $t('character.gender.label') }}</label>
+          <GenderFilter
+            :gender="defaults.gender"
+            :mode="defaults.gender_mode"
+            @update:gender="(g) => defaults.set(g, defaults.gender_mode)"
+            @update:mode="(m) => defaults.set(defaults.gender, m)"
+          />
+        </div>
+      </div>
+    </div>
+
     <div v-else-if="tab === 'duplicates'" class="panel flex-1">
       <div class="phead">
         <span class="ptitle">{{ $t('settings.duplicates.title') }}</span>
         <div class="spacer" />
-        <button class="btn pri sm" @click="saveDedupe">{{ $t('settings.duplicates.save') }}</button>
+        <button class="btn pri sm" @click="saveDedupe">
+          <Icon name="save" :size="13" />
+          {{ $t('settings.duplicates.save') }}
+        </button>
       </div>
       <div class="p-15 flex flex-col gap-15">
         <div class="field">
@@ -374,9 +456,11 @@ const link = (u: string) =>
         <div class="hint">{{ $t('settings.about.blurb') }}</div>
         <div class="flex gap-10 mt-10">
           <button class="btn gh sm" @click="link('https://www.pixiv.net/')">
+            <Icon name="external" :size="13" />
             {{ $t('settings.about.pixiv') }}
           </button>
           <button class="btn gh sm" @click="link('https://github.com/')">
+            <Icon name="external" :size="13" />
             {{ $t('settings.about.repository') }}
           </button>
         </div>

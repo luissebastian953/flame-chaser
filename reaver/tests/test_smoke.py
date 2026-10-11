@@ -193,7 +193,7 @@ def test_twitter_flatten_and_match() -> None:
     ]
     metas = TwitterAdapter._flatten(payload)
     assert len(metas) == 2 and metas[0]["_url"].endswith("AAA.jpg")
-    tw._run = lambda url, limit: metas  # type: ignore[assignment]
+    tw._run = lambda url, limit, by_post=False: metas  # type: ignore[assignment]
     recs = list(tw.timeline("artist_x"))
     assert len(recs) == 1 and recs[0].page_count == 2
     assert recs[0].permalink == "https://x.com/artist_x/status/555"
@@ -202,6 +202,31 @@ def test_twitter_flatten_and_match() -> None:
     w = Watch(slug="ganyu", match_terms=["ganyu", "甘雨"])
     assert tw.matches(recs[0], w) is True
     assert tw.matches(recs[0], Watch(slug="nahida", match_terms=["nahida"])) is False
+
+    # search: same regrouping, author from the entry, images-only query, watermark honoured
+    seen_urls: list[str] = []
+
+    def run(url, limit, by_post=False):
+        seen_urls.append(url)
+        return metas
+
+    tw._run = run  # type: ignore[assignment]
+    found = list(tw.search("甘雨", limit=20))
+    assert len(found) == 1 and found[0].artist_handle == "artist_x"
+    assert found[0].permalink == "https://x.com/artist_x/status/555"
+    assert "x.com/search?q=" in seen_urls[-1] and "filter%3Aimages" in seen_urls[-1]
+    assert list(tw.search("甘雨", since_id="555")) == []  # nothing newer than the watermark
+    print("  x search:             ok (term -> images-only query; watermark stops it)")
+
+    # gallery-dl exits 0 and puts refusals in the json; that must not read as
+    # "no results" -- an expired cookie has to be an error, loudly
+    refused = [[-1, {"error": "AuthRequired", "message": "authenticated cookies needed"}]]
+    assert TwitterAdapter._flatten(refused) == []  # indistinguishable from empty...
+    msg = TwitterAdapter._error(refused)
+    assert msg and "not signed in" in msg  # ...so _error is what catches it
+    assert TwitterAdapter._error(payload) is None  # a good payload is not an error
+    assert "X refused (RateLimit)" in (TwitterAdapter._error([[-1, {"error": "RateLimit"}]]) or "")
+    print("  x refusal:            ok (AuthRequired raises, never reads as 0 results)")
     print("  x text match:         ok")
 
     assert list(tw.timeline("artist_x", since_id="555")) == []

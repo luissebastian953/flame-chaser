@@ -78,6 +78,7 @@ const statusKey: Record<Status, string> = {
           :disabled="up.phase === 'checking' || up.phase === 'unsupported'"
           @click="up.check()"
         >
+          <Icon name="refresh" :size="13" :class="{ spin: up.phase === 'checking' }" />
           {{ up.phase === 'checking' ? $t('updates.panel.checking') : $t('updates.panel.checkNow') }}
         </button>
       </div>
@@ -89,7 +90,9 @@ const statusKey: Record<Status, string> = {
               up.phase === 'available' || up.phase === 'ready' ? 'cy' : up.phase === 'error' ? 'rose' : 'ok'
             "
           >
-            {{ up.phase === 'available' || up.phase === 'ready' ? '⤓' : up.phase === 'error' ? '!' : '◎' }}
+            <Icon v-if="up.phase === 'available' || up.phase === 'ready'" name="update" :size="26" />
+            <Icon v-else-if="up.phase === 'error'" name="error" :size="26" />
+            <Icon v-else name="success" :size="26" />
           </span>
           <div class="flex-1 min-w-0">
             <div class="text-base font-semibold">
@@ -119,9 +122,11 @@ const statusKey: Record<Status, string> = {
             </div>
           </div>
           <button v-if="up.phase === 'available'" class="btn pri sm" @click="up.download()">
+            <Icon name="download" :size="13" />
             {{ $t('updates.panel.download') }}
           </button>
           <button v-else-if="up.phase === 'ready'" class="btn pri sm" @click="up.install()">
+            <Icon name="refresh" :size="13" />
             {{ $t('updates.panel.restartNow') }}
           </button>
           <div v-else class="flex items-center gap-10">
@@ -201,26 +206,18 @@ const statusKey: Record<Status, string> = {
   border-color: color-mix(in oklch, var(--rose) 45%, transparent);
 }
 .ic {
-  width: 28px;
-  height: 28px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  border: 1px solid;
-  font-size: 14px;
   flex: 0 0 auto;
 }
 .ic.ok {
   color: var(--moss);
-  border-color: var(--moss);
 }
 .ic.cy {
   color: var(--cyan);
-  border-color: var(--cyan);
 }
 .ic.rose {
   color: var(--rose);
-  border-color: var(--rose);
 }
 .facts {
   display: grid;

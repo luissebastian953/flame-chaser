@@ -1,6 +1,10 @@
 /** Shapes from docs/design/architecture.md §6. Keep in step with dawnmaker/app.py. */
 export type Source = 'pixiv' | 'twitter';
 
+export type Gender = 'any' | 'female' | 'male';
+
+export type GenderMode = 'full' | 'partial';
+
 export interface Watch {
   slug: string;
   label: string;
@@ -10,6 +14,14 @@ export interface Watch {
   include_r18: boolean;
   /** which sources this character is crawled from; both by default */
   sources: Source[];
+  /** posts per run: new KEPT posts one crawl collects (1..1000) */
+  target: number;
+  /** the image-kind filter: keep only illustrations + anime screencaps */
+  kind_filter: boolean;
+  /** who may be in the picture (coreflame/people.py) */
+  gender: Gender;
+  /** full = only that gender; partial = the other one as a minority */
+  gender_mode: GenderMode;
   post_count?: number;
   latest_posted_at?: string | null;
   cover_sha?: string | null;
@@ -54,11 +66,26 @@ export interface GalleryItem {
   artist_name: string;
   title: string;
   thumb_url: string;
+  /** what the image IS (coreflame/kinds.py); null = not labeled yet */
+  kind: ImageKind | null;
 }
 
 export interface GalleryPage {
   items: GalleryItem[];
   next_cursor: string | null;
+}
+
+export type ImageKind = 'illustration' | 'photo' | 'render' | 'screencap' | 'other';
+
+/** a gallery filter value: an image kind, or `unlabeled` for images with no label yet */
+export type KindFilter = ImageKind | 'unlabeled';
+
+/** GET /api/gallery/{slug}/kinds */
+export interface GalleryKinds {
+  counts: Record<KindFilter, number>;
+  labeler: { available: boolean; models: boolean };
+  /** images the character's gender filter has not judged yet */
+  people?: { pending: number };
 }
 
 export interface TagStat {
@@ -105,6 +132,25 @@ export interface PostDetail {
 }
 
 /** POST /api/pixiv/probe — the character form's live validation. */
+/** POST /api/names — coreflame/names.py */
+export interface NameSuggestion {
+  text: string;
+  kind: 'name' | 'form';
+  lang: string | null; // en ja ko zh-hans zh-hant, "cjk" for Han-only
+  sources: ('danbooru' | 'wikidata')[];
+  posts: number | null; // Danbooru post count
+  form: string | null; // the form's English name
+  risky: boolean; // one short word: loose as an X search term
+}
+
+export interface CharacterNames {
+  danbooru_tag: string | null;
+  wikidata_id: string | null;
+  label: string | null;
+  suggestions: NameSuggestion[];
+  errors: Partial<Record<'danbooru' | 'wikidata', string>>;
+}
+
 export interface ProbeResult {
   tags: { tag: string; total: number; ok: boolean; warning: string | null; error: string | null }[];
   preview: { illust_id: string; title: string; artist_name: string; thumb: string | null }[];

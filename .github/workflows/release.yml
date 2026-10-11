@@ -23,7 +23,7 @@ jobs:
       - run: scripts/check-version.sh
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install -e "reaver[daemon,dev]"
+      - run: pip install -e "reaver[daemon,dev,classify]"
       - run: cd reaver && ./check.sh
       - uses: pnpm/action-setup@v4          # version from package.json#packageManager
       - uses: actions/setup-node@v4
@@ -71,7 +71,7 @@ jobs:
       - name: Sidecar (dawnmaker, PyInstaller --onedir)
         # BEFORE tauri-action. Every time.
         run: |
-          pip install -e "reaver[daemon]" pyinstaller
+          pip install -e "reaver[daemon,classify]" pyinstaller
           pnpm install --frozen-lockfile
           cd deliverer && bash scripts/build-sidecar.sh
         env:

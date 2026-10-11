@@ -20,7 +20,7 @@ WORKDIR /app
 COPY reaver/pyproject.toml reaver/README.md /app/reaver/
 COPY reaver/coreflame /app/reaver/coreflame
 COPY reaver/dawnmaker /app/reaver/dawnmaker
-RUN pip install -e "/app/reaver[daemon,dev]"
+RUN pip install -e "/app/reaver[daemon,dev,classify]"
 
 # pnpm workspace: root tooling + deliverer/. node_modules dirs live in
 # container-only volumes (see compose) so the host's macOS native binaries

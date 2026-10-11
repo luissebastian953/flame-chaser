@@ -119,6 +119,11 @@ class LibraryView:
             return None
         return dest
 
+    def remove(self, slug: str, filename: str) -> None:
+        """Drop one readable name. A hardlink outlives its blob, so a thrown-away
+        image must lose its names here explicitly. Idempotent."""
+        (self.view / _SAFE.sub("-", slug) / filename).unlink(missing_ok=True)
+
     def clear(self) -> None:
         shutil.rmtree(self.view, ignore_errors=True)
 

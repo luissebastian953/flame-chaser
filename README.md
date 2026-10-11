@@ -63,8 +63,9 @@ preview strip shows the newest results so you can confirm it is the right
 character, and **Suggested tags** ranks tags that co-occur in those results.
 Set **Minimum bookmarks** to skip low-engagement works (skipped works remember
 the threshold that skipped them, so lowering it later re-opens them), optionally
-add **X match terms** (they filter followed artists' timelines; they do not
-discover anything by themselves), then **Save & run now**.
+add **X search & match terms** (each term is searched on X, images only, and
+also filters the timelines of artists pixiv linked), tick which of **pixiv** /
+**X** this character is crawled from, then **Save & run now**.
 
 **Pipeline** shows the single worker: current stage, progress where an honest
 denominator exists, the live log, queued jobs, and a **Cancel** button.
@@ -94,9 +95,10 @@ shell starts `dawnmaker`, a Python daemon bound to a random loopback port with
 a per-launch token, and the webview talks to it over HTTP and server-sent
 events. The daemon runs `coreflame`: pixiv search pages give artwork ids, a
 visited-set is consulted before any request is spent, details are fetched and
-normalised, artist profiles yield X handles, `gallery-dl` reads those artists'
-timelines, and every image is hashed, deduped, stored content-addressed and
-thumbnailed at ingest.
+normalised, artist profiles yield X handles, `gallery-dl` searches each X term
+and reads those artists' timelines, and every image is hashed, deduped, stored
+content-addressed and thumbnailed at ingest. Each character chooses its sources
+(pixiv, X, or both); a source that is unticked is never requested.
 
 ```mermaid
 flowchart LR

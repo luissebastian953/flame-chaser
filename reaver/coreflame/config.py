@@ -21,6 +21,7 @@ class Config:
     twitter_cookies_file: str | None = None
     twitter_cookies_from_browser: str | None = None
     twitter_timeline_limit: int = 200
+    twitter_search_limit: int = 50  # per match term per poll; 0 = never search X
     dupe_threshold: int = 6
     include_r18: bool = False
     resolver: str = "system"  # system | doh

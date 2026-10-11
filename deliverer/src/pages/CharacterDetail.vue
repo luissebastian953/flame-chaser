@@ -9,7 +9,7 @@ const suggested = computed(() => lib.tags.filter((t) => t.state === 'suggested')
 const watched = computed(() => lib.tags.filter((t) => t.state === 'watched'));
 
 async function load() {
-  await Promise.all([lib.loadGrid(props.slug, true), lib.loadTags(props.slug)]);
+  await Promise.all([lib.loadGrid(props.slug, true), lib.loadTags(props.slug), lib.loadKinds(props.slug)]);
 }
 
 onMounted(async () => {
@@ -39,7 +39,7 @@ watch(() => props.slug, load);
       :title="$t('gallery.detail.back')"
       :aria-label="$t('gallery.detail.back')"
     >
-      ‹
+      <Icon name="chevron-left" :size="14" />
     </RouterLink>
     <div>
       <div class="h1">
@@ -64,6 +64,7 @@ watch(() => props.slug, load);
         class="chip jp on"
         :title="$t('gallery.detail.state.watched')"
       >
+        <Icon name="tag" :size="11" />
         {{ t.tag_raw }}
         <em>{{ $t('gallery.detail.share', { n: Math.round(t.share * 100) }) }}</em>
       </span>
@@ -73,16 +74,20 @@ watch(() => props.slug, load);
         class="chip jp"
         :title="$t('gallery.detail.state.suggested')"
       >
+        <Icon name="tag" :size="11" />
         {{ t.tag_raw }}
         <em>{{ $t('gallery.detail.share', { n: Math.round(t.share * 100) }) }}</em>
         <button class="act" @click="lib.tagAction(slug, t.tag_raw, 'watch')">
+          <Icon name="plus" :size="10" />
           {{ $t('gallery.detail.watch') }}
         </button>
         <button class="act dim" @click="lib.tagAction(slug, t.tag_raw, 'ignore')">
+          <Icon name="eye-off" :size="10" />
           {{ $t('gallery.detail.ignore') }}
         </button>
       </span>
     </div>
+    <KindFilter :slug="slug" />
     <div class="masonry">
       <img
         v-for="it in lib.grid.items"
@@ -96,6 +101,7 @@ watch(() => props.slug, load);
       />
     </div>
     <div ref="sentinel" class="kv" style="padding: 16px; text-align: center">
+      <Icon v-if="!lib.grid.done" name="loader" class="spin" :size="13" />
       {{ lib.grid.done ? $t('gallery.detail.end') : $t('gallery.detail.loading') }}
     </div>
   </div>
@@ -121,6 +127,9 @@ watch(() => props.slug, load);
   color: var(--ember);
 }
 .act {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   background: none;
   border: none;
   font-size: 10px;

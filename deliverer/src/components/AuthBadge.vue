@@ -6,7 +6,7 @@ const emit = defineEmits<{ connect: [] }>();
 
 <template>
   <span v-if="state === 'on'" class="badge ok">
-    <span class="ic">◎</span>
+    <Icon name="shield" :size="13" />
     {{ $t('auth.badge.on') }}
   </span>
   <button
@@ -16,7 +16,8 @@ const emit = defineEmits<{ connect: [] }>();
     :title="state === 'expired' ? $t('auth.badge.titleExpired') : $t('auth.badge.titleConnect')"
     @click="emit('connect')"
   >
-    <span class="ic">ⓘ</span>
+    <Icon v-if="state === 'expired'" name="warning" :size="13" />
+    <Icon v-else name="lock" :size="13" />
     {{ state === 'expired' ? $t('auth.badge.expired') : $t('auth.badge.required') }}
   </button>
 </template>
@@ -56,8 +57,5 @@ const emit = defineEmits<{ connect: [] }>();
 }
 .need:hover {
   background: color-mix(in oklch, var(--cyan) 20%, transparent);
-}
-.ic {
-  font-size: 12px;
 }
 </style>

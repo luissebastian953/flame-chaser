@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { JobState } from '@/lib/types';
+
 const jobs = useJobs();
 const logEl = ref<HTMLElement | null>(null);
 const follow = ref(true);
@@ -27,6 +29,26 @@ watch(lines, async () => {
 function short(s: string | null | undefined) {
   return (s ?? '').slice(11, 19);
 }
+
+const STATE: Record<JobState, { icon: string; tone: string }> = {
+  queued: { icon: 'clock', tone: 'var(--dim)' },
+  running: { icon: 'loader', tone: 'var(--ember)' },
+  succeeded: { icon: 'success', tone: 'var(--moss)' },
+  failed: { icon: 'error', tone: 'var(--rose)' },
+  cancelled: { icon: 'stop', tone: 'var(--dim)' },
+  interrupted: { icon: 'warning', tone: 'var(--rose)' },
+};
+
+// log lines worth an icon: the ones that need a look
+const LOG_ICON: Record<string, { icon: string }> = {
+  failed: { icon: 'error' },
+  error: { icon: 'error' },
+  warning: { icon: 'warning' },
+};
+
+function kindOf(e: { type: string; data: Record<string, unknown> }) {
+  return String(e.data.action ?? e.data.level ?? e.type.split('.')[1]);
+}
 </script>
 
 <template>
@@ -49,12 +71,14 @@ function short(s: string | null | undefined) {
       style="border-color: oklch(0.42 0.08 18); color: var(--rose)"
       @click="running && jobs.cancel(running.id)"
     >
+      <Icon name="stop" :size="13" />
       {{ $t('pipeline.cancelJob') }}
     </button>
   </div>
   <div class="body grid">
     <div v-if="running" class="panel job">
       <div class="row">
+        <Icon name="loader" class="spin" :size="15" style="color: var(--ember)" />
         <span class="chip" style="border-color: var(--ember); color: var(--ember)">{{ running.type }}</span>
         <b>{{ $t('pipeline.stage', { stage: running.stage ?? '—' }) }}</b>
         <span class="kv">{{ $t('pipeline.started', { time: short(running.started_at) }) }}</span>
@@ -80,6 +104,7 @@ function short(s: string | null | undefined) {
         <tbody>
           <tr v-for="j in jobs.queued" :key="j.id">
             <td>
+              <Icon name="clock" :size="13" class="mr-5" style="color: var(--dim)" />
               <span class="chip mono">{{ j.type }}</span>
             </td>
             <td class="kv mono">{{ j.id }}</td>
@@ -90,7 +115,7 @@ function short(s: string | null | undefined) {
                 :aria-label="$t('pipeline.cancel')"
                 @click="jobs.cancel(j.id)"
               >
-                ✕
+                <Icon name="close" :size="13" />
               </button>
             </td>
           </tr>
@@ -106,7 +131,10 @@ function short(s: string | null | undefined) {
             <td>
               <span class="chip mono">{{ j.type }}</span>
             </td>
-            <td :class="{ err: j.state === 'failed' }">{{ $t(`pipeline.state.${j.state}`) }}</td>
+            <td :class="{ err: j.state === 'failed' }">
+              <Icon :name="STATE[j.state].icon" :size="13" :style="{ color: STATE[j.state].tone }" />
+              {{ $t(`pipeline.state.${j.state}`) }}
+            </td>
             <td class="num">{{ short(j.finished_at) }}</td>
           </tr>
         </tbody>
@@ -125,8 +153,9 @@ function short(s: string | null | undefined) {
       <div ref="logEl" class="lines mono">
         <div v-for="e in lines" :key="e.id" class="line">
           <span class="t">{{ short(String(e.data.at ?? '')) }}</span>
-          <span class="k" :class="String(e.data.action ?? e.data.level ?? e.type.split('.')[1])">
-            {{ e.data.action ?? e.data.level ?? e.type.split('.')[1] }}
+          <span class="k" :class="kindOf(e)">
+            <Icon v-if="LOG_ICON[kindOf(e)]" :name="LOG_ICON[kindOf(e)]!.icon" :size="11" />
+            {{ kindOf(e) }}
           </span>
           <span class="m">{{ e.data.message }}</span>
         </div>
@@ -204,7 +233,10 @@ function short(s: string | null | undefined) {
   flex: 0 0 60px;
 }
 .k {
-  flex: 0 0 60px;
+  flex: 0 0 74px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--dim);
   font-weight: 500;
 }

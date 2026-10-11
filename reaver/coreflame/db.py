@@ -28,6 +28,14 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _looser(old_gender: str, old_mode: str, gender: str, mode: str) -> bool:
+    """Could the new gender rule accept something the old one rejected? Off
+    (any), a different gender, or full -> partial for the same one."""
+    if old_gender == "any" or (old_gender, old_mode) == (gender, mode):
+        return False
+    return gender == "any" or gender != old_gender or (old_mode, mode) == ("full", "partial")
+
+
 class Store:
     def __init__(self, path: str | Path, *, check_same_thread: bool = True) -> None:
         """`check_same_thread=False` is for a connection that lives exactly one
@@ -48,9 +56,12 @@ class Store:
     # ------------------------------------------------------------ watches
     def upsert_watch(self, w: Watch) -> int:
         """Returns how many previously-skipped artworks the new config
-        reopens (lowered min_bookmarks, or R-18 newly included)."""
+        reopens (lowered min_bookmarks, R-18 newly included, or the image-kind
+        filter switched off -- its thrown-away images go back to pending)."""
         old = self.conn.execute(
-            "SELECT min_bookmarks, include_r18 FROM watches WHERE slug=?", (w.slug,)
+            "SELECT min_bookmarks, include_r18, kind_filter, gender, gender_mode FROM watches"
+            " WHERE slug=?",
+            (w.slug,),
         ).fetchone()
         reopened = 0
         if old is not None:
@@ -60,14 +71,22 @@ class Store:
                 )
             if w.include_r18 and not old["include_r18"]:
                 reopened += self.seen.reopen_skipped("pixiv", SkipReason.R18_EXCLUDED)
+            if not w.kind_filter and old["kind_filter"]:
+                # the rows kept their url: download them again, and this time keep them
+                reopened += self._reopen_rejected(w.slug, gender=False)
+            if _looser(old["gender"], old["gender_mode"], w.gender, w.gender_mode):
+                reopened += self._reopen_rejected(w.slug, gender=True)
         self.conn.execute(
-            """INSERT INTO watches(slug,label,pixiv_tags,match_terms,min_bookmarks,include_r18,sources)
-               VALUES(?,?,?,?,?,?,?)
+            """INSERT INTO watches(slug,label,pixiv_tags,match_terms,min_bookmarks,include_r18,
+                                  sources,target,kind_filter,gender,gender_mode)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(slug) DO UPDATE SET
                  label=excluded.label, pixiv_tags=excluded.pixiv_tags,
                  match_terms=excluded.match_terms,
                  min_bookmarks=excluded.min_bookmarks, include_r18=excluded.include_r18,
-                 sources=excluded.sources""",
+                 sources=excluded.sources, target=excluded.target,
+                 kind_filter=excluded.kind_filter, gender=excluded.gender,
+                 gender_mode=excluded.gender_mode""",
             (
                 w.slug,
                 w.label,
@@ -76,9 +95,25 @@ class Store:
                 w.min_bookmarks,
                 int(w.include_r18),
                 json.dumps(w.sources),
+                w.target,
+                int(w.kind_filter),
+                w.gender,
+                w.gender_mode,
             ),
         )
         return reopened
+
+    def _reopen_rejected(self, slug: str, *, gender: bool) -> int:
+        """Back to pending: the rows kept their url, so the next download
+        fetches them again and judges them by the new, looser rule. Kind and
+        gender rejections are reopened separately (error 'gender:...' vs a kind)."""
+        return self.conn.execute(
+            f"""UPDATE media SET state='pending', error=NULL
+                WHERE state='rejected' AND error {"" if gender else "NOT "}LIKE 'gender:%'
+                  AND EXISTS (SELECT 1 FROM post_watches pw WHERE pw.slug=?
+                              AND pw.source=media.source AND pw.external_id=media.external_id)""",
+            (slug,),
+        ).rowcount
 
     def watches(self) -> list[Watch]:
         rows = self.conn.execute("SELECT * FROM watches ORDER BY slug").fetchall()
@@ -91,6 +126,10 @@ class Store:
                 min_bookmarks=r["min_bookmarks"],
                 include_r18=bool(r["include_r18"]),
                 sources=json.loads(r["sources"]),
+                target=r["target"],
+                kind_filter=bool(r["kind_filter"]),
+                gender=r["gender"],
+                gender_mode=r["gender_mode"],
             )
             for r in rows
         ]
@@ -278,6 +317,148 @@ class Store:
             ),
         )
 
+    # -- image kinds (coreflame/kinds.py) ---------------------------------------
+    def set_kind(self, sha: str, kind: str, scores: dict[str, float], model: str) -> None:
+        self.conn.execute(
+            """INSERT INTO image_kinds(sha256,kind,scores,model,labeled_at) VALUES(?,?,?,?,?)
+               ON CONFLICT(sha256) DO UPDATE SET kind=excluded.kind, scores=excluded.scores,
+                 model=excluded.model, labeled_at=excluded.labeled_at""",
+            (sha, kind, json.dumps(scores), model, _now()),
+        )
+
+    def unlabeled_media(self, model: str, limit: int | None = None) -> list[sqlite3.Row]:
+        """Stored blobs with no label, or one from a different model. One row
+        per sha: reposts of the same bytes are labelled once."""
+        return self.conn.execute(
+            """SELECT m.sha256, MIN(m.ext) AS ext FROM media m
+               LEFT JOIN image_kinds k ON k.sha256=m.sha256
+               WHERE m.state='stored' AND m.sha256 IS NOT NULL
+                 AND (k.sha256 IS NULL OR k.model<>?)
+               GROUP BY m.sha256 ORDER BY MIN(m.rowid) LIMIT ?""",
+            (model, -1 if limit is None else limit),
+        ).fetchall()
+
+    def stored_not_kept(self, keep: tuple[str, ...]) -> list[sqlite3.Row]:
+        """Stored media whose label is a kind the archive does not keep -- what
+        a cleanup throws away. With the post's artist, for the by-character name."""
+        return self.conn.execute(
+            f"""SELECT m.source, m.external_id, m.idx, m.sha256, m.ext, k.kind,
+                       p.artist_id, p.artist_handle
+                FROM media m
+                JOIN image_kinds k ON k.sha256=m.sha256
+                LEFT JOIN posts p ON p.source=m.source AND p.external_id=m.external_id
+                WHERE m.state='stored' AND k.kind NOT IN ({",".join("?" * len(keep))})
+                  AND NOT EXISTS (SELECT 1 FROM post_watches pw JOIN watches w ON w.slug=pw.slug
+                                  WHERE pw.source=m.source AND pw.external_id=m.external_id
+                                    AND w.kind_filter=0)
+                ORDER BY m.rowid""",
+            keep,
+        ).fetchall()
+
+    # -- people / gender filter (coreflame/people.py) ------------------------
+    def set_people(self, sha: str, p: Any) -> None:
+        self.conn.execute(
+            """INSERT INTO image_people(sha256,girls,boys,male_focus,scores,characters,model,tagged_at)
+               VALUES(?,?,?,?,?,?,?,?)
+               ON CONFLICT(sha256) DO UPDATE SET girls=excluded.girls, boys=excluded.boys,
+                 male_focus=excluded.male_focus, scores=excluded.scores,
+                 characters=excluded.characters, model=excluded.model, tagged_at=excluded.tagged_at""",
+            (
+                sha,
+                p.girls,
+                p.boys,
+                int(p.male_focus),
+                json.dumps(p.scores),
+                json.dumps(p.characters, ensure_ascii=False),
+                p.model,
+                _now(),
+            ),
+        )
+
+    def gender_rules(self, source: str, external_id: str) -> list[tuple[str, str]]:
+        """(gender, mode) of every character this post belongs to."""
+        return [
+            (r["gender"], r["gender_mode"])
+            for r in self.conn.execute(
+                """SELECT w.gender, w.gender_mode FROM post_watches pw JOIN watches w
+                   ON w.slug=pw.slug WHERE pw.source=? AND pw.external_id=?""",
+                (source, external_id),
+            )
+        ]
+
+    def untagged_people(self, model: str, limit: int | None = None) -> list[sqlite3.Row]:
+        """Stored blobs of posts some gender-filtered character holds, with no
+        people tags (or tags from another model). One row per sha."""
+        return self.conn.execute(
+            """SELECT m.sha256, MIN(m.ext) AS ext FROM media m
+               LEFT JOIN image_people ip ON ip.sha256=m.sha256
+               WHERE m.state='stored' AND m.sha256 IS NOT NULL
+                 AND (ip.sha256 IS NULL OR ip.model<>?)
+                 AND EXISTS (SELECT 1 FROM post_watches pw JOIN watches w ON w.slug=pw.slug
+                             WHERE pw.source=m.source AND pw.external_id=m.external_id
+                               AND w.gender<>'any')
+               GROUP BY m.sha256 ORDER BY MIN(m.rowid) LIMIT ?""",
+            (model, -1 if limit is None else limit),
+        ).fetchall()
+
+    def people_pending(self, slug: str, model: str) -> int:
+        """This character's stored images its gender filter has not judged yet
+        (0 when it has no filter) -- what the gallery offers to check."""
+        return int(
+            self.conn.execute(
+                """SELECT count(DISTINCT m.sha256) FROM post_watches pw
+                   JOIN watches w ON w.slug=pw.slug AND w.gender<>'any'
+                   JOIN media m ON m.source=pw.source AND m.external_id=pw.external_id
+                   LEFT JOIN image_people ip ON ip.sha256=m.sha256 AND ip.model=?
+                   WHERE pw.slug=? AND m.state='stored' AND ip.sha256 IS NULL""",
+                (model, slug),
+            ).fetchone()[0]
+        )
+
+    def stored_people(self) -> list[sqlite3.Row]:
+        """Stored media of posts some gender-filtered character holds, with
+        who is in them -- what a gender cleanup judges."""
+        return self.conn.execute(
+            """SELECT m.source, m.external_id, m.idx, m.sha256, m.ext,
+                      ip.girls, ip.boys, ip.male_focus, p.artist_id, p.artist_handle
+               FROM media m
+               JOIN image_people ip ON ip.sha256=m.sha256
+               LEFT JOIN posts p ON p.source=m.source AND p.external_id=m.external_id
+               WHERE m.state='stored'
+                 AND EXISTS (SELECT 1 FROM post_watches pw JOIN watches w ON w.slug=pw.slug
+                             WHERE pw.source=m.source AND pw.external_id=m.external_id
+                               AND w.gender<>'any')
+               ORDER BY m.rowid"""
+        ).fetchall()
+
+    def kind_filter_applies(self, source: str, external_id: str) -> bool:
+        """Throw away a not-kept image of this post? Only if no character the
+        post belongs to has switched the image-kind filter off."""
+        return (
+            self.conn.execute(
+                """SELECT 1 FROM post_watches pw JOIN watches w ON w.slug=pw.slug
+                   WHERE pw.source=? AND pw.external_id=? AND w.kind_filter=0 LIMIT 1""",
+                (source, external_id),
+            ).fetchone()
+            is None
+        )
+
+    def kind_counts(self, slug: str, include_r18: bool = False) -> dict[str, int]:
+        """Images per kind for one character, counted exactly as the gallery
+        lists them (stored media of live posts); `unlabeled` = no row yet."""
+        r18 = "" if include_r18 else "AND p.is_r18=0"
+        rows = self.conn.execute(
+            f"""SELECT COALESCE(k.kind,'unlabeled') AS kind, count(*) AS n
+                FROM post_watches pw
+                JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
+                JOIN media m ON m.source=p.source AND m.external_id=p.external_id
+                LEFT JOIN image_kinds k ON k.sha256=m.sha256
+                WHERE pw.slug=? AND m.state='stored' AND p.state='live' {r18}
+                GROUP BY 1""",
+            (slug,),
+        ).fetchall()
+        return {r["kind"]: r["n"] for r in rows}
+
     def phashes_for_artist(self, artist_id: str) -> list[tuple[str, int]]:
         """Candidate set for near-dupe search, scoped to one artist -- what
         keeps this O(hundreds) instead of O(archive)."""
@@ -388,6 +569,7 @@ class Store:
             "media_pending": q("SELECT count(*) FROM media WHERE state='pending'"),
             "media_dupe": q("SELECT count(*) FROM media WHERE state='dupe'"),
             "media_failed": q("SELECT count(*) FROM media WHERE state='failed'"),
+            "media_rejected": q("SELECT count(*) FROM media WHERE state='rejected'"),
             "artists": q("SELECT count(*) FROM artists"),
             "linked_to_x": q("SELECT count(*) FROM artists WHERE twitter_handle IS NOT NULL"),
             "raw_payloads": q("SELECT count(*) FROM raw_payloads"),

@@ -16,7 +16,7 @@ describe('LanguagePanel', () => {
     expect(rows[0]!.text()).toContain('English');
     expect(rows[0]!.attributes('disabled')).toBeUndefined();
     expect(rows[0]!.classes()).toContain('on');
-    expect(rows[0]!.text()).toContain('✓');
+    expect(rows[0]!.find('svg.check').exists()).toBe(true); // the check icon
     expect(rows[1]!.attributes('disabled')).toBeDefined();
     expect(rows[1]!.text()).toContain('coming soon');
   });
