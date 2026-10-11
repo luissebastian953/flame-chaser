@@ -11,6 +11,10 @@ mkdir -p "$REAVER_HOME"
 if [ "$#" -gt 0 ]; then exec "$@"; fi
 
 cd /app/reaver
+# A restarted container keeps /tmp: without this the loop below can read the
+# PREVIOUS run's handshake before tee truncates the file, and Vite starts with
+# a dead token -- every request 401s and the UI shows "daemon unreachable".
+rm -f /tmp/dawnmaker.out
 # --host 0.0.0.0 is only accepted together with --dev; the host publishes the
 # port on 127.0.0.1 only (compose), so it is still loopback from outside.
 python -m dawnmaker --host 0.0.0.0 --port "$PORT" --no-heartbeat --dev \
