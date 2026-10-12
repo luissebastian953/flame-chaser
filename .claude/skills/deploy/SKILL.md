@@ -109,11 +109,24 @@ change the store path, the node_modules volumes or the Dockerfile's install
 step, re-check that `pnpm store path` inside the container still matches
 `.modules.yaml`.
 
+### Never touch `data/reaver.db` from the host while the container runs
+
+SQLite runs in WAL mode, and its `-shm` file is shared memory. Docker Desktop's
+file sharing between macOS and the container VM cannot share that mapping, so
+a host process writing to the db (even `sqlite3` or a Python one-liner) under
+a running daemon ends in `sqlite3.OperationalError: disk I/O error` inside the
+container. On 2026-10-13 that killed the job worker; the API kept answering,
+and a queued crawl sat "idle" until a restart. Write through the API, or run
+the code inside the container (`docker compose exec dev python …`), or
+`docker compose stop dev` first. After a stop, `PRAGMA integrity_check` and
+`PRAGMA wal_checkpoint(TRUNCATE)` from the host are safe.
+
 ### Restart, rebuild or recreate?
 
 | You changed | Do |
 |---|---|
-| Python or Vue source | nothing — editable install + Vite HMR pick it up |
+| Vue source | nothing — Vite HMR picks it up |
+| Python source | `docker compose restart dev` — the running daemon keeps the code it started with (each job logs `engine up …`); a restart kills a running crawl, so wait for idle |
 | a Python test/lint run | `docker compose run --rm dev sh -c 'cd reaver && ./check.sh'` |
 | `deliverer/package.json` / lockfile | `docker compose restart dev` (entrypoint runs `pnpm install --frozen-lockfile`) |
 | `reaver/pyproject.toml` deps | `docker compose up -d --build` (pip install is an image layer) |
