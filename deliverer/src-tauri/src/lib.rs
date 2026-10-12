@@ -26,12 +26,12 @@ pub fn run() {
             shutdown_app
         ])
         .setup(|app| {
-            sidecar::spawn(&app.handle())?;
+            sidecar::spawn(app.handle())?;
             Ok(())
         })
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::Destroyed) {
-                sidecar::shutdown(&window.app_handle());
+                sidecar::shutdown(window.app_handle());
             }
         })
         .build(tauri::generate_context!())

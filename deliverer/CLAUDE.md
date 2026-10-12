@@ -27,7 +27,7 @@ deliverer/
 └── src-tauri/
     ├── tauri.conf.json         CSP + bundle.resources + updater (version source of truth)
     ├── capabilities/default.json   permissions for window `main` only
-    ├── Cargo.toml · build.rs   crate `deliverer`, lib `deliverer_lib`; no Cargo.lock yet
+    ├── Cargo.toml · Cargo.lock · build.rs   crate `deliverer`, lib `deliverer_lib`; the lock is committed
     ├── resources/sidecar/      build output, gitignored
     ├── app-icon.svg            the app icon's source (rail mark on the background)
     ├── icons/                  `pnpm tauri icon src-tauri/app-icon.svg` — needed for build, not dev

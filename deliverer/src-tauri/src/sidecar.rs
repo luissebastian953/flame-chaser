@@ -2,7 +2,7 @@
 //!   1. this file  -- kill the managed child on window destroy / app exit
 //!   2. dawnmaker    -- heartbeat timeout, covers kill -9 and Rust panics
 //!   3. dawnmaker    -- lockfile, so a second launch attaches instead of racing
-//!                    the first over the same SQLite file
+//!      the first over the same SQLite file
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -28,8 +28,7 @@ pub struct Sidecar {
 /// nothing downstream knows the difference.
 fn command_for(app: &AppHandle) -> Result<Command, String> {
     if cfg!(debug_assertions) {
-        let raw = std::env::var("REAVER_DEV_CMD")
-            .unwrap_or_else(|_| "python -m dawnmaker".into());
+        let raw = std::env::var("REAVER_DEV_CMD").unwrap_or_else(|_| "python -m dawnmaker".into());
         let mut parts = raw.split_whitespace();
         let mut cmd = Command::new(parts.next().ok_or("empty REAVER_DEV_CMD")?);
         cmd.args(parts);
@@ -65,8 +64,8 @@ pub fn spawn(app: &AppHandle) -> Result<Endpoint, String> {
     let json = line
         .strip_prefix("DAWNMAKER_READY ")
         .ok_or_else(|| format!("unexpected first line from dawnmaker: {line}"))?;
-    let endpoint: Endpoint = serde_json::from_str(json.trim())
-        .map_err(|e| format!("bad handshake: {e}"))?;
+    let endpoint: Endpoint =
+        serde_json::from_str(json.trim()).map_err(|e| format!("bad handshake: {e}"))?;
 
     let state = app.state::<Sidecar>();
     *state.child.lock().unwrap() = Some(child);

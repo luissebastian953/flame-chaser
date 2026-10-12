@@ -21,9 +21,6 @@
       }
     ],
     "security": {
-      "//": "CSP is OFF until set. Once set, loopback fetch and <img src> are",
-      "//2": "blocked with no useful error -- the gallery just goes blank.",
-      "//3": "The sidecar port is ephemeral, so the port must be wildcarded.",
       "csp": {
         "default-src": "'self'",
         "connect-src": "'self' ipc: http://ipc.localhost http://127.0.0.1:*",
@@ -35,9 +32,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "//": "resources, NOT externalBin: externalBin takes one file per target",
-    "//2": "triple, forcing PyInstaller --onefile (re-extracts the runtime on",
-    "//3": "every launch, AV-flagged on Windows, not replaced by the updater).",
     "resources": {
       "resources/sidecar/": "sidecar/"
     },
@@ -52,7 +46,6 @@
       "icons/icon.ico"
     ],
     "createUpdaterArtifacts": true,
-    "//4": "targets: CI passes --bundles per OS (dmg / nsis / appimage,deb); 'all' is for local builds",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
@@ -70,7 +63,6 @@
   },
   "plugins": {
     "updater": {
-      "//": "pubkey: `npm run tauri signer generate -- -w ~/.tauri/curio.key`; paste the PUBLIC key. Private key + password -> CI secrets only. Losing it strands every install (see cut-release skill).",
       "pubkey": "REPLACE_WITH_PUBLIC_KEY",
       "endpoints": ["https://github.com/luissebastian953/flame-chaser/releases/latest/download/latest.json"],
       "windows": {

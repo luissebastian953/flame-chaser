@@ -31,7 +31,8 @@ struct Site {
 fn site(source: &str) -> Result<Site, String> {
     Ok(match source {
         "pixiv" => Site {
-            login: "https://accounts.pixiv.net/login?return_to=https%3A%2F%2Fwww.pixiv.net%2F&lang=en",
+            login:
+                "https://accounts.pixiv.net/login?return_to=https%3A%2F%2Fwww.pixiv.net%2F&lang=en",
             home: "https://www.pixiv.net/",
             needed: &["PHPSESSID"],
             title: "Sign in to pixiv — Curio",
@@ -62,7 +63,10 @@ fn harvest(app: &AppHandle, home: &str, needed: &[&str]) -> Option<HashMap<Strin
 /// Async on purpose: `cookies_for_url` can deadlock in a sync command on
 /// Windows, and the poll loop must not block the main thread anywhere.
 #[tauri::command]
-pub async fn source_login(app: AppHandle, source: String) -> Result<HashMap<String, String>, String> {
+pub async fn source_login(
+    app: AppHandle,
+    source: String,
+) -> Result<HashMap<String, String>, String> {
     let s = site(&source)?;
 
     // Already signed in from a previous window? Then no window at all.

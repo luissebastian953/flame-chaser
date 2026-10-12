@@ -66,6 +66,15 @@ main thread. Keep any new cookie-reading code in an async command. The
 cookies go straight to the webview → `POST /api/auth/<source>`; nothing in
 Rust stores them.
 
+## `tauri.conf.json` takes no comments
+
+JSON has none, and `"//"` keys are not a workaround: `tauri-build` reads the
+config with unknown fields denied, so `cargo check` fails with ``unknown field
+`//` `` before any Rust compiles (it did, on the first-ever build). The reasons
+behind the config live in `deliverer/CLAUDE.md` and in this skill: CSP below,
+`bundle.resources` under Sidecar, the updater key in `cut-release`, and
+`bundle.targets` stays `all` for local builds while CI passes `--bundles` per OS.
+
 ## CSP — the config that blanks the gallery
 
 Once `app.security.csp` is set, loopback is blocked unless listed; the port is
@@ -87,7 +96,7 @@ via `scripts/bump-version.sh`.
 `pnpm tauri dev` (from the root) needs Rust stable ≥ 1.77 and, on macOS, the
 Xcode Command Line Tools; on Linux the webkit2gtk-4.1 deps from
 `release.yml`. Icons are not needed for `dev`, only `build`
-(`pnpm tauri icon <1024.png>` — `icons/README.md`). Neither works from a
+(`pnpm tauri icon src-tauri/app-icon.svg` from `deliverer/`). Neither works from a
 sandboxed shell without a display.
 
 ## Before commit
@@ -96,12 +105,10 @@ sandboxed shell without a display.
 cd deliverer/src-tauri && cargo fmt && cargo clippy -- -D warnings
 ```
 
-**Honest note:** the Rust here has never been compiled in this environment —
-`src-tauri/target/` is empty and there is no `Cargo.lock`. The first `cargo
-check` will likely surface API-shape errors (plugin builder names, the
-`cookies_for_url` signature, `RunEvent` variants). Resolve them against the
-installed crate versions (`cargo doc --open` or the tauri 2.x docs), keep the
-intent documented in the comments, commit the resulting `Cargo.lock`, and do
-not paper over a warning with `#[allow]`. After it compiles: `pnpm tauri dev`
-must print the handshake, the gallery must show images (CSP), and closing the
-window must leave no `dawnmaker` process (`pgrep -f dawnmaker`).
+**First compile (2026-10-13, macOS arm64):** `cargo check`, `cargo fmt` and
+`cargo clippy -- -D warnings` pass; `Cargo.lock` is committed (an app pins its
+dependencies). The one blocker was `"//"` comment keys in `tauri.conf.json`
+(see above). Linux and Windows are first compiled by the release workflow.
+After a Rust change: `pnpm tauri dev` must print the handshake, the gallery
+must show images (CSP), and closing the window must leave no `dawnmaker`
+process (`pgrep -f dawnmaker`). Never paper over a warning with `#[allow]`.
