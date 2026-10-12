@@ -20,6 +20,7 @@ deliverer/
 │   ├── styles.css        Tailwind v4 entry: @theme tokens + @utility + component classes
 │   └── auto-imports.d.ts · components.d.ts · globals.d.ts   generated / ambient types
 ├── scripts/build-sidecar.sh    PyInstaller --onedir → resources, + leaf signing
+├── scripts/sidecar_entry.py    PyInstaller's entry: imports dawnmaker as a package (its __main__ is relative)
 ├── scripts/i18n-check.mjs      keys resolve, no literal prose (part of `check`)
 ├── eslint.config.js · .prettierrc · .eslintrc-auto-import.json · tsconfig.json · vite.config.ts
 ├── .env.example                VITE_DAEMON_URL / VITE_DAEMON_TOKEN for browser-only dev
@@ -28,7 +29,8 @@ deliverer/
     ├── capabilities/default.json   permissions for window `main` only
     ├── Cargo.toml · build.rs   crate `deliverer`, lib `deliverer_lib`; no Cargo.lock yet
     ├── resources/sidecar/      build output, gitignored
-    ├── icons/                  `pnpm tauri icon <1024.png>` — needed for build, not dev
+    ├── app-icon.svg            the app icon's source (rail mark on the background)
+    ├── icons/                  `pnpm tauri icon src-tauri/app-icon.svg` — needed for build, not dev
     └── src/{main.rs,lib.rs,sidecar.rs,auth.rs}   auth.rs = source_login window
 ```
 

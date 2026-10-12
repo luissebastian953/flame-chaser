@@ -37,9 +37,19 @@ description: Cut a Curio release — version bump, sidecar build, tag, CI, and v
   `scripts/install-linux.sh` with the GitHub owner.
 - Apple: without a Developer ID the dmg still builds; users right-click →
   Open once. Add the `APPLE_*` secrets when you have one.
-- The runner needs `deliverer/src-tauri/icons/` -- `pnpm tauri icon icon.png`.
+- The runner needs `deliverer/src-tauri/icons/` (committed). The source is
+  `src-tauri/app-icon.svg`; regenerate with `pnpm tauri icon src-tauri/app-icon.svg`
+  from `deliverer/`, then delete `icons/android` and `icons/ios`.
 
 ## What CI must do, in this order
+
+**Test the frozen sidecar, not just `python -m dawnmaker`.** The bundle
+has its own import rules: PyInstaller's entry is `scripts/sidecar_entry.py`
+(dawnmaker's `__main__.py` uses relative imports and dies as a bare script) and
+`--paths ../reaver` (an editable install is an import hook PyInstaller cannot
+follow). After `bash scripts/build-sidecar.sh`, run
+`REAVER_HOME=$(mktemp -d) src-tauri/resources/sidecar/dawnmaker --no-heartbeat`:
+it must print `DAWNMAKER_READY` and answer `/api/health` at once.
 
 **Build the Python sidecar BEFORE `tauri-action`.** This is the step that gets
 forgotten and it produces the worst bug in the system: the app updates, reports
