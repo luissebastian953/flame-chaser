@@ -13,7 +13,8 @@ python -m PyInstaller \
   --noconfirm --clean --onedir --name dawnmaker \
   --distpath .build/dist --workpath .build/work --specpath .build \
   --collect-all gallery_dl \
-  ../reaver/dawnmaker/__main__.py
+  --paths ../reaver `# coreflame + dawnmaker from source: an editable install is an import hook PyInstaller cannot follow` \
+  scripts/sidecar_entry.py   # not dawnmaker/__main__.py: see the entry's docstring
 
 rm -rf "$OUT" && mkdir -p "$(dirname "$OUT")"
 cp -R .build/dist/dawnmaker "$OUT"
