@@ -361,6 +361,42 @@ def test_post_detail_links_cross_source(tmp: Path) -> None:
     print("  post detail links:    ok (X dupe -> pixiv original, and back)")
 
 
+def test_serving_when_the_handshake_arrives(tmp: Path) -> None:
+    """The shell asks for /api/health the moment it reads the handshake; the port
+    must already be listening then, or the UI shows "daemon unreachable"."""
+    import json
+    import os
+    import subprocess
+    import urllib.request
+
+    home = tmp / "spawn"
+    home.mkdir(parents=True)
+    env = {**os.environ, "REAVER_HOME": str(home)}
+    root = Path(__file__).resolve().parents[1]
+    p = subprocess.Popen(
+        [sys.executable, "-m", "dawnmaker", "--no-heartbeat"],
+        cwd=root,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    try:
+        line = p.stdout.readline() if p.stdout else ""
+        assert line.startswith("DAWNMAKER_READY "), line
+        hs = json.loads(line.split(" ", 1)[1])
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{hs['port']}/api/health",
+            headers={"Authorization": f"Bearer {hs['token']}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:  # no retry, no sleep
+            assert r.status == 200 and json.loads(r.read())["ok"] is True
+    finally:
+        p.terminate()
+        p.wait(timeout=20)
+    print("  handshake → serving:  ok (health answers the instant the port is announced)")
+
+
 def test_heartbeat_sleep_guard() -> None:
     hb = Heartbeat(timeout=30, sleep_grace=300)
     hb.last = time.monotonic() - 31
@@ -502,6 +538,7 @@ if __name__ == "__main__":
         test_gallery_identity_filter(tmp)
         test_watch_target_and_kind_filter(tmp)
         test_post_detail_links_cross_source(tmp)
+        test_serving_when_the_handshake_arrives(tmp)
         test_heartbeat_sleep_guard()
         test_config_rejects_sync_folder(tmp)
         test_probe_and_preview(tmp / "probe")

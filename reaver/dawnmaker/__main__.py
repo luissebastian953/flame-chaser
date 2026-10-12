@@ -31,10 +31,17 @@ from .events import EventHub
 log = logging.getLogger("dawnmaker")
 
 
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return int(s.getsockname()[1])
+def _listen(host: str, port: int) -> socket.socket:
+    """Bound and listening BEFORE the handshake, then handed to uvicorn: a shell
+    that connects the moment it reads the port waits in the backlog instead of
+    being refused (binding a free port, closing it and letting uvicorn bind it
+    again left a window where /api/health failed and the UI said "unreachable")."""
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    s = socket.socket(family, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind((host, port))
+    s.listen(128)
+    return s
 
 
 def _lock(path: Path, port: int) -> bool:
@@ -79,10 +86,12 @@ def main(argv: list[str] | None = None) -> int:
     )  # stdout is the handshake channel
 
     cfg = Config.load()
-    port = args.port or _free_port()
+    sock = _listen(args.host, args.port)
+    port = int(sock.getsockname()[1])
     lock = cfg.home / "dawnmaker.lock"
     cfg.home.mkdir(parents=True, exist_ok=True)
     if not _lock(lock, port):
+        sock.close()
         other = json.loads(lock.read_text())
         print(json.dumps({"error": "already_running", **other}), flush=True)
         return 3
@@ -122,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     if runner.interrupted:
         log.warning("marked %d job(s) interrupted from a previous run", runner.interrupted)
     try:
-        server.run()
+        server.run(sockets=[sock])  # the socket the handshake announced, already listening
     finally:
         runner.stop()
         if lock.exists():
