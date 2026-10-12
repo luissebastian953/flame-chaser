@@ -61,6 +61,11 @@ adding-an-endpoint checklist).
 
 ## Rules specific to this package
 
+- **The worker thread never dies.** A job's failure becomes `failed` in
+  `_run_one`; an error around it (the queue query, a lost database) is logged,
+  the job it was on is marked failed, the connection reopened, and the loop
+  backs off (2 s → 30 s). A dead worker leaves every later job queued while
+  the API still says "idle".
 - **One worker thread, not a pool.** The constraint is the remote rate limit,
   not local CPU. Two workers on pixiv doubles the ban risk and halves each
   one's budget. Media downloads may use a small bounded pool (3) because they

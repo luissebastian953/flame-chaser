@@ -323,17 +323,57 @@ class JobRunner:
         return Job.from_row(r) if r else None
 
     def _loop(self) -> None:
+        """The one worker thread. It must not die: a job's own failure is caught
+        in _run_one, but an error around it -- the queue query, the bookkeeping,
+        a database the container lost its grip on ("disk I/O error") -- used to
+        end the thread silently, leaving every later job queued forever while
+        the API still answered "idle". Now it is logged, the job it was on is
+        marked failed, the connection is reopened, and the loop backs off."""
         store = self._factory()
+        backoff = 2.0
         try:
             while not self._stop.is_set():
-                job = self._next(store)
-                if job is None:
-                    self._wake.wait(timeout=2.0)
-                    self._wake.clear()
-                    continue
-                self._run_one(store, job)
+                job: Job | None = None
+                try:
+                    job = self._next(store)
+                    if job is None:
+                        self._wake.wait(timeout=2.0)
+                        self._wake.clear()
+                    else:
+                        self._run_one(store, job)
+                    backoff = 2.0
+                except Exception:
+                    log.exception("worker: error outside a job; retrying in %.0fs", backoff)
+                    store = self._recover(store, job)
+                    self._stop.wait(backoff)
+                    backoff = min(backoff * 2, 30.0)
         finally:
             store.close()
+
+    def _recover(self, store: Store, job: Job | None) -> Store:
+        """A fresh connection (one that hit an I/O error can stay broken), and the
+        job the error interrupted marked failed rather than left `running`."""
+        try:
+            store.close()
+        except Exception as e:  # already broken; the fresh one below is what matters
+            log.debug("worker: closing the broken connection: %s", e)
+        fresh = self._factory()
+        if job is not None:
+            try:
+                fresh.conn.execute(
+                    "UPDATE jobs SET state=?, error=?, finished_at=? WHERE id=? AND state IN (?,?)",
+                    (
+                        FAILED,
+                        "worker error outside the job; see the daemon log",
+                        _now(),
+                        job.id,
+                        QUEUED,
+                        RUNNING,
+                    ),
+                )
+            except Exception:
+                log.exception("worker: could not mark job %s failed", job.id)
+        return fresh
 
     def _run_one(self, store: Store, job: Job) -> None:
         handler = self.handlers.get(job.type)

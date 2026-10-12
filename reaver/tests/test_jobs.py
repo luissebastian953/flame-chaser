@@ -3,6 +3,7 @@ claim is about threads."""
 
 from __future__ import annotations
 
+import sqlite3
 import sys
 import threading
 import time
@@ -295,6 +296,59 @@ def test_failure_is_data(tmp: Path) -> None:
     print("  failure recorded:     ok (bad job type -> failed with error, runner survives)")
 
 
+class _FlakyConn:
+    """A connection whose queue query fails once with the error Docker's file
+    sharing produced when the host wrote to the db under a running container."""
+
+    def __init__(self, real) -> None:
+        self.real, self.failed = real, False
+
+    def execute(self, sql, *args):
+        if not self.failed and "WHERE state='queued'" in sql:
+            self.failed = True
+            raise sqlite3.OperationalError("disk I/O error")
+        return self.real.execute(sql, *args)
+
+    def __getattr__(self, name):
+        return getattr(self.real, name)
+
+
+def test_worker_survives_an_error_outside_a_job(tmp: Path) -> None:
+    """The worker thread used to die on any error around a job, leaving every
+    later job queued forever while the API said "idle"."""
+    cfg = Config(home=tmp / "worker")
+    made: list[Store] = []
+
+    def factory() -> Store:
+        s = Store(cfg.db_path)
+        if threading.current_thread().name == "coreflame-worker":
+            if not made:  # only the worker's first connection is broken
+                s.conn = _FlakyConn(s.conn)  # type: ignore[assignment]
+            made.append(s)
+        return s
+
+    ran = threading.Event()
+
+    def noop(ctx) -> dict:
+        ran.set()
+        return {"ok": 1}
+
+    runner = JobRunner(factory, {"noop": noop})
+    store = Store(cfg.db_path)
+    jid = JobRunner.submit(store, "noop", {})
+    runner.start()
+    try:
+        assert ran.wait(15), "the worker died instead of retrying"
+        deadline = time.time() + 5
+        while JobRunner.get(store, jid).state != SUCCEEDED and time.time() < deadline:
+            time.sleep(0.05)
+    finally:
+        runner.stop()
+    assert JobRunner.get(store, jid).state == SUCCEEDED
+    assert len(made) >= 2  # the worker reopened its connection
+    print("  worker survives:      ok (queue query failed once; reconnected and ran the job)")
+
+
 if __name__ == "__main__":
     import tempfile
 
@@ -309,4 +363,5 @@ if __name__ == "__main__":
         test_honest_denominators(tmp)
         test_watch_sources_gate_each_stage(tmp)
         test_failure_is_data(tmp)
+        test_worker_survives_an_error_outside_a_job(tmp)
     print("\nall passed")

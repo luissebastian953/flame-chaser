@@ -6,6 +6,7 @@ person using the app, not for git log.
 
 ## Unreleased
 
+- Fixed: a database error outside a job no longer stops the job queue until Curio restarts — the worker logs it, marks that job failed and carries on
 - Added: character names — every kept image is named with the character(s) in it (any anime, game, manga or novel character the two built-in taggers know) or marked unidentified; the gallery filters by Identified / Unidentified and by character, and the image details list who it shows. Nothing is removed for being unidentified; “Identify N images” names what was stored before. On by default, switch in Settings › Characters (up to ~1.3 GB of models download on first use; the database gains two tables)
 - Changed: one consistent icon set across the app — the side rail and its status lines, Settings tabs and storage rows, every action button (add, run, edit, save, sign in/out, check for updates, download, label), job states and warnings in Pipeline, the image details panel, gallery cards, sign-in badges and the help (i) buttons; a spinner shows while something is working
 - Added: a gender filter per character (Both · Female · Male, Full or Partial) that keeps only art with the right people in it — e.g. drops Genshin's male characters that a “Raiden” search brings in; Settings › Characters sets the default for new characters (the ~467 MB model downloads on first use; the database gains a table and two character settings)
