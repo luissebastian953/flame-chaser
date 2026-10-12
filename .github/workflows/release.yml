@@ -81,7 +81,9 @@ jobs:
       - name: Smoke the sidecar we just built
         # A bundle that reports the wrong version is the bug this job exists to prevent.
         run: |
-          BIN=deliverer/src-tauri/resources/sidecar/dawnmaker/dawnmaker
+          # build-sidecar.sh copies the --onedir bundle AS resources/sidecar/, so the
+          # executable is sidecar/dawnmaker -- the path the shell resolves at runtime
+          BIN=deliverer/src-tauri/resources/sidecar/dawnmaker
           [ "${{ runner.os }}" = "Windows" ] && BIN="$BIN.exe"
           "$BIN" --help | head -1
         shell: bash
