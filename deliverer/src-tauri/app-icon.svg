@@ -1,0 +1,14 @@
+<!-- Curio app icon: the side rail's mark (App.vue .brand) on the app's background,
+     inside Apple's 824px grid on a 1024 canvas. Regenerate every size (from deliverer/):
+     `pnpm tauri icon src-tauri/app-icon.svg`, then delete icons/android and icons/ios
+     (desktop-only). The SVG is the source; no 1024px PNG is kept (*.png is ignored). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#080b16" stroke="#2b303c" stroke-width="4"/>
+  <g transform="translate(512 518) scale(23) translate(-12 -11.8)" fill="none" stroke="#e279de"
+     stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 19.5h15"/>
+    <path d="M7 19.5v-6.6a5 5 0 0 1 10 0v6.6"/>
+    <circle cx="12" cy="5.4" r="1.3"/>
+    <circle cx="12" cy="15.2" r="2.5" fill="#e279de" stroke="none"/>
+  </g>
+</svg>
