@@ -127,8 +127,10 @@ async function open(url: string) {
 </template>
 
 <style scoped>
+/* laid over the grid (and its backdrop), never beside it: the grid does not reflow */
 .aside {
   position: absolute;
+  z-index: 5;
   top: 0;
   right: 0;
   bottom: 0;

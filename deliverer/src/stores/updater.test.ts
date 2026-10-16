@@ -33,6 +33,7 @@ function health(idle: boolean): Health {
     version: __APP_VERSION__,
     library_root: '/lib',
     db_path: '/db',
+    library_free_bytes: 1,
     schema_version: 1,
     idle,
     last_event_id: 0,

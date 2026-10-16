@@ -1,0 +1,19 @@
+{
+  "brand": { "name": "Curio", "tagline": "ローカルアーカイブ" },
+  "nav": { "crawl": "クロール", "pipeline": "パイプライン", "gallery": "ギャラリー", "settings": "設定" },
+  "shutdown": { "label": "アプリを終了", "armed": "クロール実行中 — もう一度クリックで終了" },
+  "status": {
+    "daemon": "dawnmaker v{version}",
+    "unreachable": "デーモンに接続できません",
+    "connecting": "接続中…",
+    "idle": "待機中",
+    "crawling": "クロール中",
+    "pixiv": "pixiv {state}",
+    "x": "X {state}",
+    "connected": "接続済み",
+    "checking": "確認中…",
+    "expired": "期限切れ",
+    "notLinked": "未連携"
+  },
+  "connectingDaemon": "dawnmaker に接続中…"
+}

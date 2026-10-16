@@ -9,7 +9,12 @@ export const router = createRouter({
     { path: '/gallery', component: () => import('@/pages/Gallery.vue') },
     { path: '/gallery/:slug', component: () => import('@/pages/CharacterDetail.vue'), props: true },
     { path: '/config', component: () => import('@/pages/Config.vue') },
-    { path: '/pipeline', component: () => import('@/pages/Pipeline.vue') },
+    { path: '/pipeline', component: () => import('@/pages/PipelineList.vue') },
+    {
+      path: '/pipeline/:lane(pixiv|twitter)',
+      component: () => import('@/pages/PipelineDetail.vue'),
+      props: true,
+    },
     { path: '/settings', component: () => import('@/pages/Settings.vue') },
   ],
 });

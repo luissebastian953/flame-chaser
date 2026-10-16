@@ -36,9 +36,21 @@ describe('i18n messages', () => {
     warn.mockRestore();
   });
 
-  it('only marks English as ready for now', () => {
+  it('marks English and Japanese as ready', () => {
     expect(LOCALES.find((l) => l.code === 'en')?.ready).toBe(true);
-    expect(LOCALES.filter((l) => l.ready).map((l) => l.code)).toEqual(['en']);
+    expect(LOCALES.filter((l) => l.ready).map((l) => l.code)).toEqual(['en', 'ja']);
+  });
+
+  it('ships Japanese with every English key translated', () => {
+    const ja = coverage().find((r) => r.code === 'ja')!;
+
+    expect(ja.pending).toBe(0);
+    expect(ja.pct).toBe(100);
+    expect(i18n.global.t('app.nav.gallery', {}, { locale: 'ja' })).toBe('ギャラリー');
+
+    expect(i18n.global.t('updates.banner.ready', { version: '0.2.0' }, { locale: 'ja' })).toBe(
+      '0.2.0 の準備完了',
+    );
   });
 });
 
@@ -64,11 +76,18 @@ describe('setLocale', () => {
     expect(savedChoice()).toBe('system');
   });
 
-  it('falls back to English when the wanted locale is not ready yet', () => {
+  it('switches to Japanese now that it ships', () => {
     setLocale('ja');
 
+    expect(i18n.global.locale.value).toBe('ja');
+    expect(document.documentElement.lang).toBe('ja');
+  });
+
+  it('falls back to English when the wanted locale is not ready yet', () => {
+    setLocale('id');
+
     expect(i18n.global.locale.value).toBe('en');
-    expect(localStorage.getItem('curio.locale')).toBe('ja'); // the wish is kept for when ja ships
+    expect(localStorage.getItem('curio.locale')).toBe('id'); // the wish is kept for when id ships
   });
 
   it('defaults to following the system when nothing (or junk) is stored', () => {

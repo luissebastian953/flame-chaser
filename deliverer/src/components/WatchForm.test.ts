@@ -239,6 +239,27 @@ describe('WatchForm name suggestions (Danbooru + Wikidata)', () => {
   const xOnly = () =>
     blank({ label: 'Raiden Mei', pixiv_tags: [], sources: ['twitter'], match_terms: ['raiden mei'] });
 
+  it('shows five placeholder rows from the first keystroke until the lookup answers', async () => {
+    let answer!: (v: CharacterNames) => void;
+    const pending = new Promise<CharacterNames>((r) => (answer = r));
+
+    vi.mocked(api.post).mockImplementation(async (path: string) =>
+      path === '/api/names' ? await pending : { tags: [], suggestions: [], preview: [] },
+    );
+
+    const w = mountForm(xOnly());
+    // through the debounce and the request alike: placeholders, no "nothing found"
+    expect(w.findAll('.nm-row.skel')).toHaveLength(5);
+    expect(w.text()).not.toContain('no co-occurring tags');
+    await new Promise((r) => setTimeout(r, 700));
+    expect(w.findAll('.nm-row.skel')).toHaveLength(5);
+
+    answer(MEI);
+    await flushPromises();
+    expect(w.findAll('.nm-row.skel')).toHaveLength(0);
+    expect(w.get('.side-col').text()).toContain('라이덴 메이');
+  });
+
   it('works without pixiv: asks with the name first, lists names in every language', async () => {
     const w = await mountWith(xOnly());
 

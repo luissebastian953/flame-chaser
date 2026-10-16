@@ -1,0 +1,79 @@
+{
+  "title": "クロール設定",
+  "subtitle": "監視中のキャラクター {characters} · pixiv タグ {tags}",
+  "addCharacter": "キャラクターを追加",
+  "runAll": "すべて今すぐ実行",
+  "edit": "編集",
+  "run": "実行",
+  "cards": {
+    "lastRun": {
+      "title": "前回の実行",
+      "plus": "+{n}",
+      "unit": "枚の新規画像",
+      "foot": "件の投稿を確認 · 直近 {runs} | 件の投稿を確認 · 直近 {runs}",
+      "none": "まだクロールしていません"
+    },
+    "runCount": "0 回 | 1 回 | {n} 回",
+    "perRun": {
+      "title": "1 回あたり",
+      "max": "最大 {n}",
+      "unit": "件 / キャラクター",
+      "foot": "訪問済みの投稿はスキップ"
+    },
+    "recognition": {
+      "title": "認識",
+      "meta": "前回の実行",
+      "share": "{n}%",
+      "unit": "の画像を保持",
+      "kept": "保持",
+      "dropped": "除外"
+    },
+    "sources": {
+      "title": "ソース",
+      "settings": "設定 →",
+      "library": "ライブラリ",
+      "free": "空き {n}",
+      "state": {
+        "valid": "有効",
+        "checking": "確認中",
+        "expired": "期限切れ",
+        "notLinked": "未連携",
+        "connected": "接続済み"
+      }
+    },
+    "ago": {
+      "never": "なし",
+      "justNow": "たった今",
+      "minutes": "{n}分前",
+      "hours": "{n}時間前",
+      "days": "{n}日前"
+    }
+  },
+  "table": {
+    "heading": "監視中のキャラクター",
+    "character": "キャラクター",
+    "sources": "ソース",
+    "sourcePixiv": "pixiv",
+    "sourceX": "X",
+    "pixivTags": "pixiv タグ",
+    "matchTerms": "X の照合語",
+    "bookmarks": "ブックマーク ≥",
+    "r18": "R-18",
+    "posts": "投稿",
+    "r18On": "オン",
+    "r18Off": "—",
+    "perRun": "1 回あたり",
+    "more": "+あと{n}件"
+  },
+  "empty": "キャラクターはまだありません。発見は pixiv タグから始まります。",
+  "status": {
+    "saved": "保存しました",
+    "reopened": "保存しました · 以前スキップした {n} 件の作品を再開"
+  },
+  "row": {
+    "queued": "待機中 | 待機中 | 待機中 ×{n}",
+    "running": "{stage} · 新規 {posts}",
+    "done": "完了 · +{n}",
+    "failed": "失敗"
+  }
+}

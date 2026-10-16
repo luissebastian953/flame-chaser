@@ -17,8 +17,10 @@ describe('LanguagePanel', () => {
     expect(rows[0]!.attributes('disabled')).toBeUndefined();
     expect(rows[0]!.classes()).toContain('on');
     expect(rows[0]!.find('svg.check').exists()).toBe(true); // the check icon
-    expect(rows[1]!.attributes('disabled')).toBeDefined();
-    expect(rows[1]!.text()).toContain('coming soon');
+    expect(rows[1]!.text()).toContain('日本語');
+    expect(rows[1]!.attributes('disabled')).toBeUndefined();
+    expect(rows[2]!.attributes('disabled')).toBeDefined();
+    expect(rows[2]!.text()).toContain('coming soon');
   });
 
   it('follows the system by default and unfollows when a language is picked', async () => {

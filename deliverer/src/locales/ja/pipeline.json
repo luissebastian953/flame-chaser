@@ -1,0 +1,116 @@
+{
+  "title": "クロールパイプライン",
+  "pill": {
+    "running": "実行中",
+    "paused": "一時停止",
+    "idle": "待機中"
+  },
+  "sub": "ワーカー {total} 中 {busy} 稼働 · {queued}",
+  "queuedCount": "キューは空 | 1 件待機 | {n} 件待機",
+  "reqPerMin": "{n} req/分",
+  "pauseQueue": "キューを一時停止",
+  "started": "{time} に開始",
+  "resumeQueue": "キューを再開",
+  "cancelAll": "すべてキャンセル",
+  "cancelAllConfirm": "もう一度クリックですべてキャンセル",
+  "running": "実行中",
+  "runningHint": "ワーカーごとに 1 枚のカード · 開くとステージ、カウンター、ログ",
+  "open": "開く",
+  "idleWorker": "待機中の {lane} ワーカー · 次の待機ジョブを自動的に取ります",
+  "lane": {
+    "pixiv": "pixiv",
+    "twitter": "X"
+  },
+  "postsNew": "新規 {posts}",
+  "pausedTag": "一時停止",
+  "queued": "待機中",
+  "queuedHint": "順番に実行 · ドラッグで並べ替え",
+  "runNow": "今すぐ実行",
+  "cancel": "キャンセル",
+  "queueEmpty": "キューは空です",
+  "meta": {
+    "tags": "タグなし | 1 タグ | {n} タグ",
+    "target": "{n} 件",
+    "accounts": "アカウントなし | 1 アカウント | {n} アカウント"
+  },
+  "job": {
+    "timelines": "X · フォロー中のタイムライン",
+    "media": "{source} · 保留中のメディア",
+    "link": "pixiv の絵師 → X ハンドル",
+    "tags": "観測されたタグ",
+    "label": "画像ラベルの未処理分",
+    "other": "{type}"
+  },
+  "completed": "今日完了",
+  "seeAll": "{n} 件すべて表示",
+  "seeFewer": "少なく表示",
+  "noneToday": "今日はまだ何も完了していません",
+  "completedRow": "新規 +{new} · 保持 {kept} · 除外 {dropped}",
+  "state": {
+    "queued": "待機中",
+    "running": "実行中",
+    "succeeded": "成功",
+    "failed": "失敗",
+    "cancelled": "キャンセル済み",
+    "interrupted": "中断"
+  },
+  "budget": {
+    "title": "レート予算",
+    "hint": "全ワーカーで共有",
+    "perSec": "{n}/秒",
+    "idle": "待機中",
+    "perMin": "{n}/分"
+  },
+  "session": {
+    "title": "セッション",
+    "images": "今日の新規画像",
+    "checked": "確認した投稿",
+    "dupes": "統合した重複",
+    "dropped": "画像フィルターで除外"
+  },
+  "activity": {
+    "title": "アクティビティ",
+    "hint": "全ワーカー",
+    "empty": "まだありません"
+  },
+  "detail": {
+    "back": "パイプラインに戻る",
+    "worker": "ワーカー {n}",
+    "tag": "タグ {tag}",
+    "pauseWorker": "ワーカーを一時停止",
+    "resumeWorker": "ワーカーを再開",
+    "cancelJob": "ジョブをキャンセル",
+    "postsThisRun": "今回の投稿 · 残り {left}",
+    "newThisRun": "今回の新規投稿",
+    "split": "{skipped} 件スキップ — 訪問済みのためリクエストなし",
+    "splitNew": "新規 {n}",
+    "progress": "{stage} · {done} / {total}",
+    "progressOpen": "{stage} · これまで {done}",
+    "kept": "保持 {n}",
+    "dropped": "除外 {n}",
+    "eta": "残り約 {t}",
+    "noDenominator": "このステージには正確な分母がありません — 未訪問分は一覧が進むにつれて分かります",
+    "lastJob": "前回のジョブ · {state}",
+    "noJob": "このワーカーはまだ何も実行していません。クロールからクロールを開始してください。",
+    "log": "ログ",
+    "followTail": "末尾を追う",
+    "noLog": "ログ行はまだありません"
+  },
+  "stage": {
+    "discover": "発見",
+    "tags": "タグ",
+    "link": "連携",
+    "download": "ダウンロード",
+    "label": "ラベル",
+    "people": "人物",
+    "identify": "特定"
+  },
+  "counter": {
+    "indexed": "索引済み",
+    "skipped": "スキップ",
+    "downloaded": "ダウンロード済み",
+    "dupes": "重複",
+    "dropped": "除外",
+    "failed": "失敗"
+  }
+}

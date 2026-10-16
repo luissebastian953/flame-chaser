@@ -13,16 +13,32 @@
     "back": "Back to gallery",
     "images": "0 images | 1 image | {n} images",
     "imagesMore": "{n}+ images",
-    "observedTags": "Observed tags",
-    "share": "{n}%",
-    "state": {
-      "watched": "watched",
-      "suggested": "suggested"
+    "stats": "{images} · {posts} · {artists}",
+    "source": {
+      "label": "Source",
+      "all": "All"
     },
+    "order": {
+      "label": "Order",
+      "newest": "Newest",
+      "oldest": "Oldest"
+    },
+    "delete": {
+      "label": "Delete character",
+      "armed": "Click again to delete"
+    },
+    "observedTags": "Observed tags",
+    "tagsHint": "what these {posts} are actually tagged with · share of posts",
+    "seeAll": "see all {n}",
+    "fewer": "fewer",
+    "share": "{n}%",
+    "watching": "watching",
+    "ignored": "ignored",
     "watch": "watch",
     "ignore": "ignore",
     "end": "end",
-    "loading": "loading…"
+    "loading": "loading…",
+    "artists": "0 artists | 1 artist | {n} artists"
   },
   "aside": {
     "title": "Image detail",

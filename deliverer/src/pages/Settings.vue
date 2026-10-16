@@ -117,21 +117,11 @@ async function saveDedupe() {
   }
 }
 
-// ---- theme bindings (Reka sliders take number[]) ----
-const opacity = computed({ get: () => [theme.plateOpacity], set: (v) => (theme.plateOpacity = v[0] ?? 1) });
-const blur = computed({ get: () => [theme.plateBlur], set: (v) => (theme.plateBlur = v[0] ?? 0) });
-const grid = computed({ get: () => [theme.gridAlpha], set: (v) => (theme.gridAlpha = v[0] ?? 0.05) });
-
-const cutCorners = computed({
-  get: () => theme.corners === 'cut',
-  set: (v) => (theme.corners = v ? 'cut' : 'square'),
-});
-
-watch(
-  () => [theme.bg, theme.plateOpacity, theme.plateBlur, theme.gridAlpha, theme.scanlines, theme.corners],
-  () => theme.apply(),
-  { deep: true },
-);
+// ---- theme: the panel edits a draft; Apply (here, in the header) promotes it
+function applyTheme() {
+  theme.commit();
+  status.value = t('settings.theme.applied');
+}
 
 const APP_VERSION = __APP_VERSION__; // vite.config `define`, from package.json
 const BUILD = __GIT_SHA__;
@@ -148,6 +138,16 @@ const link = (u: string) =>
     </div>
     <div class="spacer" />
     <span v-if="status" class="kv">{{ status }}</span>
+    <template v-if="tab === 'theme'">
+      <button class="btn gh" @click="theme.reset()">
+        <Icon name="refresh" :size="13" />
+        {{ $t('settings.theme.resetDefault') }}
+      </button>
+      <button class="btn pri" :disabled="!theme.dirty" @click="applyTheme">
+        <Icon name="check" :size="13" />
+        {{ $t('settings.theme.apply') }}
+      </button>
+    </template>
   </div>
 
   <!-- items-start: a tab is as tall as its content and .body scrolls; stretched to the
@@ -188,89 +188,7 @@ const link = (u: string) =>
     <UpdatesPanel v-else-if="tab === 'updates'" />
 
     <!-- THEME -->
-    <div v-else-if="tab === 'theme'" class="panel flex-1">
-      <div class="phead">
-        <span class="ptitle">{{ $t('settings.theme.title') }}</span>
-        <div class="spacer" />
-        <button class="btn gh sm" @click="theme.reset()">
-          <Icon name="refresh" :size="13" />
-          {{ $t('settings.theme.reset') }}
-        </button>
-      </div>
-      <div class="p-15 flex flex-col gap-20">
-        <div class="field">
-          <label>{{ $t('settings.theme.background') }}</label>
-          <div class="flex items-center gap-10">
-            <input v-model="theme.bg" type="color" class="w-40 h-30 p-0 cursor-pointer" />
-            <span class="data text-small text-mut">{{ theme.bg }}</span>
-            <div class="spacer" />
-            <button
-              v-for="p in theme.presets"
-              :key="p.name"
-              class="w-20 h-20 border border-line"
-              :style="{ background: p.bg }"
-              :title="$t(`settings.theme.presets.${p.name}`)"
-              @click="theme.bg = p.bg"
-            />
-          </div>
-          <div class="hint">{{ $t('settings.theme.backgroundHint') }}</div>
-        </div>
-
-        <div class="field">
-          <label>
-            {{ $t('settings.theme.plateOpacity') }}
-            <span class="data text-tx ml-5">
-              {{ $t('settings.theme.percent', { n: Math.round(theme.plateOpacity * 100) }) }}
-            </span>
-          </label>
-          <SliderRoot v-model="opacity" :min="0.3" :max="1" :step="0.01" class="rk-slider">
-            <SliderTrack class="rk-slider-track"><SliderRange class="rk-slider-range" /></SliderTrack>
-            <SliderThumb class="rk-slider-thumb" :aria-label="$t('settings.theme.plateOpacityAria')" />
-          </SliderRoot>
-        </div>
-
-        <div class="field">
-          <label>
-            {{ $t('settings.theme.plateBlur') }}
-            <span class="data text-tx ml-5">{{ $t('settings.theme.px', { n: theme.plateBlur }) }}</span>
-          </label>
-          <SliderRoot v-model="blur" :min="0" :max="24" :step="1" class="rk-slider">
-            <SliderTrack class="rk-slider-track"><SliderRange class="rk-slider-range" /></SliderTrack>
-            <SliderThumb class="rk-slider-thumb" :aria-label="$t('settings.theme.plateBlurAria')" />
-          </SliderRoot>
-          <div class="hint">{{ $t('settings.theme.plateBlurHint') }}</div>
-        </div>
-
-        <div class="field">
-          <label>
-            {{ $t('settings.theme.gridSubstrate') }}
-            <span class="data text-tx ml-5">
-              {{ $t('settings.theme.percent', { n: Math.round(theme.gridAlpha * 100) }) }}
-            </span>
-          </label>
-          <SliderRoot v-model="grid" :min="0" :max="0.15" :step="0.005" class="rk-slider">
-            <SliderTrack class="rk-slider-track"><SliderRange class="rk-slider-range" /></SliderTrack>
-            <SliderThumb class="rk-slider-thumb" :aria-label="$t('settings.theme.gridAria')" />
-          </SliderRoot>
-        </div>
-
-        <div class="flex items-center gap-10">
-          <SwitchRoot id="scan" v-model="theme.scanlines" class="rk-switch">
-            <SwitchThumb class="rk-switch-thumb" />
-          </SwitchRoot>
-          <label for="scan" class="text-small">{{ $t('settings.theme.scanlines') }}</label>
-        </div>
-        <div class="flex items-center gap-10">
-          <SwitchRoot id="corners" v-model="cutCorners" class="rk-switch">
-            <SwitchThumb class="rk-switch-thumb" />
-          </SwitchRoot>
-          <label for="corners" class="text-small">
-            {{ $t('settings.theme.cutCorners') }}
-            <span class="hint ml-5">{{ $t('settings.theme.cutCornersHint') }}</span>
-          </label>
-        </div>
-      </div>
-    </div>
+    <ThemePanel v-else-if="tab === 'theme'" />
 
     <!-- STORAGE -->
     <div v-else-if="tab === 'storage'" class="panel flex-1">

@@ -127,9 +127,11 @@ const suggestions = computed(() =>
 
 // ---- names from Danbooru + Wikidata (debounced; no pixiv session needed) -----
 const names = ref<CharacterNames | null>(null);
-const looking = ref(false);
+const looking = ref(false); // the request is out
+const namesPending = ref(false); // a lookup is due (debounce) or out: placeholders until the first answers
 const showAll = reactive({ name: false, form: false });
 const GROUP_N = 6;
+const SKELETON_N = 5;
 let namesTimer: ReturnType<typeof setTimeout> | null = null;
 
 const norm = (x: string) => x.normalize('NFKC').toLowerCase().trim();
@@ -144,6 +146,7 @@ async function lookUpNames() {
   const queries = nameQueries.value;
   if (!queries.length) {
     names.value = null;
+    namesPending.value = false;
     return;
   }
   looking.value = true;
@@ -153,6 +156,7 @@ async function lookUpNames() {
     names.value = null; // the panel just shows no names; the form still works
   } finally {
     looking.value = false;
+    namesPending.value = false;
   }
 }
 
@@ -160,6 +164,7 @@ watch(
   () => nameQueries.value.join('\u0000'),
   () => {
     if (namesTimer) clearTimeout(namesTimer);
+    namesPending.value = nameQueries.value.length > 0;
     namesTimer = setTimeout(lookUpNames, 600);
   },
   { immediate: true },
@@ -170,6 +175,8 @@ const fresh = (kind: NameSuggestion['kind']) =>
 
 const nameRows = computed(() => fresh('name'));
 const formRows = computed(() => fresh('form'));
+// nothing listed yet and a lookup on its way: placeholder rows instead of an empty panel
+const skeleton = computed(() => namesPending.value && !nameRows.value.length && !formRows.value.length);
 
 const visible = (rows: NameSuggestion[], kind: 'name' | 'form') =>
   showAll[kind] ? rows : rows.slice(0, GROUP_N);
@@ -617,6 +624,18 @@ function submit(run: boolean) {
               </div>
             </template>
 
+            <div v-if="skeleton" class="nm-group" aria-busy="true">
+              <div class="nm-h">{{ $t('character.suggestions.names') }}</div>
+              <div v-for="i in SKELETON_N" :key="i" class="nm-row skel" aria-hidden="true">
+                <div class="nm-text">
+                  <span class="bone name" />
+                  <span class="bone lang" />
+                </div>
+                <div class="nm-add"><span class="bone add" /></div>
+              </div>
+              <span class="sr-only">{{ $t('character.suggestions.looking') }}</span>
+            </div>
+
             <div v-if="suggestions.length" class="nm-group">
               <div class="nm-h">{{ $t('character.suggestions.pixiv') }}</div>
               <div class="sug">
@@ -641,20 +660,21 @@ function submit(run: boolean) {
               </div>
             </div>
 
-            <div v-if="!nameRows.length && !formRows.length && !suggestions.length" class="hint mt-15">
+            <div
+              v-if="!skeleton && !nameRows.length && !formRows.length && !suggestions.length"
+              class="hint mt-15"
+            >
               {{
-                looking
-                  ? $t('character.suggestions.looking')
-                  : probing
-                    ? $t('character.suggestions.checking')
-                    : !nameQueries.length
-                      ? $t('character.suggestions.empty')
-                      : names
-                        ? $t('character.suggestions.nothing')
-                        : $t('character.suggestions.none')
+                probing
+                  ? $t('character.suggestions.checking')
+                  : !nameQueries.length
+                    ? $t('character.suggestions.empty')
+                    : names
+                      ? $t('character.suggestions.nothing')
+                      : $t('character.suggestions.none')
               }}
             </div>
-            <div v-else-if="looking" class="hint">{{ $t('character.suggestions.looking') }}</div>
+            <div v-else-if="looking && !skeleton" class="hint">{{ $t('character.suggestions.looking') }}</div>
           </div>
           <div class="cycle">
             <div class="flex items-center">
@@ -866,6 +886,46 @@ function submit(run: boolean) {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+}
+/* placeholder rows, the shape of a name row, while the first lookup is out */
+.nm-row.skel {
+  padding: 9px 0;
+}
+.skel .nm-text {
+  gap: 5px;
+}
+.bone {
+  display: block;
+  height: 12px;
+  background: linear-gradient(90deg, var(--surf2) 0%, var(--line-soft) 50%, var(--surf2) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+.bone.name {
+  height: 15px;
+  width: 38%;
+}
+.skel:nth-child(odd) .bone.name {
+  width: 52%;
+}
+.bone.lang {
+  width: 18px;
+}
+.bone.add {
+  width: 28px;
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bone {
+    animation: none;
+  }
 }
 .more {
   align-self: flex-start;

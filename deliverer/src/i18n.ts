@@ -14,7 +14,7 @@ import { createI18n } from 'vue-i18n';
 // `ready` flips on when src/locales/<code>/ exists with real coverage.
 export const LOCALES = [
   { code: 'en', native: 'English', label: 'English (US)', ready: true },
-  { code: 'ja', native: '日本語', label: 'Japanese', ready: false },
+  { code: 'ja', native: '日本語', label: 'Japanese', ready: true },
   { code: 'id', native: 'Bahasa Indonesia', label: 'Indonesian', ready: false },
   { code: 'zh', native: '简体中文', label: 'Simplified Chinese', ready: false },
   { code: 'fil', native: 'Filipino', label: 'Filipino', ready: false },

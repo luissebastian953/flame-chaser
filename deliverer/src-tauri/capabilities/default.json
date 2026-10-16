@@ -7,6 +7,7 @@
     "dialog:allow-open",
     "opener:allow-open-url",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "core:window:allow-set-effects"
   ]
 }

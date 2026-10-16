@@ -1,21 +1,51 @@
 {
-  "title": "Worker pipeline",
-  "sub": "single worker · {status} · {queued}",
-  "oneRunning": "1 running",
-  "idle": "idle",
-  "queuedCount": "0 queued | 1 queued | {n} queued",
-  "cancelJob": "Cancel job",
-  "cancel": "Cancel",
-  "stage": "stage · {stage}",
+  "title": "Crawl pipeline",
+  "pill": {
+    "running": "running",
+    "paused": "paused",
+    "idle": "idle"
+  },
+  "sub": "{busy} of {total} workers busy · {queued}",
+  "queuedCount": "queue empty | 1 queued | {n} queued",
+  "reqPerMin": "{n} req/min",
+  "pauseQueue": "Pause queue",
   "started": "started {time}",
-  "counter": "{done} / {total}",
-  "noDenominator": "no honest denominator for this stage — unvisited work is only known as the listing unfolds",
-  "noJob": "No job running. Start one from Crawl.",
+  "resumeQueue": "Resume queue",
+  "cancelAll": "Cancel all",
+  "cancelAllConfirm": "Click again to cancel all",
+  "running": "Running",
+  "runningHint": "one card per worker · open for stages, counters and log",
+  "open": "Open",
+  "idleWorker": "idle {lane} worker · picks up the next queued job automatically",
+  "lane": {
+    "pixiv": "pixiv",
+    "twitter": "X"
+  },
+  "postsNew": "{posts} new",
+  "pausedTag": "paused",
   "queued": "Queued",
-  "empty": "empty",
-  "recent": "Recent",
-  "log": "Log",
-  "followTail": "follow tail",
+  "queuedHint": "runs in order · drag to reorder",
+  "runNow": "Run now",
+  "cancel": "Cancel",
+  "queueEmpty": "queue empty",
+  "meta": {
+    "tags": "no tags | 1 tag | {n} tags",
+    "target": "{n} posts",
+    "accounts": "no accounts | 1 account | {n} accounts"
+  },
+  "job": {
+    "timelines": "X · followed timelines",
+    "media": "{source} · pending media",
+    "link": "pixiv artists → X handles",
+    "tags": "observed tags",
+    "label": "image labels backlog",
+    "other": "{type}"
+  },
+  "completed": "Completed today",
+  "seeAll": "see all {n}",
+  "seeFewer": "show fewer",
+  "noneToday": "nothing finished today",
+  "completedRow": "+{new} new · {kept} kept · {dropped} dropped",
   "state": {
     "queued": "queued",
     "running": "running",
@@ -23,5 +53,64 @@
     "failed": "failed",
     "cancelled": "cancelled",
     "interrupted": "interrupted"
+  },
+  "budget": {
+    "title": "Rate budget",
+    "hint": "shared by all workers",
+    "perSec": "{n}/s",
+    "idle": "idle",
+    "perMin": "{n}/min"
+  },
+  "session": {
+    "title": "Session",
+    "images": "new images today",
+    "checked": "posts checked",
+    "dupes": "dupes merged",
+    "dropped": "dropped by the image filter"
+  },
+  "activity": {
+    "title": "Activity",
+    "hint": "all workers",
+    "empty": "nothing yet"
+  },
+  "detail": {
+    "back": "Back to the pipeline",
+    "worker": "worker {n}",
+    "tag": "tag {tag}",
+    "pauseWorker": "Pause worker",
+    "resumeWorker": "Resume worker",
+    "cancelJob": "Cancel job",
+    "postsThisRun": "posts this run · {left} left",
+    "newThisRun": "new posts this run",
+    "split": "{skipped} skipped — already visited, no request spent",
+    "splitNew": "{n} new",
+    "progress": "{stage} · {done} / {total}",
+    "progressOpen": "{stage} · {done} so far",
+    "kept": "kept {n}",
+    "dropped": "dropped {n}",
+    "eta": "eta ~{t}",
+    "noDenominator": "no honest denominator for this stage — unvisited work is only known as the listing unfolds",
+    "lastJob": "last job · {state}",
+    "noJob": "This worker has not run anything yet. Start a crawl from Crawl.",
+    "log": "Log",
+    "followTail": "follow tail",
+    "noLog": "no log lines yet"
+  },
+  "stage": {
+    "discover": "discover",
+    "tags": "tags",
+    "link": "link",
+    "download": "download",
+    "label": "label",
+    "people": "people",
+    "identify": "identify"
+  },
+  "counter": {
+    "indexed": "indexed",
+    "skipped": "skipped",
+    "downloaded": "downloaded",
+    "dupes": "dupes",
+    "dropped": "dropped",
+    "failed": "failed"
   }
 }

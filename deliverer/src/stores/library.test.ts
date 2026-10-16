@@ -318,6 +318,47 @@ describe('useLibrary identity filter', () => {
   });
 });
 
+describe('useLibrary source and order', () => {
+  const KINDS = 'kinds=illustration%2Cscreencap%2Cunlabeled';
+
+  it('every source and newest first by default, so neither is sent', async () => {
+    vi.mocked(api.get).mockResolvedValue(page([], null));
+    const lib = useLibrary();
+    await lib.loadGrid('kiana');
+
+    expect(lib.source).toBeNull();
+    expect(lib.order).toBe('newest');
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/kiana?limit=120&${KINDS}`);
+  });
+
+  it('setSource() and setOrder() narrow the query and start the grid over', async () => {
+    vi.mocked(api.get)
+      .mockResolvedValueOnce(page(['a'], 'c1'))
+      .mockResolvedValueOnce(page(['x'], 'c2'))
+      .mockResolvedValueOnce(page(['old'], null))
+      .mockResolvedValueOnce(page(['all'], null));
+
+    const lib = useLibrary();
+    await lib.loadGrid('kiana');
+
+    await lib.setSource('kiana', 'twitter');
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/kiana?limit=120&${KINDS}&source=twitter`);
+    expect(lib.grid.items.map((i) => i.sha256)).toEqual(['x']);
+
+    // the newest-first cursor c2 must not be carried into the other order
+    await lib.setOrder('kiana', 'oldest');
+
+    expect(api.get).toHaveBeenLastCalledWith(
+      `/api/gallery/kiana?limit=120&${KINDS}&source=twitter&order=oldest`,
+    );
+
+    expect(lib.grid.items.map((i) => i.sha256)).toEqual(['old']);
+
+    await lib.setSource('kiana', null);
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/kiana?limit=120&${KINDS}&order=oldest`);
+  });
+});
+
 describe('useLibrary loadGrid() concurrency', () => {
   function deferred<T>() {
     let resolve!: (v: T) => void;

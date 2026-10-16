@@ -4,15 +4,16 @@
 deliverer/
 ├── src/                  Vue 3 + Vite (NOT Nuxt — see below)
 │   ├── main.ts           createApp + pinia + router + i18n; bundled fonts
-│   ├── App.vue           rail, AuthGate, UpdateBanner, theme apply
+│   ├── App.vue           rail (BrandMark), AuthGate, UpdateBanner, theme apply
 │   ├── router.ts         hash history; routes → pages/ (hand-written, lazy)
 │   ├── i18n.ts (+ .test.ts)   LOCALES, glob-loaded messages, setLocale
-│   ├── pages/            Gallery · CharacterDetail · Config* · Pipeline · Settings
-│   ├── components/       AuthBadge* · AuthGate · DetailAside · GenderFilter* · Icon* · IdentityFilter* · InfoTip* · KindFilter* · SourceCard* ·
-│   │                     UpdateBanner* · UpdatesPanel · WatchForm*   (* = has a .test.ts)
+│   ├── pages/            Gallery · CharacterDetail* · Config* · PipelineList* · PipelineDetail* · Settings
+│   ├── components/       AuthBadge* · AuthGate · BrandMark · DetailAside · EmberField · GenderFilter* · Icon* · IdentityFilter* · InfoTip* · KindFilter* ·
+│   │                     QueuedPanel · RateBudget · SourceCard* · StatCard* · ThemePanel* · ThemePreview · UpdateBanner* · UpdatesPanel · WatchForm* · WorkerAvatar   (* = has a .test.ts)
 │   ├── stores/           characterDefaults* · endpoint · jobs* · library* · sources* · theme* · updater*  (Pinia)
 │   ├── lib/api.ts (+ .test.ts)   endpoint discovery, fetch wrapper, mediaUrl, EventSource, heartbeat
 │   ├── lib/types.ts      the API shapes — keep in step with dawnmaker/app.py
+│   ├── lib/pipeline.ts (+ .test.ts)   what the pipeline screens derive from a job: stages, character, counters, worker colour
 │   ├── lib/icons.ts (+ .test.ts)   the icon set's lookup; the test checks every name a template uses
 │   ├── assets/icons/icons.json   the Curio icon set, verbatim from curio-icons.zip (86 line icons)
 │   ├── locales/en/       app auth character crawl gallery pipeline settings updates .json
@@ -29,7 +30,7 @@ deliverer/
     ├── capabilities/default.json   permissions for window `main` only
     ├── Cargo.toml · Cargo.lock · build.rs   crate `deliverer`, lib `deliverer_lib`; the lock is committed
     ├── resources/sidecar/      build output, gitignored
-    ├── app-icon.svg            the app icon's source (rail mark on the background)
+    ├── app-icon.svg            the app icon's source (the Curio mark, as components/BrandMark.vue, on the background)
     ├── icons/                  `pnpm tauri icon src-tauri/app-icon.svg` — needed for build, not dev
     └── src/{main.rs,lib.rs,sidecar.rs,auth.rs}   auth.rs = source_login window
 ```
@@ -152,11 +153,18 @@ ember,cyan,moss,rose}`. Ember is the one accent (magenta, hue 332); cyan is
   Slider, Switch, Checkbox, Tooltip, Popover — the focus/keyboard/aria parts.
   Skin them with the `.rk-*` classes. Do NOT install shadcn-vue: its
   pre-styled rounded components fight the cut-corner design.
-- **Theme at runtime** (`stores/theme.ts`): the Settings page writes
-  `--color-bg` and re-hues the neutral ladder with `color-mix`; plate opacity
-  / blur / grid alpha are `--plate-*` / `--grid-alpha`. Persisted in
-  localStorage only — the daemon never sees theme state. `useTheme().apply()`
-  runs in `App.vue` setup, before first paint.
+- **Theme at runtime** (`stores/theme.ts`): a theme is five colours
+  (primary, accent, canvas, surface) and three finishes (corners, glow,
+  scanlines); `cssVars()` turns it into `--color-*`, `--glow`, `--scan-alpha`,
+  `--window-alpha`, `--plate-*`, `--grid-alpha`, and `cssClasses()` into
+  `corners-cut` / `corners-round` / `no-scan` on `<html>`. Settings › Theme
+  edits a **draft** that only the Live preview (`ThemePreview`, the draft's
+  variables scoped to its root) shows; Apply promotes it. Built-in presets +
+  user presets and the theme live in localStorage only — the daemon never
+  sees theme state. `useTheme().apply()` runs in `App.vue` setup, before
+  first paint. The window is `transparent: true` (tauri.conf.json): the
+  canvas paints its own alpha, so at `--window-alpha: 1` nothing shows
+  through; "Blur background" is the OS effect via `setEffects`.
 - Square by default: `--radius-*` is reset; only `rounded-chip` (2px) exists.
 
 ## Source sign-in

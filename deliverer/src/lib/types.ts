@@ -23,12 +23,17 @@ export interface Watch {
   /** full = only that gender; partial = the other one as a minority */
   gender_mode: GenderMode;
   post_count?: number;
+  /** distinct artists over the character's live posts */
+  artist_count?: number;
   latest_posted_at?: string | null;
   cover_sha?: string | null;
   reopened?: number;
 }
 
 export type JobState = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
+
+/** one worker per source (coreflame/jobs.py): each site sees one request stream */
+export type Lane = 'pixiv' | 'twitter';
 
 export interface Job {
   id: string;
@@ -38,12 +43,44 @@ export interface Job {
   stage: string | null;
   done: number;
   total: number | null;
+  /** running tallies mid-run (posts, new, stored, listed, gated, …); final counts after */
   counters: Record<string, number>;
   error: string | null;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
+  /** the worker that may take it; `any` = no remote request, either one */
+  lane: Lane | 'any';
+  /** the worker that ran it; null until it starts */
+  worker: Lane | null;
+  /** queue order (reorder / run now); lower runs first */
+  position: number;
+  /** held at its next record boundary, keeping its worker */
+  paused: boolean;
+  /** requests this job sent in the last minute */
+  req_per_min: number;
   log?: LogLine[];
+}
+
+export interface WorkerSlot {
+  lane: Lane;
+  job_id: string | null;
+}
+
+/** a rate budget and what it actually sent in the last minute */
+export interface RateBudget {
+  key: string;
+  label: string;
+  /** requests per second; null = paced by something else (gallery-dl) */
+  rate: number | null;
+  per_min: number;
+}
+
+export interface PipelineState {
+  paused: boolean;
+  workers: WorkerSlot[];
+  budgets: RateBudget[];
+  req_per_min: number;
 }
 
 export interface LogLine {
@@ -71,6 +108,9 @@ export interface GalleryItem {
   /** whether its character is named (coreflame/identify.py) */
   identity: IdentState;
 }
+
+/** which end of the timeline a gallery grid starts from */
+export type GridOrder = 'newest' | 'oldest';
 
 export interface GalleryPage {
   items: GalleryItem[];
@@ -208,6 +248,8 @@ export interface Health {
   version: string;
   library_root: string;
   db_path: string;
+  /** free space on the disk holding the library */
+  library_free_bytes: number;
   schema_version: number;
   idle: boolean;
   last_event_id: number;

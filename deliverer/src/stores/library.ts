@@ -2,9 +2,11 @@ import type {
   GalleryCharacters,
   GalleryKinds,
   GalleryPage,
+  GridOrder,
   IdentState,
   KindFilter,
   PostDetail,
+  Source,
   TagStat,
   Watch,
 } from '@/lib/types';
@@ -82,6 +84,10 @@ export const useLibrary = defineStore('library', {
     /** one character the grid is narrowed to (this gallery only), or null */
     character: null as string | null,
     characters: null as GalleryCharacters | null,
+    /** one source the grid is narrowed to (this gallery only), or null for every source */
+    source: null as Source | null,
+    /** newest or oldest first; kept while the app runs */
+    order: 'newest' as GridOrder,
   }),
   getters: {
     /** Rail count: sum of what each watch has kept. */
@@ -129,6 +135,8 @@ export const useLibrary = defineStore('library', {
         // a chosen character replaces the identified/unidentified choice
         if (this.character) q.set('character', this.character);
         else if (this.who.length && this.who.length < IDENT_STATES.length) q.set('ident', this.who.join(','));
+        if (this.source) q.set('source', this.source);
+        if (this.order !== 'newest') q.set('order', this.order);
         if (grid.cursor) q.set('cursor', grid.cursor);
         const page = await api.get<GalleryPage>(`/api/gallery/${slug}?${q}`);
         if (this.grid !== grid) return; // reset meanwhile: that load owns the grid now
@@ -170,6 +178,16 @@ export const useLibrary = defineStore('library', {
     /** Narrow the grid to one character (null = everyone); not remembered across galleries. */
     async setCharacter(slug: string, name: string | null) {
       this.character = name;
+      await this.loadGrid(slug, true);
+    },
+    /** Narrow the grid to one source (null = every source); the grid starts over. */
+    async setSource(slug: string, source: Source | null) {
+      this.source = source;
+      await this.loadGrid(slug, true);
+    },
+    /** Newest or oldest first; a cursor only continues its own order, so the grid starts over. */
+    async setOrder(slug: string, order: GridOrder) {
+      this.order = order;
       await this.loadGrid(slug, true);
     },
     async loadTags(slug: string) {

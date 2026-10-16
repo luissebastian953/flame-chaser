@@ -10,6 +10,7 @@ export {}
 declare global {
   const ALL_KIND_FILTERS: typeof import('./stores/library').ALL_KIND_FILTERS
   const ApiError: typeof import('./lib/api').ApiError
+  const BUILT_IN: typeof import('./stores/theme').BUILT_IN
   const DEFAULT_KIND_FILTER: typeof import('./stores/library').DEFAULT_KIND_FILTER
   const EffectScope: typeof import('vue').EffectScope
   const ICON_PATHS: typeof import('./lib/icons').ICON_PATHS
@@ -17,19 +18,29 @@ declare global {
   const KIND_FILTERS: typeof import('./stores/library').KIND_FILTERS
   const REGIONS: typeof import('./stores/formats').REGIONS
   const TYPES: typeof import('./lib/api').TYPES
+  const WORKER_COLORS: typeof import('./lib/pipeline').WORKER_COLORS
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const actions: typeof import('./stores/formats').actions
+  const activityKind: typeof import('./lib/pipeline').activityKind
   const api: typeof import('./lib/api').api
   const authedUrl: typeof import('./lib/api').authedUrl
+  const characterOf: typeof import('./lib/pipeline').characterOf
+  const clock: typeof import('./lib/pipeline').clock
+  const coerceSpec: typeof import('./stores/theme').coerceSpec
   const computed: typeof import('vue').computed
   const createApp: typeof import('vue').createApp
   const createPinia: typeof import('pinia').createPinia
+  const cssClasses: typeof import('./stores/theme').cssClasses
+  const cssVars: typeof import('./stores/theme').cssVars
   const customRef: typeof import('vue').customRef
+  const defaultSettings: typeof import('./stores/theme').defaultSettings
   const defineAsyncComponent: typeof import('vue').defineAsyncComponent
   const defineComponent: typeof import('vue').defineComponent
   const defineStore: typeof import('pinia').defineStore
   const discover: typeof import('./lib/api').discover
   const effectScope: typeof import('vue').effectScope
+  const elapsed: typeof import('./lib/pipeline').elapsed
+  const etaSeconds: typeof import('./lib/pipeline').etaSeconds
   const getActivePinia: typeof import('pinia').getActivePinia
   const getCurrentInstance: typeof import('vue').getCurrentInstance
   const getCurrentScope: typeof import('vue').getCurrentScope
@@ -37,11 +48,13 @@ declare global {
   const getters: typeof import('./stores/theme').getters
   const h: typeof import('vue').h
   const inject: typeof import('vue').inject
+  const isLightColor: typeof import('./stores/theme').isLightColor
   const isProxy: typeof import('vue').isProxy
   const isReactive: typeof import('vue').isReactive
   const isReadonly: typeof import('vue').isReadonly
   const isRef: typeof import('vue').isRef
   const isShallow: typeof import('vue').isShallow
+  const jobTitle: typeof import('./lib/pipeline').jobTitle
   const mapActions: typeof import('pinia').mapActions
   const mapGetters: typeof import('pinia').mapGetters
   const mapState: typeof import('pinia').mapState
@@ -66,7 +79,9 @@ declare global {
   const onUnmounted: typeof import('vue').onUnmounted
   const onUpdated: typeof import('vue').onUpdated
   const onWatcherCleanup: typeof import('vue').onWatcherCleanup
+  const postsOf: typeof import('./lib/pipeline').postsOf
   const provide: typeof import('vue').provide
+  const queueMeta: typeof import('./lib/pipeline').queueMeta
   const reactive: typeof import('vue').reactive
   const readonly: typeof import('vue').readonly
   const ref: typeof import('vue').ref
@@ -76,9 +91,13 @@ declare global {
   const shallowReactive: typeof import('vue').shallowReactive
   const shallowReadonly: typeof import('vue').shallowReadonly
   const shallowRef: typeof import('vue').shallowRef
+  const sourceOf: typeof import('./lib/pipeline').sourceOf
+  const stageIndex: typeof import('./lib/pipeline').stageIndex
+  const stagesOf: typeof import('./lib/pipeline').stagesOf
   const startHeartbeat: typeof import('./lib/api').startHeartbeat
   const storeToRefs: typeof import('pinia').storeToRefs
   const subscribe: typeof import('./lib/api').subscribe
+  const targetOf: typeof import('./lib/pipeline').targetOf
   const toRaw: typeof import('vue').toRaw
   const toRef: typeof import('vue').toRef
   const toRefs: typeof import('vue').toRefs
@@ -97,6 +116,7 @@ declare global {
   const useLibrary: typeof import('./stores/library').useLibrary
   const useLink: typeof import('vue-router').useLink
   const useModel: typeof import('vue').useModel
+  const usePipelineLive: typeof import('./lib/pipeline').usePipelineLive
   const useRoute: typeof import('vue-router').useRoute
   const useRouter: typeof import('vue-router').useRouter
   const useSlots: typeof import('vue').useSlots
@@ -108,6 +128,8 @@ declare global {
   const watchEffect: typeof import('vue').watchEffect
   const watchPostEffect: typeof import('vue').watchPostEffect
   const watchSyncEffect: typeof import('vue').watchSyncEffect
+  const workerColor: typeof import('./lib/pipeline').workerColor
+  const workerIndex: typeof import('./lib/pipeline').workerIndex
 }
 // for type re-export
 declare global {
@@ -118,7 +140,10 @@ declare global {
   export type { DateStyle, SizeUnit, FormatsState } from './stores/formats'
   import('./stores/formats')
   // @ts-ignore
-  export type { ThemeState } from './stores/theme'
+  export type { WorkerJob } from './stores/jobs'
+  import('./stores/jobs')
+  // @ts-ignore
+  export type { Corners, Glow, ThemeSpec, WindowSpec, ThemeSettings, Preset } from './stores/theme'
   import('./stores/theme')
   // @ts-ignore
   export type { Phase } from './stores/updater'
@@ -127,7 +152,10 @@ declare global {
   export type { ApiError, Endpoint, DaemonEvent } from './lib/api'
   import('./lib/api')
   // @ts-ignore
-  export type { Source, Gender, GenderMode, Watch, JobState, Job, LogLine, GalleryItem, GalleryPage, ImageKind, KindFilter, IdentState, GalleryCharacters, CharacterHit, GalleryKinds, TagStat, PostDetail, NameSuggestion, CharacterNames, ProbeResult, SourcesStatus, Health } from './lib/types'
+  export type { Character } from './lib/pipeline'
+  import('./lib/pipeline')
+  // @ts-ignore
+  export type { Source, Gender, GenderMode, Watch, JobState, Lane, Job, WorkerSlot, RateBudget, PipelineState, LogLine, GalleryItem, GridOrder, GalleryPage, ImageKind, KindFilter, IdentState, GalleryCharacters, CharacterHit, GalleryKinds, TagStat, PostDetail, NameSuggestion, CharacterNames, ProbeResult, SourcesStatus, Health } from './lib/types'
   import('./lib/types')
 }
 
@@ -138,6 +166,7 @@ declare module 'vue' {
   interface ComponentCustomProperties {
     readonly ALL_KIND_FILTERS: UnwrapRef<typeof import('./stores/library')['ALL_KIND_FILTERS']>
     readonly ApiError: UnwrapRef<typeof import('./lib/api')['ApiError']>
+    readonly BUILT_IN: UnwrapRef<typeof import('./stores/theme')['BUILT_IN']>
     readonly DEFAULT_KIND_FILTER: UnwrapRef<typeof import('./stores/library')['DEFAULT_KIND_FILTER']>
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
     readonly ICON_PATHS: UnwrapRef<typeof import('./lib/icons')['ICON_PATHS']>
@@ -145,31 +174,42 @@ declare module 'vue' {
     readonly KIND_FILTERS: UnwrapRef<typeof import('./stores/library')['KIND_FILTERS']>
     readonly REGIONS: UnwrapRef<typeof import('./stores/formats')['REGIONS']>
     readonly TYPES: UnwrapRef<typeof import('./lib/api')['TYPES']>
+    readonly WORKER_COLORS: UnwrapRef<typeof import('./lib/pipeline')['WORKER_COLORS']>
     readonly acceptHMRUpdate: UnwrapRef<typeof import('pinia')['acceptHMRUpdate']>
     readonly actions: UnwrapRef<typeof import('./stores/formats')['actions']>
+    readonly activityKind: UnwrapRef<typeof import('./lib/pipeline')['activityKind']>
     readonly api: UnwrapRef<typeof import('./lib/api')['api']>
     readonly authedUrl: UnwrapRef<typeof import('./lib/api')['authedUrl']>
+    readonly characterOf: UnwrapRef<typeof import('./lib/pipeline')['characterOf']>
+    readonly clock: UnwrapRef<typeof import('./lib/pipeline')['clock']>
+    readonly coerceSpec: UnwrapRef<typeof import('./stores/theme')['coerceSpec']>
     readonly computed: UnwrapRef<typeof import('vue')['computed']>
     readonly createApp: UnwrapRef<typeof import('vue')['createApp']>
     readonly createPinia: UnwrapRef<typeof import('pinia')['createPinia']>
+    readonly cssClasses: UnwrapRef<typeof import('./stores/theme')['cssClasses']>
+    readonly cssVars: UnwrapRef<typeof import('./stores/theme')['cssVars']>
     readonly customRef: UnwrapRef<typeof import('vue')['customRef']>
+    readonly defaultSettings: UnwrapRef<typeof import('./stores/theme')['defaultSettings']>
     readonly defineAsyncComponent: UnwrapRef<typeof import('vue')['defineAsyncComponent']>
     readonly defineComponent: UnwrapRef<typeof import('vue')['defineComponent']>
     readonly defineStore: UnwrapRef<typeof import('pinia')['defineStore']>
     readonly discover: UnwrapRef<typeof import('./lib/api')['discover']>
     readonly effectScope: UnwrapRef<typeof import('vue')['effectScope']>
+    readonly elapsed: UnwrapRef<typeof import('./lib/pipeline')['elapsed']>
+    readonly etaSeconds: UnwrapRef<typeof import('./lib/pipeline')['etaSeconds']>
     readonly getActivePinia: UnwrapRef<typeof import('pinia')['getActivePinia']>
     readonly getCurrentInstance: UnwrapRef<typeof import('vue')['getCurrentInstance']>
     readonly getCurrentScope: UnwrapRef<typeof import('vue')['getCurrentScope']>
     readonly getCurrentWatcher: UnwrapRef<typeof import('vue')['getCurrentWatcher']>
-    readonly getters: UnwrapRef<typeof import('./stores/theme')['getters']>
     readonly h: UnwrapRef<typeof import('vue')['h']>
     readonly inject: UnwrapRef<typeof import('vue')['inject']>
+    readonly isLightColor: UnwrapRef<typeof import('./stores/theme')['isLightColor']>
     readonly isProxy: UnwrapRef<typeof import('vue')['isProxy']>
     readonly isReactive: UnwrapRef<typeof import('vue')['isReactive']>
     readonly isReadonly: UnwrapRef<typeof import('vue')['isReadonly']>
     readonly isRef: UnwrapRef<typeof import('vue')['isRef']>
     readonly isShallow: UnwrapRef<typeof import('vue')['isShallow']>
+    readonly jobTitle: UnwrapRef<typeof import('./lib/pipeline')['jobTitle']>
     readonly mapActions: UnwrapRef<typeof import('pinia')['mapActions']>
     readonly mapGetters: UnwrapRef<typeof import('pinia')['mapGetters']>
     readonly mapState: UnwrapRef<typeof import('pinia')['mapState']>
@@ -194,7 +234,9 @@ declare module 'vue' {
     readonly onUnmounted: UnwrapRef<typeof import('vue')['onUnmounted']>
     readonly onUpdated: UnwrapRef<typeof import('vue')['onUpdated']>
     readonly onWatcherCleanup: UnwrapRef<typeof import('vue')['onWatcherCleanup']>
+    readonly postsOf: UnwrapRef<typeof import('./lib/pipeline')['postsOf']>
     readonly provide: UnwrapRef<typeof import('vue')['provide']>
+    readonly queueMeta: UnwrapRef<typeof import('./lib/pipeline')['queueMeta']>
     readonly reactive: UnwrapRef<typeof import('vue')['reactive']>
     readonly readonly: UnwrapRef<typeof import('vue')['readonly']>
     readonly ref: UnwrapRef<typeof import('vue')['ref']>
@@ -204,9 +246,13 @@ declare module 'vue' {
     readonly shallowReactive: UnwrapRef<typeof import('vue')['shallowReactive']>
     readonly shallowReadonly: UnwrapRef<typeof import('vue')['shallowReadonly']>
     readonly shallowRef: UnwrapRef<typeof import('vue')['shallowRef']>
+    readonly sourceOf: UnwrapRef<typeof import('./lib/pipeline')['sourceOf']>
+    readonly stageIndex: UnwrapRef<typeof import('./lib/pipeline')['stageIndex']>
+    readonly stagesOf: UnwrapRef<typeof import('./lib/pipeline')['stagesOf']>
     readonly startHeartbeat: UnwrapRef<typeof import('./lib/api')['startHeartbeat']>
     readonly storeToRefs: UnwrapRef<typeof import('pinia')['storeToRefs']>
     readonly subscribe: UnwrapRef<typeof import('./lib/api')['subscribe']>
+    readonly targetOf: UnwrapRef<typeof import('./lib/pipeline')['targetOf']>
     readonly toRaw: UnwrapRef<typeof import('vue')['toRaw']>
     readonly toRef: UnwrapRef<typeof import('vue')['toRef']>
     readonly toRefs: UnwrapRef<typeof import('vue')['toRefs']>
@@ -225,6 +271,7 @@ declare module 'vue' {
     readonly useLibrary: UnwrapRef<typeof import('./stores/library')['useLibrary']>
     readonly useLink: UnwrapRef<typeof import('vue-router')['useLink']>
     readonly useModel: UnwrapRef<typeof import('vue')['useModel']>
+    readonly usePipelineLive: UnwrapRef<typeof import('./lib/pipeline')['usePipelineLive']>
     readonly useRoute: UnwrapRef<typeof import('vue-router')['useRoute']>
     readonly useRouter: UnwrapRef<typeof import('vue-router')['useRouter']>
     readonly useSlots: UnwrapRef<typeof import('vue')['useSlots']>
@@ -236,5 +283,7 @@ declare module 'vue' {
     readonly watchEffect: UnwrapRef<typeof import('vue')['watchEffect']>
     readonly watchPostEffect: UnwrapRef<typeof import('vue')['watchPostEffect']>
     readonly watchSyncEffect: UnwrapRef<typeof import('vue')['watchSyncEffect']>
+    readonly workerColor: UnwrapRef<typeof import('./lib/pipeline')['workerColor']>
+    readonly workerIndex: UnwrapRef<typeof import('./lib/pipeline')['workerIndex']>
   }
 }

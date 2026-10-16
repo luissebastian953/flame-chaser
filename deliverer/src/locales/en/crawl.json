@@ -5,6 +5,50 @@
   "runAll": "Run all now",
   "edit": "Edit",
   "run": "Run",
+  "cards": {
+    "lastRun": {
+      "title": "Last run",
+      "plus": "+{n}",
+      "unit": "new images",
+      "foot": "post checked · last {runs} | posts checked · last {runs}",
+      "none": "no crawl yet"
+    },
+    "runCount": "0 runs | 1 run | {n} runs",
+    "perRun": {
+      "title": "Per run",
+      "max": "max {n}",
+      "unit": "posts / character",
+      "foot": "skips posts already visited"
+    },
+    "recognition": {
+      "title": "Recognition",
+      "meta": "last run",
+      "share": "{n}%",
+      "unit": "of images kept",
+      "kept": "kept",
+      "dropped": "dropped"
+    },
+    "sources": {
+      "title": "Sources",
+      "settings": "Settings →",
+      "library": "Library",
+      "free": "{n} free",
+      "state": {
+        "valid": "valid",
+        "checking": "checking",
+        "expired": "expired",
+        "notLinked": "not linked",
+        "connected": "connected"
+      }
+    },
+    "ago": {
+      "never": "never",
+      "justNow": "just now",
+      "minutes": "{n}m ago",
+      "hours": "{n}h ago",
+      "days": "{n}d ago"
+    }
+  },
   "table": {
     "heading": "Watched characters",
     "character": "Character",
@@ -18,11 +62,18 @@
     "posts": "Posts",
     "r18On": "on",
     "r18Off": "—",
-    "perRun": "Per run"
+    "perRun": "Per run",
+    "more": "+{n} more"
   },
   "empty": "No characters yet. Discovery starts from a pixiv tag.",
   "status": {
     "saved": "saved",
     "reopened": "saved · reopened {n} previously skipped artworks"
+  },
+  "row": {
+    "queued": "queued | queued | queued ×{n}",
+    "running": "{stage} · {posts} new",
+    "done": "done · +{n}",
+    "failed": "failed"
   }
 }

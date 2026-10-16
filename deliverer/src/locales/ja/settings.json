@@ -1,0 +1,193 @@
+{
+  "title": "設定",
+  "subtitle": "ウェブビューのテーマ · デーモンの設定",
+  "tabs": {
+    "accounts": "アカウント",
+    "language": "言語",
+    "updates": "アップデート",
+    "theme": "テーマ",
+    "storage": "ストレージ",
+    "network": "ネットワーク",
+    "duplicates": "重複",
+    "characters": "キャラクター",
+    "about": "情報"
+  },
+  "language": {
+    "title": "言語",
+    "interface": "インターフェースの言語",
+    "interfaceHint": "未翻訳の部分は英語で表示されます",
+    "soon": "近日対応",
+    "followSystem": "システムの言語に従う",
+    "systemIs": "システムは {name} に設定されています",
+    "systemNotReady": "システムは {name} に設定されています — 未翻訳のため英語で表示しています",
+    "coverage": {
+      "title": "翻訳カバレッジ",
+      "sub": "同梱のメッセージファイルから集計",
+      "contribute": "貢献する",
+      "keys": "{translated} / {total} キー",
+      "complete": "完了",
+      "pending": "残り {n}",
+      "contributeHint": "翻訳は deliverer/src/locales にあります — 言語ごとに 1 フォルダー、ページごとに 1 つの JSON ファイル。カバレッジが実質的になった時点で言語が有効になります。"
+    },
+    "formats": {
+      "title": "書式",
+      "sub": "インターフェースの言語とは独立",
+      "reset": "リセット",
+      "region": "地域",
+      "regionHint": "数値の区切りと、地域形式の日付・時刻を決めます。",
+      "regions": {
+        "auto": "システム ({tag})",
+        "en_US": "アメリカ合衆国",
+        "en_GB": "イギリス",
+        "id_ID": "インドネシア",
+        "ja_JP": "日本",
+        "zh_CN": "中国",
+        "fil_PH": "フィリピン"
+      },
+      "date": "日付の形式",
+      "dateIso": "ISO 8601",
+      "dateLocale": "地域形式",
+      "time": "時刻",
+      "time24": "24 時間",
+      "time12": "12 時間",
+      "size": "ファイルサイズ",
+      "sizeBinary": "2 進 (MiB)",
+      "sizeDecimal": "10 進 (MB)",
+      "preview": "プレビュー",
+      "previewNumber": "数値",
+      "previewDate": "日付",
+      "previewDateTime": "日付と時刻",
+      "previewSize": "サイズ"
+    }
+  },
+  "status": {
+    "saving": "保存中…",
+    "savedNextJob": "保存しました · 次のジョブから適用",
+    "saved": "保存しました",
+    "loading": "読み込み中…"
+  },
+  "accounts": {
+    "title": "アカウント",
+    "local": "ログイン情報はこのコンピューターから出ません",
+    "intro": "Curio はブラウザと同じように、あなたとして pixiv と X を閲覧します。サインインはサイト自身のページで行われ、Curio がパスワードを見ることはありません。作品の発見には pixiv が必須です。X は任意で、絵師自身の投稿を加えます。",
+    "skipped": "初回起動時にスキップしました。ここでサインインしても同じことができます。"
+  },
+  "theme": {
+    "title": "テーマ",
+    "intro": "プリセットを選ぶか自分で作る · アプリ全体に適用",
+    "apply": "適用",
+    "resetDefault": "デフォルトに戻す",
+    "applied": "テーマを適用しました",
+    "unsaved": "未適用の変更",
+    "presets": "プリセット",
+    "userPreset": "あなたのプリセット",
+    "removePreset": "プリセットを削除",
+    "custom": {
+      "title": "カスタムテーマ",
+      "hint": "選択中のプリセットを編集 · 残すには保存",
+      "import": "JSON を読み込む",
+      "importHint": "Curio から書き出したテーマを貼り付け",
+      "load": "読み込む",
+      "cancel": "キャンセル",
+      "badJson": "Curio のテーマではありません",
+      "name": "名前",
+      "namePlaceholder": "例: Midnight ember",
+      "basedOn": "ベース",
+      "primary": "プライマリ",
+      "accent": "アクセント",
+      "background": "背景",
+      "surface": "サーフェス",
+      "corners": "角",
+      "cornersOf": {
+        "cut": "カット",
+        "square": "四角",
+        "round": "丸"
+      },
+      "glow": "グロー",
+      "glowOf": {
+        "off": "オフ",
+        "soft": "ソフト",
+        "neon": "ネオン"
+      },
+      "scanlines": "スキャンライン",
+      "scanAria": "スキャンラインの強さ",
+      "export": "JSON を書き出す",
+      "copied": "クリップボードにコピーしました",
+      "save": "プリセットとして保存",
+      "saved": "プリセットとして保存しました"
+    },
+    "window": {
+      "title": "背景の不透明度",
+      "hint": "プレートの下でキャンバスがどう見えるか",
+      "transparent": "不透明度を有効にする",
+      "transparentHint": "単色の塗りの代わりに、ウィンドウ越しにデスクトップを透けさせます。",
+      "opacityAria": "ウィンドウの不透明度",
+      "blur": "背景をぼかす",
+      "blurHint": "ウィンドウの背後をすりガラスにします。大きなライブラリでは GPU を少し使います。",
+      "blurAria": "プレートのぼかし",
+      "grid": "グリッド下地",
+      "gridAria": "グリッドの不透明度",
+      "desktopOnly": "デスクトップのぼかしにはデスクトップアプリが必要です。ブラウザ版ではプレートだけをぼかします"
+    },
+    "preview": {
+      "title": "ライブプレビュー",
+      "meta": "{name} · {opacity}% · ぼかし {blur}",
+      "solid": "{name} · 単色",
+      "hint": "下書きのテーマを現在の不透明度とぼかしで、実際の作品の上に描画しています。",
+      "stat": "{n} 枚の画像"
+    },
+    "percent": "{n}%",
+    "px": "{n} px"
+  },
+  "storage": {
+    "title": "ストレージ",
+    "library": "ライブラリ",
+    "database": "データベース",
+    "schema": "スキーマ",
+    "schemaValue": "v{n}",
+    "layout": "レイアウト",
+    "layoutValue": "blobs/（コンテンツアドレス） · by-character/（ハードリンク） · thumbs/（WebP 400px）",
+    "hint": "データベースはライブラリフォルダーの中には置かれません — ライブラリを同期ドライブに移すのは安全ですが、データベースはそうではありません。"
+  },
+  "network": {
+    "title": "ネットワーク",
+    "save": "保存",
+    "resolver": "リゾルバー",
+    "resolverSystem": "system — OS の DNS",
+    "resolverDoh": "doh — DNS over HTTPS（1.1.1.1 / 8.8.8.8 に IP 指定）",
+    "resolverHint": "迂回の第 1 層: 名前解決を HTTPS で IP エンドポイントに対して行うため、ISP の DNS 乗っ取りを回避します。TLS は引き続き本来のホスト名を検証します。",
+    "proxy": "プロキシ",
+    "proxyPlaceholder": "socks5://127.0.0.1:1080",
+    "proxyHint": "第 2 層、SNI/DPI によるブロック向け。gallery-dl にも渡されます。証明書の検証は決して無効になりません — それを要求するプロキシは傍受者です。",
+    "pixivRate": "pixiv のレート",
+    "pixivRateAria": "pixiv のレート",
+    "rateValue": "{n} req/秒",
+    "rateHint": "意図的に控えめです — これは個人のアーカイブで、ミラーではありません。",
+    "xSearch": "X の検索深度",
+    "xSearchValue": "1 語あたり {n} 件",
+    "xSearchOff": "オフ — X は検索せず、連携済みの絵師をフォローするだけ",
+    "xSearchHint": "コマンドラインから始めたクロール用。アプリからのクロールは各キャラクターの「1 回あたりの投稿数」まで検索します。検索は X がレート制限と凍結の対象にするリクエストです。0 で X の検索を全面的にオフにします。"
+  },
+  "duplicates": {
+    "title": "重複",
+    "save": "保存",
+    "distance": "dHash 距離",
+    "distanceValue": "≤ {n}",
+    "distanceAria": "ハミングしきい値",
+    "hint": "sha256 の完全一致は常に重複排除されます。近似重複は同じ絵師の中でだけ比較します — 絵師をまたいだ一致は、再投稿より同じポーズを 2 人が描いた場合のほうがはるかに多いためです。6 は控えめで、10 を超えるとバリエーションまで統合し始めます。"
+  },
+  "about": {
+    "title": "情報",
+    "name": "Curio",
+    "version": "Curio {version} · ビルド {build} · クローラー v{crawler}",
+    "blurb": "個人のアーカイブ。すべてのレコードに出典を保持し、ここにあるものを再配布する意図はありません。",
+    "pixiv": "pixiv",
+    "repository": "リポジトリ"
+  },
+  "characters": {
+    "title": "新しいキャラクター",
+    "lead": "新しいキャラクターのフォームの初期値。各キャラクターは自分のフォームで変更できます。",
+    "identify": "すべての画像でキャラクター名を特定する",
+    "identifyHint": "2 つのタガーが、保持した各画像に写っているのが誰かを特定します — 知っているアニメ・ゲーム・漫画・小説のキャラクターなら何でも。確信のない画像は未特定とマークされ、何も削除されません。初回実行時に最大約 1.3 GB をダウンロードします。"
+  }
+}

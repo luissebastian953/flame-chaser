@@ -17,7 +17,8 @@
         "height": 840,
         "minWidth": 960,
         "label": "main",
-        "minHeight": 640
+        "minHeight": 640,
+        "transparent": true
       }
     ],
     "security": {
@@ -27,7 +28,8 @@
         "img-src": "'self' data: blob: http://127.0.0.1:*",
         "style-src": "'self' 'unsafe-inline'"
       }
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

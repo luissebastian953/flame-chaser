@@ -29,6 +29,11 @@ function job(state: Job['state'], over: Partial<Job> = {}): Job {
     created_at: '',
     started_at: null,
     finished_at: null,
+    lane: 'any',
+    worker: null,
+    position: 1,
+    paused: false,
+    req_per_min: 0,
     ...over,
   };
 }

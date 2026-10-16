@@ -149,7 +149,11 @@
 
 /* Scanline plate: faint horizontal lines over a surface. */
 @utility scan {
-  background-image: repeating-linear-gradient(to bottom, transparent 0 2px, oklch(1 0 0 / 0.025) 2px 3px);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 2px,
+    oklch(1 0 0 / var(--scan-alpha, 0.025)) 2px 3px
+  );
 }
 
 /* Mono data readout: tabular digits, no ligatures. */
@@ -182,6 +186,8 @@
   --plate-opacity: 1;
   --plate-blur: 0px;
   --grid-alpha: 0.035;
+  --scan-alpha: 0.025; /* Settings › Theme: scanline strength on plates */
+  --window-alpha: 1; /* < 1 only with a transparent window: the desktop shows through the canvas */
   /* selected-state halo shared by radio / switch (checkbox uses drop-shadow) */
   --glow:
     0 0 0 3px color-mix(in oklch, var(--color-ember) 22%, transparent),
@@ -195,8 +201,14 @@
     height: 100%;
     margin: 0;
   }
+  /* the window is transparent (tauri.conf.json): the canvas paints its own
+     alpha, so with --window-alpha 1 nothing changes and below it the desktop
+     shows through */
+  html {
+    background: transparent;
+  }
   body {
-    background-color: var(--color-bg);
+    background-color: color-mix(in srgb, var(--color-bg) calc(var(--window-alpha) * 100%), transparent);
     /* grid substrate */
     background-image:
       linear-gradient(oklch(1 0 0 / var(--grid-alpha)) 1px, transparent 1px),
@@ -285,6 +297,11 @@
     gap: 9px;
     padding: 0 8px 20px;
   }
+  .brand .mark {
+    flex: none;
+    color: var(--color-ember);
+    filter: drop-shadow(0 0 4px color-mix(in oklch, var(--color-ember) 45%, transparent));
+  }
   .brand b {
     font-size: 14px;
     letter-spacing: 0.18em;
@@ -345,6 +362,27 @@
   .nav a.router-link-active .ic,
   .nav button.router-link-active .ic {
     color: var(--color-ember);
+  }
+  /* a worker is running: the ember dot breathes beside the count */
+  .nav .ct .live {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 7px;
+    background: var(--color-ember);
+    box-shadow: 0 0 6px var(--color-ember);
+    animation: breathe 1.6s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    50% {
+      opacity: 0.35;
+      box-shadow: 0 0 2px var(--color-ember);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nav .ct .live {
+      animation: none;
+    }
   }
   .nav .ct {
     margin-left: auto;
@@ -570,17 +608,44 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: repeating-linear-gradient(to bottom, transparent 0 2px, oklch(1 0 0 / 0.025) 2px 3px);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0 2px,
+      oklch(1 0 0 / var(--scan-alpha)) 2px 3px
+    );
   }
   .no-scan .panel.scan::after {
     display: none;
   }
+  /* Settings › Theme "round": the one departure from the square build */
+  .corners-round .panel:not(.poly) {
+    border-radius: 8px;
+    clip-path: none;
+  }
+  .corners-round .btn,
+  .corners-round .chip {
+    clip-path: none;
+    border-radius: 5px;
+  }
   .phead {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 9px;
     padding: 10px 13px;
     border-bottom: 1px solid var(--color-line-soft);
+  }
+  /* the ember tick at the card's edge, as tall as the title's type */
+  .phead::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 3px;
+    height: 11px;
+    transform: translateY(-50%);
+    background: var(--color-ember);
+    box-shadow: 0 0 8px oklch(0.74 0.205 332 / 0.6);
   }
   .ptitle {
     font-family: var(--font-mono);
@@ -589,11 +654,6 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--color-dim);
-  }
-  .ptitle::before {
-    content: '//';
-    color: var(--color-ember);
-    margin-right: 6px;
   }
   .kv {
     font-size: 11.5px;

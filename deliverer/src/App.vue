@@ -34,21 +34,7 @@ onMounted(async () => {
   <div class="layout">
     <aside class="rail">
       <div class="brand">
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="var(--ember)"
-          stroke-width="1.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M4.5 19.5h15" />
-          <path d="M7 19.5v-6.6a5 5 0 0 1 10 0v6.6" />
-          <circle cx="12" cy="5.4" r="1.3" />
-          <circle cx="12" cy="15.2" r="2.5" fill="var(--ember)" stroke="none" />
-        </svg>
+        <BrandMark :size="22" class="mark" />
         <div>
           <b>{{ $t('app.brand.name') }}</b>
           <span>{{ $t('app.brand.tagline') }}</span>
@@ -63,7 +49,10 @@ onMounted(async () => {
         <RouterLink to="/pipeline">
           <Icon name="pipeline" class="ic" />
           {{ $t('app.nav.pipeline') }}
-          <span class="ct">{{ jobs.queued.length + (jobs.running ? 1 : 0) || '' }}</span>
+          <span class="ct">
+            <i v-if="jobs.running.length" class="live" aria-hidden="true" />
+            {{ jobs.queued.length + jobs.running.length || '' }}
+          </span>
         </RouterLink>
         <RouterLink to="/gallery">
           <Icon name="gallery" class="ic" />
