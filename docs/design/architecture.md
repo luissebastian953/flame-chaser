@@ -327,18 +327,44 @@ decision in the gallery.
 
 ## 4. Job model
 
-One job queue, **one worker thread**. Not a pool — the constraint is the remote
-rate limit, not local CPU, and two workers hitting pixiv concurrently just
-doubles the ban risk while halving the per-worker budget. Media downloads within
-a job may use a small bounded pool (default 3) because they hit a different host
-with its own budget.
+One job queue, **one worker thread per source** — `pixiv` and `twitter` —
+never two on the same source. Not a pool: the constraint is the remote rate
+limit, not local CPU, and two workers hitting pixiv concurrently just doubles
+the ban risk while halving the per-worker budget. The two sources are different
+hosts with separate budgets, so each gets its own lane (changed 2026-10-14 by
+the owner, from one worker for everything): the pixiv worker owns
+www.pixiv.net and i.pximg.net, the X worker owns gallery-dl and pbs.twimg.com,
+and a worker downloads only its own source's media. Each site still sees
+exactly one request stream. A job's `lane` says which worker may take it;
+`any` (tags, labels — no remote request) goes to whichever is free, claimed
+with a conditional UPDATE so the two never take the same job.
 
 ```
-job = { id, type, params, state, progress, counters, started_at, finished_at, error }
+job = { id, type, params, state, stage, done, total, counters, error,
+        lane, worker, position, paused, req_per_min,
+        created_at, started_at, finished_at }
 
-type   : poll | link | media | tags | label | backfill | reindex
-state  : queued → running → (succeeded | failed | cancelled)
+type   : poll | timelines | link | media | tags | label
+state  : queued → running → (succeeded | failed | cancelled | interrupted)
+lane   : pixiv | twitter | any      worker: the lane that ran it
 ```
+
+A crawl submitted from the UI is **planned** into per-source jobs
+(`coreflame/handlers.plan`): per character a pixiv `poll` (discover → tags →
+link → download its pending pixiv media) and an X `poll` (search to the
+character's posts per run, downloading as it goes), then one X `timelines`
+job for the linked artists' feeds. `media` without a source becomes one per
+source. The CLI's synchronous `coreflame jobs run poll` still runs the whole
+crawl as one job, because it runs one job at a time in its own thread.
+
+The queue is ordered by `position` (drag to reorder; **Run now** moves a job
+to the front — it starts when its lane's worker is free, a running job is
+never pre-empted), then `created_at`. **Pause queue** stops workers taking
+new jobs (in memory; a restarted daemon starts running). **Pause worker**
+holds its running job at the next `check()` — the same record boundary a
+cancel uses — keeping its lane; the flag is a column, so another process's
+resume works too. `counters` carry running tallies mid-run (posts kept, new,
+stored, dupes, listed, gated), merged under the handler's final counts.
 
 Jobs are persisted. A job `running` at startup with no live thread is marked
 `interrupted` on boot rather than silently forgotten — that row is how you find
@@ -638,9 +664,19 @@ log with tracebacks.
 
 ### 5.2 Worker pipeline — *live*
 
-Subscribes to `GET /api/events` (SSE). Shows the queue, the running job's stage
-(`discover → detail → link → download`), per-source counters, a rolling log, and
-the rate-limit budget remaining. Cancel button per job.
+Two states. **List** (`/pipeline`): one card per busy worker — avatar (the
+character's cover) ringed in the worker's identity colour (1 ember, 2 moss,
+3 cyan, 4 amber: per worker, not per status), source chips, a stage track,
+the current line and bar, posts this run against the X target (or new posts
+for pixiv, which walks to its watermark), req/min — and a dashed idle slot per
+free worker; below it the queue (drag to reorder, Run now) and today's
+finished jobs; on the right the shared rate budget, the session's totals and
+the activity feed across workers. **Detail** (`/pipeline/<lane>`, Open or
+click a card): that worker's job — stages, the visited/new split (`gated` ids
+cost no request), progress with eta, counters and its own log; Pause worker
+and Cancel job act on it alone. The ember particle field renders only while a
+worker runs (`data-pipeline-running` on the screen root). Both subscribe to
+`GET /api/events` (SSE) and poll `/jobs` + `/pipeline` every 3 s for req/min.
 
 SSE over WebSocket deliberately: this stream is one-directional, EventSource
 reconnects on its own, and cancellation is a normal POST. A WebSocket here buys
@@ -679,12 +715,22 @@ Virtualized grid of that character's images. **Keyset pagination, not offset** �
 duplicates and skips rows when a crawl inserts newer posts while the user is
 scrolling, which on this app happens constantly.
 
+The header carries the name, "N images · N posts", an All / pixiv / X source
+filter, a Newest / Oldest order (both start the grid over; neither is
+remembered across galleries) and Delete character (a second click within 4 s
+confirms). The header stays put and the filter block — Observed tags, then
+the Show / Who / Characters rows — is sticky at the top of the scrolling
+grid; once the grid scrolls under them both turn into a frosted plate, the
+block's fading toward the images so tiles slide under it.
+
 Clicking a tile opens an aside sliding from the right (`transform: translateX`,
 `transition` 200ms, `prefers-reduced-motion` respected) showing: full image,
 title, artist + link, source badge, posted date, tags, dimensions, file size,
 sha256, **the other source's copy if dedupe linked one**, and an "open source
-post" button. The grid stays mounted underneath — the aside is a detail panel,
-not a route change, so browser-back closes it via a history entry.
+post" button. The aside **overlays** the grid below the header over a 15% black
+backdrop — the grid never reflows, so the tile stays where it was clicked, ringed
+in ember. Backdrop click, Esc or × closes it. The grid stays mounted underneath
+— the aside is a detail panel, not a route change.
 
 The cross-source link is the payoff of the phash work and should be visible:
 "also posted on X · 2026-08-21" with a link.
@@ -706,7 +752,8 @@ Base `http://127.0.0.1:{port}/api`. All requests carry
 ### Config & status
 
 ```
-GET    /health                       → {ok, version, library_root, db_path}
+GET    /health                       → {ok, version, library_root, db_path,
+                                        library_free_bytes}  free space on the library's disk
 POST   /heartbeat                    ← {}  every 5s from the shell; no beat for
                                         30s (monotonic, sleep-aware) → daemon exits
 GET    /config                       → Config (secrets redacted to booleans)
@@ -744,8 +791,8 @@ GET    /watches                      → [{slug,label,pixiv_tags,match_terms,
                                          target:100,       -- posts per run, 1..1000 (§10.16)
                                          kind_filter:true, -- image-kind filter (§10.15)
                                          gender:any|female|male, gender_mode:full|partial (§10.18)
-                                         post_count,image_count,last_polled_at,
-                                         cover_sha}]
+                                         post_count,artist_count,image_count,
+                                         last_polled_at,cover_sha}]
 POST   /watches                      ← {slug,label,pixiv_tags,match_terms,...}
 PATCH  /watches/{slug}
 DELETE /watches/{slug}?purge=false   purge=true also deletes its blobs
@@ -780,12 +827,21 @@ POST   /names                        ← {queries:[≤8]}   display name first, 
 
 ```
 POST   /jobs                         ← {type, params:{watches?:[slug], limit?,
-                                               target?}}   poll: overrides every character's
-                                               own posts per run (Watch.target, §10.16)
-                                     → 202 {job_id}
-GET    /jobs?state=&limit=50         → [job]
+                                               target?, source?}}   poll: overrides every
+                                               character's own posts per run (Watch.target,
+                                               §10.16); planned into per-source jobs (§4)
+                                     → 202 {job_id, job_ids}   400 nothing_to_run
+GET    /jobs?state=&limit=50         → [job]   with lane, worker, position, paused, req_per_min
 GET    /jobs/{id}                    → job + last 200 log lines
 POST   /jobs/{id}/cancel             → 202
+POST   /jobs/{id}/pause              ← {paused}  → 202 · 409 not_running
+POST   /jobs/{id}/run-now            → 202 · 409 not_queued  (front of the queue)
+POST   /jobs/reorder                 ← {ids}  → {order}  named first, the rest keep their order
+GET    /pipeline                     → {paused, workers:[{lane, job_id}],
+                                        budgets:[{key,label,rate|null,per_min}], req_per_min}
+                                        what each rate budget sent in the last minute
+                                        (coreflame/http.py METER); rate null = gallery-dl
+POST   /pipeline/pause               ← {paused}  → {paused}   the queue as a whole
 GET    /events                       → text/event-stream
 ```
 
@@ -810,8 +866,8 @@ buffer so a reconnect during a long crawl does not lose the pipeline view.
 
 ```
 GET /gallery                         → [{slug,label,cover_sha,image_count,
-                                         post_count,latest_posted_at}]
-GET /gallery/{slug}?cursor=&limit=100&source=&sort=posted|added&r18=exclude
+                                         post_count,artist_count,latest_posted_at}]
+GET /gallery/{slug}?cursor=&limit=100&source=pixiv|twitter&order=newest|oldest&r18=exclude
                    &kinds=illustration,unlabeled       (absent = every kind; §10.15)
                    &ident=identified,unidentified,pending   (absent = all; §10.19)
                    &character=raiden_mei               (images naming that character)
@@ -822,6 +878,8 @@ GET /gallery/{slug}?cursor=&limit=100&source=&sort=posted|added&r18=exclude
                                         next_cursor}
                                        400 bad_kind on an unknown or empty kinds=,
                                        400 bad_ident on an unknown or empty ident=
+                                       400 bad_order on anything but newest|oldest
+                                       (a cursor only continues the order it came from)
                                        (the UI always sends the kept kinds + unlabeled;
                                         `character` replaces `ident` when chosen)
 GET /gallery/{slug}/kinds?r18=exclude → {counts:{illustration,photo,render,

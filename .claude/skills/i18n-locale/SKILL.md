@@ -78,8 +78,8 @@ present — repeat the form). Leave data alone. Partial files are fine.
 ## Adding a language
 
 Planned order and codes (`LOCALES` in `src/i18n.ts`): `ja` 日本語 first —
-the source material is Japanese — then `id` Bahasa Indonesia, `zh` 中文,
-`fil` Filipino. Steps:
+the source material is Japanese; shipped 2026-10-16, complete — then `id`
+Bahasa Indonesia, `zh` 中文, `fil` Filipino. Steps:
 
 1. `cp -r src/locales/en src/locales/<code>` and translate file by file.
 2. Flip `ready: true` on that entry in `LOCALES` (`native` + `label`
@@ -87,9 +87,12 @@ the source material is Japanese — then `id` Bahasa Indonesia, `zh` 中文,
    from the array). Until then the language shows as "coming soon" in
    Settings › Language, and `coverage()` reports its key count there —
    partial folders are visible progress, not hidden.
-3. `src/i18n.test.ts` asserts which locales are `ready` (`['en']` today):
-   update that expectation; the test also loads every `en` namespace and
-   checks interpolation, so keep `en` complete.
+3. `src/i18n.test.ts` asserts which locales are `ready` (`['en', 'ja']`
+   today) and that `ja` has 0 pending keys: update those expectations, and
+   add the same full-coverage assertion for the new locale once it is
+   complete. `LanguagePanel.test.ts` checks row order and which rows are
+   disabled. The test also loads every `en` namespace and checks
+   interpolation, so keep `en` complete.
 4. The stored choice (`curio.locale`) is a code or `'system'` (default =
    follow `navigator.language`); `setLocale()` resolves it and falls back
    to `en` while the wanted locale is not `ready`, keeping the wish

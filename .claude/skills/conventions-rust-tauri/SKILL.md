@@ -31,7 +31,9 @@ commands. Policy lives in Python, UI in Vue; Rust only bridges.
 
 `capabilities/default.json` applies to `"windows": ["main"]` only:
 `core:default`, `dialog:allow-open`, `opener:allow-open-url`,
-`updater:default`, `process:allow-restart`. The `source-login` window
+`updater:default`, `process:allow-restart`, `core:window:allow-set-effects`
+(Settings › Theme's desktop blur; the window is `transparent: true` with
+`macOSPrivateApi` for it). The `source-login` window
 (`auth.rs`, label `LABEL`) loads remote content (pixiv / x.com login pages)
 and MUST NOT appear in any capability, so that content has no IPC. Do not
 "fix" a missing-permission error by widening `windows`.

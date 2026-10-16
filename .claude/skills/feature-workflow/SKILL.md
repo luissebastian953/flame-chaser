@@ -20,7 +20,7 @@ Do the steps in this order; each one makes the next mechanical.
   that are load-bearing")? Load-bearing = anything about: the visited gate
   and its four states, pixiv-discovers/X-follows, two-level dedupe scope,
   monotonic watermarks, `Referer`, `verify=False`, loopback-only media,
-  thumbnails at ingest, db location, one worker thread, retry policy,
+  thumbnails at ingest, db location, one worker thread per source, retry policy,
   handshake-over-stdout, `bundle.resources`, capabilities for remote windows.
   If yes: say so, explain the trade-off, and stop for a decision. Do not
   quietly change it.

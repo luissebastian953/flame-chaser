@@ -100,8 +100,10 @@ sequenceDiagram
 
 ## c. Crawl pipeline
 
-One `poll` job runs four stages in one worker thread
-(`coreflame/handlers.py` → `pipeline.py`). The decisions that keep it cheap
+A crawl is planned into one `poll` job per source per character plus an X
+`timelines` job (`coreflame/handlers.plan`); the pixiv job runs the four
+stages below on the pixiv worker, the X job searches and downloads on the X
+worker (`coreflame/handlers.py` → `pipeline.py`). The decisions that keep it cheap
 are all in the discover stage of `sources/pixiv.py`: the listing page already
 carries the id, so the watermark and the visited set (`seen.py`) are consulted
 *before* a detail request is spent. `seen_posts` has four states and they are
@@ -155,7 +157,7 @@ flowchart TD
     d6 --> d7["mark stored"]
     d7 --> d8["by-character/&lt;slug&gt;/ hardlink<br/>library.py LibraryView.place"]
   end
-  job["poll job · one worker thread"] --> disc
+  job["pixiv poll job · the pixiv worker"] --> disc
   adv --> tags
   tags --> lnk
   lnk --> tw
@@ -173,9 +175,12 @@ known as the listing unfolds; link, twitter and download know their counts.
 
 ## d. Job model
 
-`coreflame/jobs.py`. Jobs are rows in the `jobs` table with six states. A
-single worker thread takes the oldest `queued` row; the constraint is the
-remote rate limit, so there is no pool. Cancellation is cooperative: the
+`coreflame/jobs.py`. Jobs are rows in the `jobs` table with six states. One
+worker thread per source lane (`pixiv`, `twitter`) takes the first `queued`
+row of its lane (or an `any` job) by `position`, claiming it with a
+conditional UPDATE; the constraint is the remote rate limit, so there is no
+pool and never two workers on one source. A paused job (`pause_requested`)
+holds at its next `check()`, keeping its lane. Cancellation is cooperative: the
 `cancel_requested` column is read by `ctx.check()` between records and at every
 `ctx.stage()`, never inside a write, so a cancel can only land between
 complete records — and because it is a column, a cancel from another process

@@ -71,7 +71,8 @@ validation's failure, not extraction's. Re-normalise by re-parsing
   four states (`indexed skipped gone failed`) are four retry policies.
 - Every write is an idempotent upsert on a natural key; blobs on disk, hash
   in SQLite, never bytes in SQLite.
-- Jobs: one worker thread; `ctx.check()` between records and at each
+- Jobs: one worker thread per source lane, never two on one source;
+  `ctx.check()` between records and at each
   `ctx.stage()`, never inside a write; `ctx.progress(done, total=None)` when
   there is no honest denominator. A job `running` at boot becomes `interrupted`.
 

@@ -67,9 +67,13 @@ add **X search & match terms** (each term is searched on X, images only, and
 also filters the timelines of artists pixiv linked), tick which of **pixiv** /
 **X** this character is crawled from, then **Save & run now**.
 
-**Pipeline** shows the single worker: current stage, progress where an honest
-denominator exists, the live log, queued jobs, and a **Cancel** button.
-Cancellation is cooperative and lands between records, never mid-write.
+**Pipeline** shows one card per worker — one for pixiv, one for X, so each
+site sees a single stream of requests — with its stage, posts this run and
+requests per minute; **Open** shows that worker's stages, counters and log.
+Below: the queue (drag to reorder, **Run now**) and today's finished jobs;
+beside: the rate budget, the session's totals and the activity feed. Pause
+the queue or one worker; cancel a job or everything. Cancellation is
+cooperative and lands between records, never mid-write.
 
 **Gallery** lists characters with cover and counts; a character page is an
 infinite grid with a detail aside (source, artist, bookmarks, the same image on

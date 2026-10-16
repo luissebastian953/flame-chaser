@@ -10,7 +10,7 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
 │   ├── config.py     Config dataclass; ~/.reaver (REAVER_HOME); save() vs save_secrets() (0600)
 │   ├── models.py     IllustRecord / MediaRef / Tag / Watch — pydantic, the normalization boundary
 │   ├── migrations.py forward-only schema migrations (backup before apply, min_app_version)
-│   ├── http.py       SourceClient: token buckets (global + per endpoint), 429, retries
+│   ├── http.py       SourceClient: token buckets (global + per endpoint), 429, retries; METER (req/min per budget and job)
 │   ├── net.py        DoH resolver + the blocking diagnostic (`coreflame net <host>`)
 │   ├── db.py         SQLite Store; every write an idempotent upsert; raw retention, quarantine
 │   ├── seen.py       the visited gate (four states)
@@ -24,8 +24,8 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
 │   ├── people.py     who is in a picture (WD tagger v3): per-character gender filter, full/partial
 │   ├── identify.py   the character's name (WD v3 + Camie v2 vouch for each other) or unidentified; labels only
 │   ├── library.py    hardlink view, gc, import
-│   ├── jobs.py       queue, single worker thread, JobContext (check/stage/progress), interrupted-at-boot
-│   ├── handlers.py   job type -> pipeline function; adapters built per job
+│   ├── jobs.py       queue, one worker thread per source lane, JobContext (check/stage/progress/tally), pause, interrupted-at-boot
+│   ├── handlers.py   job type -> pipeline function; adapters built per job; plan() splits a crawl per source
 │   ├── pipeline.py   poll → link → poll_twitter / search_to_target → download; drift notes
 │   ├── cli.py        watch / watches / poll / link / media / status / doctor / tags / suggest / jobs / net
 │   └── sources/      one file per source, behind the Adapter protocol
@@ -46,7 +46,7 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
     ├── test_normalize.py raw → extract → validate → quarantine; re-normalize; drift
     ├── test_seen.py      the visited gate
     ├── test_tags.py      observed-tag ranking
-    ├── test_jobs.py      make_runner(); queue, cancel, interrupted
+    ├── test_jobs.py      make_runner(); queue, cancel, interrupted, lanes, pause, order, plan, meter
     ├── test_kinds.py     score mapping, model verify, reject at ingest, backlog discard (fake labeler)
     ├── test_target.py    X search to N kept posts: exact target, catch-up, history end, 10× stop (DeepX)
     ├── test_names.py     Danbooru/Wikidata names: resolve, merge, entity check, cache (fixtures)
@@ -66,10 +66,11 @@ adding-an-endpoint checklist).
   the job it was on is marked failed, the connection reopened, and the loop
   backs off (2 s → 30 s). A dead worker leaves every later job queued while
   the API still says "idle".
-- **One worker thread, not a pool.** The constraint is the remote rate limit,
-  not local CPU. Two workers on pixiv doubles the ban risk and halves each
-  one's budget. Media downloads may use a small bounded pool (3) because they
-  hit a different host.
+- **One worker thread per source, never two on one source.** The constraint
+  is the remote rate limit, not local CPU. Two workers on pixiv doubles the ban
+  risk and halves each one's budget; pixiv and X are different hosts, so each
+  has a lane (`jobs.LANES`) and a worker downloads only its own source's
+  media. An `any` job (no remote request) is claimed by whichever is free.
 - **Retry 429 and 5xx. Never retry other 4xx.** That is how an IP ban happens.
 - **Cancellation is cooperative** — `ctx.check()` between records and at every
   `ctx.stage()`; never inside a write. `upsert_post` is one transaction, so a
