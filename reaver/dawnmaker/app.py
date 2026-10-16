@@ -7,6 +7,7 @@ sync endpoints in a threadpool). Every error is `{"error": {code, message}}`.
 from __future__ import annotations
 
 import base64
+import shutil
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -16,10 +17,11 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from coreflame import __version__, identify, kinds, people, tags
+from coreflame import __version__, handlers, identify, kinds, people, tags
 from coreflame.blobs import BlobStore
 from coreflame.config import Config
 from coreflame.db import Store
+from coreflame.http import METER
 from coreflame.jobs import JobRunner
 from coreflame.models import Watch
 from coreflame.thumbs import ThumbStore
@@ -52,6 +54,16 @@ class Heartbeat:
             self.last = time.monotonic() - self.timeout / 2
             return False
         return gap > self.timeout
+
+
+def _free_bytes(path: Path) -> int:
+    """Free space on the disk holding the library. The blob folder is made on
+    first download, so before that the nearest existing parent answers."""
+    while not path.exists():
+        if path.parent == path:
+            return 0
+        path = path.parent
+    return shutil.disk_usage(path).free
 
 
 def _cursor_enc(posted_at: str, external_id: str) -> str:
@@ -131,6 +143,14 @@ class JobIn(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
+class PauseIn(BaseModel):
+    paused: bool
+
+
+class ReorderIn(BaseModel):
+    ids: list[str]
+
+
 class TagAction(BaseModel):
     tag: str
     action: str  # watch | ignore
@@ -180,6 +200,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             "version": __version__,
             "library_root": str(state.cfg.blob_root.parent),
             "db_path": str(state.cfg.db_path),
+            "library_free_bytes": _free_bytes(state.cfg.blob_root),
             "schema_version": s.stats()["schema_version"],
             "idle": JobRunner.idle(s),
             "last_event_id": state.hub.last_id,
@@ -345,10 +366,17 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
                             p.posted_at DESC, p.external_id DESC, m.idx LIMIT 1""",
                 (w.slug,),
             ).fetchone()
+            artists = s.conn.execute(
+                """SELECT count(DISTINCT p.source || ':' || p.artist_id) FROM post_watches pw
+                   JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
+                   WHERE pw.slug=? AND p.state='live'""",
+                (w.slug,),
+            ).fetchone()[0]
             out.append(
                 {
                     **w.model_dump(),
                     "post_count": r["n"],
+                    "artist_count": artists,
                     "latest_posted_at": r["latest"],
                     "cover_sha": cover["sha256"] if cover else None,
                 }
@@ -413,27 +441,70 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
     def submit_job(body: JobIn, s: Store = Depends(store)) -> dict:
         if body.type not in state.runner.handlers:
             raise HTTPException(400, {"code": "bad_type", "message": body.type})
-        jid = JobRunner.submit(s, body.type, body.params)
+        # a crawl becomes one job per source per character (coreflame/handlers.plan)
+        ids = handlers.submit(s, body.type, body.params)
+        if not ids:
+            raise HTTPException(400, {"code": "nothing_to_run", "message": "no character matches"})
         state.runner.kick()
-        return {"job_id": jid}
+        return {"job_id": ids[0], "job_ids": ids}
+
+    def job_out(j: Any, rates: dict[str, int]) -> dict:
+        return {**j.__dict__, "req_per_min": rates.get(j.id, 0)}
 
     @app.get("/api/jobs")
     def list_jobs(
         state_: str | None = Query(None, alias="state"), limit: int = 50, s: Store = Depends(store)
     ) -> list[dict]:
-        return [j.__dict__ for j in JobRunner.list_jobs(s, state_, limit)]
+        rates = METER.per_job()
+        return [job_out(j, rates) for j in JobRunner.list_jobs(s, state_, limit)]
+
+    @app.get("/api/pipeline")
+    def pipeline_state() -> dict:
+        """The workers (one per source lane), whether the queue is paused, and the
+        rate budgets with what each sent in the last minute."""
+        budgets = METER.snapshot()
+        return {
+            "paused": state.runner.held,
+            "workers": state.runner.workers(),
+            "budgets": budgets,
+            "req_per_min": sum(b["per_min"] for b in budgets),
+        }
+
+    @app.post("/api/pipeline/pause")
+    def pause_queue(body: PauseIn) -> dict:
+        state.runner.hold(body.paused)
+        return {"paused": state.runner.held}
+
+    @app.post("/api/jobs/reorder")
+    def reorder_jobs(body: ReorderIn, s: Store = Depends(store)) -> dict:
+        return {"order": JobRunner.reorder(s, body.ids)}
 
     @app.get("/api/jobs/{jid}")
     def get_job(jid: str, s: Store = Depends(store)) -> dict:
         j = JobRunner.get(s, jid)
         if j is None:
             raise nf("no_job", jid)
-        return {**j.__dict__, "log": JobRunner.tail(s, jid, 200)}
+        return {**job_out(j, METER.per_job()), "log": JobRunner.tail(s, jid, 200)}
 
     @app.post("/api/jobs/{jid}/cancel", status_code=202)
     def cancel_job(jid: str, s: Store = Depends(store)) -> dict:
         if not state.runner.cancel(s, jid):
             raise nf("no_active_job", jid)
+        return {"ok": True}
+
+    @app.post("/api/jobs/{jid}/pause", status_code=202)
+    def pause_job(jid: str, body: PauseIn, s: Store = Depends(store)) -> dict:
+        """Hold a running job at its next record boundary (it keeps its worker)."""
+        if not state.runner.pause(s, jid, body.paused):
+            raise HTTPException(409, {"code": "not_running", "message": jid})
+        return {"paused": body.paused}
+
+    @app.post("/api/jobs/{jid}/run-now", status_code=202)
+    def run_job_now(jid: str, s: Store = Depends(store)) -> dict:
+        """To the front of the queue; it starts as soon as its worker is free."""
+        if not JobRunner.run_now(s, jid):
+            raise HTTPException(409, {"code": "not_queued", "message": jid})
+        state.runner.kick()
         return {"ok": True}
 
     @app.get("/api/events")
@@ -463,13 +534,19 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         kinds_: str | None = Query(None, alias="kinds"),
         ident: str | None = None,
         character: str | None = None,
+        order: str = "newest",
         s: Store = Depends(store),
     ) -> dict:
         """Keyset on (posted_at, external_id) -- offset pagination duplicates and
         skips rows when a crawl inserts while the user scrolls. `kinds` is a
         comma list of image kinds to show (plus `unlabeled`); absent = all.
         `ident` is a comma list of identified / unidentified / pending (not
-        identified yet); `character` keeps the images naming that character."""
+        identified yet); `character` keeps the images naming that character.
+        `order` is newest (default) or oldest first; a cursor only continues
+        the order it came from."""
+        if order not in ("newest", "oldest"):
+            raise HTTPException(400, {"code": "bad_order", "message": order})
+        cmp, direction = ("<", "DESC") if order == "newest" else (">", "ASC")
         where = ["pw.slug=?", "m.state='stored'", "p.state='live'"]
         args: list[Any] = [identify.IDENTIFIER_ID, slug]  # the JOIN's ? comes first
         if source:
@@ -501,7 +578,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
                 c_posted, c_id = _cursor_dec(cursor)
             except (ValueError, UnicodeDecodeError):
                 raise HTTPException(400, {"code": "bad_cursor", "message": cursor}) from None
-            where.append("(p.posted_at < ? OR (p.posted_at = ? AND p.external_id < ?))")
+            where.append(f"(p.posted_at {cmp} ? OR (p.posted_at = ? AND p.external_id {cmp} ?))")
             args += [c_posted, c_posted, c_id]
         rows = s.conn.execute(
             f"""SELECT m.sha256, m.source, m.external_id, m.idx, m.width, m.height,
@@ -513,7 +590,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
                 LEFT JOIN image_kinds k ON k.sha256=m.sha256
                 LEFT JOIN image_identity i ON i.sha256=m.sha256 AND i.model=?
                 WHERE {" AND ".join(where)}
-                ORDER BY p.posted_at DESC, p.external_id DESC, m.idx
+                ORDER BY p.posted_at {direction}, p.external_id {direction}, m.idx
                 LIMIT ?""",
             (*args, limit + 1),
         ).fetchall()

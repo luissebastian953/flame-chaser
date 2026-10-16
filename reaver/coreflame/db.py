@@ -278,7 +278,13 @@ class Store:
         return cur.rowcount > 0
 
     # --------------------------------------------------------------- media
-    def pending_media(self, limit: int = 200) -> list[sqlite3.Row]:
+    def pending_media(self, limit: int = 200, source: str | None = None) -> list[sqlite3.Row]:
+        """`source` keeps a worker to its own hosts: the X lane never fetches
+        i.pximg.net, the pixiv lane never pbs.twimg.com."""
+        if source:
+            return self.conn.execute(
+                "SELECT * FROM media WHERE state='pending' AND source=? LIMIT ?", (source, limit)
+            ).fetchall()
         return self.conn.execute(
             "SELECT * FROM media WHERE state='pending' LIMIT ?", (limit,)
         ).fetchall()

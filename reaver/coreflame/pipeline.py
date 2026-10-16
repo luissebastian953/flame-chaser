@@ -77,6 +77,7 @@ class _NullCtx:
     def progress(self, done: int, total: int | None = None, **data: Any) -> None: ...
     def item(self, message: str, **data: Any) -> None: ...
     def log(self, message: str, level: str = "info", **data: Any) -> None: ...
+    def tally(self, key: str, n: int = 1) -> None: ...
 
 
 def _ctx(ctx: JobContext | None) -> JobContext:
@@ -136,6 +137,7 @@ def poll_pixiv(
                 is_new = store.upsert_post(rec, w.slug)
                 if is_new:
                     st.new_posts += 1
+                    c.tally("posts")
                 else:
                     st.seen_posts += 1
                 c.item(
@@ -464,7 +466,7 @@ def _drain_downloads(
     """Download (and judge) everything pending now. Returns the labeler,
     tagger and identifier, each None once it has proved unusable, so the
     caller stops handing it over."""
-    while store.pending_media(1):
+    while store.pending_media(1, source="twitter"):
         got = download_pending(
             store,
             blobs,
@@ -476,6 +478,7 @@ def _drain_downloads(
             announce=False,
             tagger=tagger,
             identifier=identifier,
+            source="twitter",  # the X worker never touches pixiv's hosts
         )
         st.merge(got)
         if LABELS_OFF in got.notes:
@@ -567,6 +570,7 @@ def search_to_target(
                     if _kept(store, rec.external_id):
                         kept += 1
                         new_here += 1
+                        c.tally("posts")
                         c.progress(kept, target)
                 _commit(store, walk, direction, int(rec.external_id))
             else:  # the whole page was processed
@@ -602,18 +606,20 @@ def download_pending(
     announce: bool = True,
     tagger: Tags | None = None,
     identifier: Identifies | None = None,
+    source: str | None = None,
 ) -> RunStats:
     """`announce=False` when a caller interleaves downloads with its own stage
     (search_to_target): no stage change, and its progress bar is left alone.
     `identifier` names the character in every image that is stored; it never
-    rejects one."""
+    rejects one. `source` downloads only that source's media -- a worker stays
+    on its own hosts (coreflame/jobs.py lanes)."""
     st = RunStats()
     c = _ctx(ctx)
     thumbs = thumbs or ThumbStore(blobs.root.parent / "thumbs")
     # by-character/<slug>/ is a derived view over blobs/: hardlinks where the
     # filesystem allows, else symlinks, else copies. Rebuildable, never truth.
     view = LibraryView(blobs.root.parent)
-    rows = store.pending_media(batch)
+    rows = store.pending_media(batch, source)
     if announce:
         c.stage("download", total=len(rows))  # pending count IS an honest total
     for i, row in enumerate(rows):

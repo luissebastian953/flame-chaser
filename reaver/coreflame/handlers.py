@@ -9,9 +9,11 @@ from typing import Any
 
 from .blobs import BlobStore
 from .config import Config
+from .db import Store
 from .identify import Identifier, Identifies, make_identifier
-from .jobs import Handler, JobContext, JobRunner
+from .jobs import LANES, Handler, JobContext, JobRunner
 from .kinds import Labeler, Labels, make_labeler
+from .models import Watch
 from .people import Tagger, Tags, make_tagger
 from .pipeline import (
     RunStats,
@@ -105,11 +107,82 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
     """`make_adapters` is called per job so tests can inject fakes and the
     daemon can rebuild on config change."""
 
+    def _download(ctx: JobContext, a: Adapters, source: str | None) -> RunStats:
+        return download_pending(
+            ctx.store,
+            a.blobs,
+            a.pixiv,
+            a.twitter,
+            threshold=a.cfg.dupe_threshold,
+            ctx=ctx,
+            labeler=a.labels_for(ctx),
+            tagger=a.tags_for(ctx),
+            identifier=a.identify_for(ctx),
+            source=source,
+        )
+
+    def _x_search(ctx: JobContext, a: Adapters, watches: list[Watch]) -> RunStats:
+        """Search each character until its posts-per-run are KEPT (params.target
+        overrides every character's own)."""
+        st = RunStats()
+        override = ctx.job.params.get("target")
+        every_x = [w for w in ctx.store.watches() if w.wants("twitter")]
+        for w in [w for w in watches if w.wants("twitter")]:
+            target = max(1, min(int(override or w.target), TARGET_MAX))
+            st.merge(
+                search_to_target(
+                    ctx.store,
+                    a.twitter,
+                    a.blobs,
+                    a.pixiv,
+                    w,
+                    every_x,
+                    target,
+                    labeler=a.labels_for(ctx),
+                    threshold=a.cfg.dupe_threshold,
+                    ctx=ctx,
+                    tagger=a.tags_for(ctx),
+                    identifier=a.identify_for(ctx),
+                )
+            )
+        return st
+
+    def _x_ready(ctx: JobContext, a: Adapters) -> bool:
+        if not a.twitter.available():
+            ctx.log(
+                f"X: skipped -- {a.twitter.binary} not found on PATH (pip install gallery-dl)",
+                level="warning",
+            )
+            return False
+        return True
+
     def poll(ctx: JobContext) -> dict[str, Any]:
+        """`params.source` = pixiv | twitter: one source's half of a crawl, on that
+        source's worker (plan_poll makes these). Without it: the whole crawl in one
+        job -- the CLI's synchronous run, never two at once."""
         a = make_adapters(ctx)
         try:
+            source = ctx.job.params.get("source")
             slugs = ctx.job.params.get("watches")
             watches = [w for w in ctx.store.watches() if not slugs or w.slug in slugs]
+            if source == "pixiv":
+                st = poll_pixiv(ctx.store, a.pixiv, watches, ctx=ctx)
+                if ctx.job.params.get("link", True):
+                    st.merge(resolve_artist_links(ctx.store, a.pixiv, ctx=ctx))
+                if ctx.job.params.get("media", True):
+                    st.merge(_download(ctx, a, "pixiv"))
+                return _counters(st)
+            if source == "twitter":
+                st = RunStats()
+                if not _x_ready(ctx, a):
+                    return _counters(st)
+                if a.cfg.twitter_search_limit == 0:
+                    ctx.log("X search is off (search limit 0 in Settings)")
+                else:
+                    st.merge(_x_search(ctx, a, watches))
+                if ctx.job.params.get("media", True):
+                    st.merge(_download(ctx, a, "twitter"))
+                return _counters(st)
             st = poll_pixiv(ctx.store, a.pixiv, watches, ctx=ctx)
             if ctx.job.params.get("link", True):
                 st.merge(resolve_artist_links(ctx.store, a.pixiv, ctx=ctx))
@@ -133,28 +206,8 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                     )
                 )
             else:
-                # search each character until its posts-per-run are KEPT (params.target
-                # overrides every character's own), then linked artists' timelines
-                override = ctx.job.params.get("target")
-                every_x = [w for w in ctx.store.watches() if w.wants("twitter")]
-                for w in [w for w in watches if w.wants("twitter")]:
-                    target = max(1, min(int(override or w.target), TARGET_MAX))
-                    st.merge(
-                        search_to_target(
-                            ctx.store,
-                            a.twitter,
-                            a.blobs,
-                            a.pixiv,
-                            w,
-                            every_x,
-                            target,
-                            labeler=a.labels_for(ctx),
-                            threshold=a.cfg.dupe_threshold,
-                            ctx=ctx,
-                            tagger=a.tags_for(ctx),
-                            identifier=a.identify_for(ctx),
-                        )
-                    )
+                # search each character to its posts-per-run, then linked artists' timelines
+                st.merge(_x_search(ctx, a, watches))
                 st.merge(
                     poll_twitter(
                         ctx.store,
@@ -166,19 +219,31 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                     )
                 )
             if ctx.job.params.get("media", True):
-                st.merge(
-                    download_pending(
-                        ctx.store,
-                        a.blobs,
-                        a.pixiv,
-                        a.twitter,
-                        threshold=a.cfg.dupe_threshold,
-                        ctx=ctx,
-                        labeler=a.labels_for(ctx),
-                        tagger=a.tags_for(ctx),
-                        identifier=a.identify_for(ctx),
-                    )
+                st.merge(_download(ctx, a, None))
+            return _counters(st)
+        finally:
+            a.close()
+
+    def timelines(ctx: JobContext) -> dict[str, Any]:
+        """The media feeds of every artist linked from pixiv, matched against
+        every X character -- the X worker's last job of a crawl."""
+        a = make_adapters(ctx)
+        try:
+            st = RunStats()
+            if not _x_ready(ctx, a):
+                return _counters(st)
+            st.merge(
+                poll_twitter(
+                    ctx.store,
+                    a.twitter,
+                    ctx.store.watches(),
+                    limit=a.cfg.twitter_timeline_limit,
+                    search_limit=0,
+                    ctx=ctx,
                 )
+            )
+            if ctx.job.params.get("media", True):
+                st.merge(_download(ctx, a, "twitter"))
             return _counters(st)
         finally:
             a.close()
@@ -197,6 +262,7 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
     def media(ctx: JobContext) -> dict[str, Any]:
         a = make_adapters(ctx)
         try:
+            source = ctx.job.params.get("source")
             return _counters(
                 download_pending(
                     ctx.store,
@@ -209,6 +275,7 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                     labeler=a.labels_for(ctx),
                     tagger=a.tags_for(ctx),
                     identifier=a.identify_for(ctx),
+                    source=source if source in LANES else None,
                 )
             )
         finally:
@@ -253,12 +320,56 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
         finally:
             a.close()
 
-    return {"poll": poll, "link": link, "media": media, "tags": tags, "label": label}
+    return {
+        "poll": poll,
+        "timelines": timelines,
+        "link": link,
+        "media": media,
+        "tags": tags,
+        "label": label,
+    }
+
+
+def plan(store: Store, type_: str, params: dict[str, Any] | None = None) -> list[tuple[str, dict]]:
+    """What one request becomes in the queue. A crawl (`poll`) is split so each
+    source's worker gets its own jobs: per character a pixiv poll (discover ->
+    tags -> link -> download) and an X poll (search to the character's posts per
+    run), then one X `timelines` job for the linked artists. `media` without a
+    source becomes one per source. Everything else, and anything that already
+    names its source, is one job as asked."""
+    params = dict(params or {})
+    if type_ == "media" and params.get("source") not in LANES:
+        return [("media", {**params, "source": s}) for s in LANES]
+    if type_ != "poll" or params.get("source") in LANES:
+        return [(type_, params)]
+    slugs = params.pop("watches", None)
+    watches = [w for w in store.watches() if not slugs or w.slug in slugs]
+    want_x = params.pop("twitter", True)
+    out: list[tuple[str, dict]] = []
+    for w in watches:
+        if w.wants("pixiv"):
+            out.append(("poll", {**params, "watches": [w.slug], "source": "pixiv"}))
+    if want_x:
+        for w in watches:
+            if w.wants("twitter"):
+                target = max(1, min(int(params.get("target") or w.target), TARGET_MAX))
+                x = {k: v for k, v in params.items() if k != "link"}
+                out.append(
+                    ("poll", {**x, "watches": [w.slug], "source": "twitter", "target": target})
+                )
+        if any(w.wants("twitter") for w in watches):
+            media = {"media": params["media"]} if "media" in params else {}
+            out.append(("timelines", {**media, "accounts": len(store.followed_handles())}))
+    return out
+
+
+def submit(store: Store, type_: str, params: dict[str, Any] | None = None) -> list[str]:
+    """Plan, then queue -- in order, so a source's jobs run in the order planned."""
+    return [JobRunner.submit(store, t, p) for t, p in plan(store, type_, params)]
 
 
 def default_runner(cfg: Config) -> JobRunner:
     """The runner the CLI and the daemon share."""
-    from .db import Store
 
     def factory() -> Store:
         return Store(cfg.db_path)

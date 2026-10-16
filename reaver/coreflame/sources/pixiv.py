@@ -28,7 +28,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import ValidationError
 
-from ..http import SourceClient
+from ..http import METER, SourceClient
 from ..models import DiscoverStats, IllustRecord, Watch
 from ..seen import Seen, SeenState, SkipReason
 from .specs import PIXIV_DETAIL, PIXIV_LISTING, extract
@@ -36,6 +36,12 @@ from .specs import PIXIV_DETAIL, PIXIV_LISTING, extract
 log = logging.getLogger(__name__)
 
 BASE = "https://www.pixiv.net"
+
+# The Rate budget panel lists pixiv's budgets before the first crawl builds an
+# adapter; the adapter re-declares them with the configured rate.
+METER.declare("pixiv.search", "pixiv · search", 0.5)
+METER.declare("pixiv", "pixiv · ajax", 1.0)
+METER.declare("pixiv.pximg", "i.pximg.net", 2.0)
 
 
 class RawSink(Protocol):
@@ -84,9 +90,10 @@ class PixivAdapter:
             burst=3.0,
             resolver=resolver,
             proxy=proxy,
+            meter=("pixiv", "pixiv · ajax"),
         )
-        self.client.limit_endpoint("pximg", rate=2.0, burst=4.0)
-        self.client.limit_endpoint("search", rate=0.5, burst=2.0)
+        self.client.limit_endpoint("pximg", rate=2.0, burst=4.0, label="i.pximg.net")
+        self.client.limit_endpoint("search", rate=0.5, burst=2.0, label="pixiv · search")
         self.extracted: list[dict] = []  # this run's extractions, for drift
 
     # -- discovery --------------------------------------------------------

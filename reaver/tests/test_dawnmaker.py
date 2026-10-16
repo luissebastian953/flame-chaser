@@ -44,6 +44,8 @@ def test_auth_layers(tmp: Path) -> None:
     r = client.get("/api/health", headers={"Origin": "tauri://localhost"})
     assert r.status_code == 200
     assert r.headers["access-control-allow-origin"] == "tauri://localhost"
+    # free space on the library disk, answered before the blob folder exists
+    assert isinstance(r.json()["library_free_bytes"], int) and r.json()["library_free_bytes"] > 0
     # preflight: no token yet, must still be answered -- but only for an allowed origin
     pre = client.options(
         "/api/health",
@@ -95,7 +97,47 @@ def test_watches_and_jobs_api(tmp: Path) -> None:
     assert len(j["log"]) > 5
     assert client.get("/api/jobs").json()[0]["id"] == jid
     assert client.get("/api/health").json()["idle"] is True
+    # a crawl becomes one job per source per character
+    assert r.json()["job_ids"] == [jid] and j["lane"] == "pixiv" and j["worker"] == "pixiv"
+    assert j["req_per_min"] == 0 and j["paused"] is False
     print("  watches + jobs API:   ok (PATCH applied: 1 kept, 1 skipped; job log via API)")
+
+
+def test_pipeline_controls(tmp: Path) -> None:
+    client, _, _ = boot(tmp / "pipe")
+    client.post("/api/watches", json={"slug": "ganyu", "pixiv_tags": ["甘雨"]})
+    client.post("/api/watches", json={"slug": "kafka", "pixiv_tags": ["カフカ"]})
+    r = client.post("/api/jobs", json={"type": "poll", "params": {"media": False}})
+    ids = r.json()["job_ids"]
+    jobs = {j["id"]: j for j in client.get("/api/jobs").json()}
+    lanes = [jobs[i]["lane"] for i in ids]
+    assert lanes == ["pixiv", "pixiv", "twitter", "twitter", "twitter"], lanes
+    assert jobs[ids[-1]]["type"] == "timelines"
+    bad = client.post("/api/jobs", json={"type": "poll", "params": {"watches": ["nobody"]}})
+    assert bad.status_code == 400 and bad.json()["error"]["code"] == "nothing_to_run"
+    p = client.get("/api/pipeline").json()
+    assert p["paused"] is False and [w["lane"] for w in p["workers"]] == ["pixiv", "twitter"]
+    assert all(w["job_id"] is None for w in p["workers"])  # nothing started in this test
+    keys = [b["key"] for b in p["budgets"]]
+    assert keys[:3] == ["pixiv.search", "pixiv", "pixiv.pximg"] and "gallery-dl" in keys
+    assert isinstance(p["req_per_min"], int)
+    assert client.post("/api/pipeline/pause", json={"paused": True}).json() == {"paused": True}
+    assert client.get("/api/pipeline").json()["paused"] is True
+    client.post("/api/pipeline/pause", json={"paused": False})
+    # reorder + run now
+    order = client.post("/api/jobs/reorder", json={"ids": [ids[3], ids[0]]}).json()["order"]
+    assert order[:2] == [ids[3], ids[0]] and sorted(order) == sorted(ids)
+    assert client.post(f"/api/jobs/{ids[4]}/run-now").status_code == 202
+    queued = sorted(
+        (j for j in client.get("/api/jobs").json() if j["state"] == "queued"),
+        key=lambda j: j["position"],
+    )
+    assert queued[0]["id"] == ids[4]
+    assert client.post("/api/jobs/nope/run-now").status_code == 409
+    # pause applies to a running job only
+    r = client.post(f"/api/jobs/{ids[0]}/pause", json={"paused": True})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "not_running"
+    print("  pipeline controls:    ok (5 jobs on 2 workers; pause queue; reorder; run now; 409s)")
 
 
 def test_sse_replay_and_live(tmp: Path) -> None:
@@ -159,6 +201,18 @@ def test_gallery_keyset_and_media(tmp: Path) -> None:
     ids = [it["external_id"] for it in page1["items"] + page2["items"] + page3["items"]]
     assert ids == ["106", "105", "104", "103", "102", "101", "100"] and page3["next_cursor"] is None
     assert len(set(ids)) == 7  # no dupes, no skips across the tie
+    # oldest first: the same keyset walked the other way, ties included
+    old1 = client.get("/api/gallery/ganyu?limit=3&order=oldest").json()
+    old2 = client.get(
+        f"/api/gallery/ganyu?limit=3&order=oldest&cursor={old1['next_cursor']}"
+    ).json()
+    old3 = client.get(
+        f"/api/gallery/ganyu?limit=3&order=oldest&cursor={old2['next_cursor']}"
+    ).json()
+    old = [it["external_id"] for it in old1["items"] + old2["items"] + old3["items"]]
+    assert old == ids[::-1] and old3["next_cursor"] is None
+    bad = client.get("/api/gallery/ganyu?order=sideways")
+    assert bad.status_code == 400 and bad.json()["error"]["code"] == "bad_order"
     sha = page1["items"][0]["sha256"]
     t = client.get(f"/api/media/{sha}/thumb")
     assert t.status_code == 200 and t.headers["content-type"] == "image/webp"
@@ -229,6 +283,7 @@ def test_gallery_kinds_filter(tmp: Path) -> None:
     cards = client.get("/api/gallery").json()
     assert cards[0]["cover_sha"] == shas["202"]  # newest illustration, not the newer photo
     assert cards[0]["post_count"] == 3
+    assert cards[0]["artist_count"] >= 1  # distinct (source, artist) over the live posts
     # 203's only image thrown away (kinds.KEEP): the post is no longer counted or listed
     store.mark_media("pixiv", "203", 0, state="rejected", error="photo")
     assert client.get("/api/gallery").json()[0]["post_count"] == 2
@@ -532,6 +587,7 @@ if __name__ == "__main__":
         print("dawnmaker")
         test_auth_layers(tmp)
         test_watches_and_jobs_api(tmp)
+        test_pipeline_controls(tmp)
         test_sse_replay_and_live(tmp)
         test_gallery_keyset_and_media(tmp)
         test_gallery_kinds_filter(tmp)

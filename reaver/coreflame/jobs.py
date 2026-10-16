@@ -1,8 +1,17 @@
-"""Job queue: one worker, cooperative cancel, persisted state.
+"""Job queue: one worker per source, cooperative cancel and pause, persisted state.
 
-One worker thread, not a pool: the constraint is the remote rate limit, not
-local CPU. Two workers on pixiv doubles the ban risk and halves each one's
-budget.
+One worker thread per SOURCE, never two on the same one: the constraint is the
+remote rate limit, not local CPU. Two workers on pixiv doubles the ban risk and
+halves each one's budget. pixiv and X are different hosts with separate budgets,
+so each gets its own lane -- the `pixiv` worker owns www.pixiv.net and
+i.pximg.net, the `twitter` worker owns gallery-dl and pbs.twimg.com. Each site
+still sees exactly one request stream. A job's `lane` says which worker may take
+it; `any` (tags, labels: no remote request) goes to whichever is free.
+
+The queue is ordered by `position` (reorder, run now), then created_at. A job is
+claimed with a conditional UPDATE, so two workers never take the same `any` job.
+Pausing the queue stops workers taking new jobs; pausing a job holds it at its
+next check() -- the same record boundary a cancel uses -- still holding its lane.
 
 Cancellation is cooperative. `JobContext.check()` is called between records,
 never inside a write, so a cancel lands at a record boundary and the db is
@@ -29,6 +38,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .db import Store
+from .http import METER
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +51,20 @@ QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED = (
     "interrupted",
 )
 TERMINAL = {SUCCEEDED, FAILED, CANCELLED, INTERRUPTED}
+
+LANES = ("pixiv", "twitter")  # one worker thread each, in this order
+ANY = "any"  # a job that sends no remote request: either worker may run it
+# type -> lane when params do not say. poll / media name their source; one
+# without (the CLI's whole-archive run) is the legacy single job -> pixiv lane.
+_LANE_BY_TYPE = {"poll": "pixiv", "media": "pixiv", "link": "pixiv", "timelines": "twitter"}
+
+
+def lane_of(type_: str, params: dict[str, Any] | None = None) -> str:
+    src = (params or {}).get("source")
+    if type_ in ("poll", "media") and src in LANES:
+        return str(src)
+    return _LANE_BY_TYPE.get(type_, ANY)
+
 
 Event = dict[str, Any]
 Handler = Callable[["JobContext"], dict[str, Any]]  # returns counters
@@ -83,6 +107,10 @@ class Job:
     created_at: str = ""
     started_at: str | None = None
     finished_at: str | None = None
+    lane: str = "pixiv"
+    worker: str | None = None  # the lane that ran it; None until claimed
+    position: float = 0
+    paused: bool = False
 
     @classmethod
     def from_row(cls, r: Any) -> Job:
@@ -99,6 +127,10 @@ class Job:
             created_at=r["created_at"],
             started_at=r["started_at"],
             finished_at=r["finished_at"],
+            lane=r["lane"],
+            worker=r["worker"],
+            position=r["position"],
+            paused=bool(r["pause_requested"]),
         )
 
 
@@ -119,29 +151,62 @@ class JobContext:
         self._check_every = check_every
         self._since_check = check_every  # first check() consults the db, not the 5th
         self._cancel = threading.Event()
+        self._pause = threading.Event()
+        # running tallies (item actions, progress extras, tally()), written to
+        # jobs.counters as they move so the pipeline shows them mid-run; the
+        # handler's own counters are merged over them at the end
+        self.live: dict[str, Any] = {}
 
-    # -- cancellation ----------------------------------------------------
+    # -- cancellation and pause ------------------------------------------------
     def request_cancel(self) -> None:
         self._cancel.set()
 
-    def _db_flag(self) -> bool:
+    def request_pause(self, on: bool) -> None:
+        if on:
+            self._pause.set()
+        else:
+            self._pause.clear()
+
+    def _db_flags(self) -> tuple[bool, bool]:
         r = self.store.conn.execute(
-            "SELECT cancel_requested FROM jobs WHERE id=?", (self.job.id,)
+            "SELECT cancel_requested, pause_requested FROM jobs WHERE id=?", (self.job.id,)
         ).fetchone()
-        return bool(r and r["cancel_requested"])
+        return (bool(r and r["cancel_requested"]), bool(r and r["pause_requested"]))
+
+    def _hold(self) -> None:
+        """Paused: wait here -- a record boundary -- until resumed or cancelled.
+        The db is the truth, so a resume from another process works too."""
+        self.log("paused")
+        while True:
+            if self._cancel.is_set():
+                raise Cancelled()
+            cancel, pause = self._db_flags()
+            if cancel:
+                self._cancel.set()
+                raise Cancelled()
+            if not pause:
+                self._pause.clear()
+                break
+            time.sleep(0.25)
+        self.log("resumed")
 
     def check(self) -> None:
-        """Call between records. Raises Cancelled. Polls the db flag on the
-        first call and every `check_every` after, so a cancel from another
-        process is seen even by a job of two records."""
+        """Call between records. Raises Cancelled; holds while paused. Polls the
+        db flags on the first call and every `check_every` after, so a cancel or
+        pause from another process is seen even by a job of two records."""
         if self._cancel.is_set():
             raise Cancelled()
         self._since_check += 1
         if self._since_check >= self._check_every:
             self._since_check = 0
-            if self._db_flag():
+            cancel, pause = self._db_flags()
+            if cancel:
                 self._cancel.set()
                 raise Cancelled()
+            if pause:
+                self._pause.set()
+        if self._pause.is_set():
+            self._hold()
 
     # -- events -------------------------------------------------------------
     def emit(self, kind: str, message: str, level: str = "info", **data: Any) -> None:
@@ -174,18 +239,25 @@ class JobContext:
                 log.exception("job event subscriber failed")
 
     def stage(self, name: str, **data: Any) -> None:
-        # a stage boundary is always a safe place to stop
-        if self._cancel.is_set() or self._db_flag():
+        # a stage boundary is always a safe place to stop (or pause)
+        cancel, pause = self._db_flags()
+        if self._cancel.is_set() or cancel:
             self._cancel.set()
             raise Cancelled()
+        if pause or self._pause.is_set():
+            self._pause.set()
+            self._hold()
         self.job.stage = name
         self.store.conn.execute("UPDATE jobs SET stage=? WHERE id=?", (name, self.job.id))
         self.emit("stage", name, **data)
 
     def progress(self, done: int, total: int | None = None, **data: Any) -> None:
         self.job.done, self.job.total = done, total
+        # numeric extras (listed, gated) are running totals: kept, not summed
+        self.live.update({k: v for k, v in data.items() if isinstance(v, int)})
         self.store.conn.execute(
-            "UPDATE jobs SET done=?, total=? WHERE id=?", (done, total, self.job.id)
+            "UPDATE jobs SET done=?, total=?, counters=? WHERE id=?",
+            (done, total, json.dumps(self.live), self.job.id),
         )
         self.emit(
             "progress",
@@ -196,24 +268,41 @@ class JobContext:
         )
 
     def item(self, message: str, **data: Any) -> None:
+        action = data.get("action")
+        if isinstance(action, str):
+            self.tally(action)
         self.emit("item", message, **data)
+
+    def tally(self, key: str, n: int = 1) -> None:
+        """Count something mid-run (an item's action does it for you)."""
+        self.live[key] = int(self.live.get(key, 0)) + n
+        self.store.conn.execute(
+            "UPDATE jobs SET counters=? WHERE id=?", (json.dumps(self.live), self.job.id)
+        )
 
     def log(self, message: str, level: str = "info", **data: Any) -> None:
         self.emit("log", message, level=level, **data)
 
 
 class JobRunner:
-    """Owns the worker thread. `store_factory` opens a store PER THREAD --
-    sqlite connections are not shared across threads."""
+    """Owns the worker threads, one per lane. `store_factory` opens a store PER
+    THREAD -- sqlite connections are not shared across threads."""
 
-    def __init__(self, store_factory: Callable[[], Store], handlers: dict[str, Handler]) -> None:
+    def __init__(
+        self,
+        store_factory: Callable[[], Store],
+        handlers: dict[str, Handler],
+        lanes: tuple[str, ...] = LANES,
+    ) -> None:
         self._factory = store_factory
         self.handlers = handlers
+        self.lanes = lanes
         self.subscribers: list[Callable[[Event], None]] = []
         self._wake = threading.Event()
         self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
-        self._current: JobContext | None = None
+        self._held = threading.Event()  # the queue is paused: take nothing new
+        self._threads: dict[str, threading.Thread] = {}
+        self._current: dict[str, JobContext] = {}
         self._lock = threading.Lock()
         store = self._factory()
         try:
@@ -225,7 +314,7 @@ class JobRunner:
     @staticmethod
     def mark_interrupted(store: Store) -> int:
         cur = store.conn.execute(
-            "UPDATE jobs SET state='interrupted', finished_at=?, "
+            "UPDATE jobs SET state='interrupted', finished_at=?, pause_requested=0, "
             "error=COALESCE(error,'process exited while running') WHERE state='running'",
             (_now(),),
         )
@@ -233,11 +322,21 @@ class JobRunner:
 
     # -- submit / query / cancel (any thread) ---------------------------------
     @staticmethod
-    def submit(store: Store, type_: str, params: dict[str, Any] | None = None) -> str:
+    def submit(
+        store: Store, type_: str, params: dict[str, Any] | None = None, lane: str | None = None
+    ) -> str:
+        """Queued at the back. `lane` defaults to lane_of(type_, params)."""
         jid = uuid.uuid4().hex[:12]
         store.conn.execute(
-            "INSERT INTO jobs(id,type,params,state,created_at) VALUES(?,?,?,'queued',?)",
-            (jid, type_, json.dumps(params or {}, ensure_ascii=False), _now()),
+            "INSERT INTO jobs(id,type,params,state,created_at,lane,position) "
+            "VALUES(?,?,?,'queued',?,?,(SELECT COALESCE(max(position),0)+1 FROM jobs))",
+            (
+                jid,
+                type_,
+                json.dumps(params or {}, ensure_ascii=False),
+                _now(),
+                lane or lane_of(type_, params),
+            ),
         )
         return jid
 
@@ -265,9 +364,13 @@ class JobRunner:
         ).fetchall()
         return [{**dict(r), "data": json.loads(r["data"] or "{}")} for r in reversed(rows)]
 
+    def _running_ctx(self, jid: str) -> JobContext | None:
+        with self._lock:
+            return next((c for c in self._current.values() if c.job.id == jid), None)
+
     def cancel(self, store: Store, jid: str) -> bool:
         """Queued -> cancelled immediately. Running -> flag; the worker stops at
-        the next record boundary."""
+        the next record boundary (a paused one too)."""
         j = self.get(store, jid)
         if j is None or j.state in TERMINAL:
             return False
@@ -278,10 +381,49 @@ class JobRunner:
             )
             return True
         store.conn.execute("UPDATE jobs SET cancel_requested=1 WHERE id=?", (jid,))
-        with self._lock:
-            if self._current and self._current.job.id == jid:
-                self._current.request_cancel()
+        if ctx := self._running_ctx(jid):
+            ctx.request_cancel()
         return True
+
+    def pause(self, store: Store, jid: str, on: bool) -> bool:
+        """Hold (or release) a RUNNING job at its next record boundary. It keeps
+        its lane while held -- that is what pausing a worker means."""
+        cur = store.conn.execute(
+            "UPDATE jobs SET pause_requested=? WHERE id=? AND state='running'", (int(on), jid)
+        )
+        if cur.rowcount == 0:
+            return False
+        if ctx := self._running_ctx(jid):
+            ctx.request_pause(on)
+        return True
+
+    @staticmethod
+    def reorder(store: Store, ids: list[str]) -> list[str]:
+        """The queue in this order: `ids` first (queued ones; others ignored),
+        then every queued job not named, in its current order. Returns the order."""
+        queued = [
+            r["id"]
+            for r in store.conn.execute(
+                "SELECT id FROM jobs WHERE state='queued' ORDER BY position, created_at"
+            ).fetchall()
+        ]
+        named = [i for i in dict.fromkeys(ids) if i in queued]
+        order = named + [i for i in queued if i not in named]
+        with store.tx():
+            for pos, jid in enumerate(order, 1):
+                store.conn.execute("UPDATE jobs SET position=? WHERE id=?", (pos, jid))
+        return order
+
+    @staticmethod
+    def run_now(store: Store, jid: str) -> bool:
+        """To the front of the queue. It starts when its lane's worker is free --
+        a running job is never pre-empted."""
+        cur = store.conn.execute(
+            "UPDATE jobs SET position=(SELECT COALESCE(min(position),0)-1 FROM jobs "
+            "WHERE state='queued') WHERE id=? AND state='queued'",
+            (jid,),
+        )
+        return cur.rowcount == 1
 
     @staticmethod
     def idle(store: Store) -> bool:
@@ -290,60 +432,113 @@ class JobRunner:
         ).fetchone()
         return bool(r[0] == 0)
 
-    # -- worker ------------------------------------------------------------
+    # -- the queue as a whole -------------------------------------------------
+    @property
+    def held(self) -> bool:
+        return self._held.is_set()
+
+    def hold(self, on: bool) -> None:
+        """Pause / resume the queue: workers finish what they run, take nothing new.
+        In memory -- a restarted daemon starts with the queue running."""
+        if on:
+            self._held.set()
+        else:
+            self._held.clear()
+            self._wake.set()
+
+    def workers(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [
+                {"lane": lane, "job_id": c.job.id if (c := self._current.get(lane)) else None}
+                for lane in self.lanes
+            ]
+
+    # -- workers -------------------------------------------------------------
     def start(self) -> None:
-        if self._thread and self._thread.is_alive():
-            return
         self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, name="coreflame-worker", daemon=True)
-        self._thread.start()
+        for lane in self.lanes:
+            t = self._threads.get(lane)
+            if t and t.is_alive():
+                continue
+            t = threading.Thread(
+                target=self._loop, args=(lane,), name=f"coreflame-worker-{lane}", daemon=True
+            )
+            self._threads[lane] = t
+            t.start()
 
     def stop(self, timeout: float = 30.0) -> None:
         self._stop.set()
         self._wake.set()
-        if self._thread:
-            self._thread.join(timeout)
+        for t in self._threads.values():
+            t.join(timeout)
 
     def kick(self) -> None:
         self._wake.set()
 
     def run_pending(self, store: Store) -> int:
-        """Synchronous: run every queued job in THIS thread. For the CLI and
-        for tests; the daemon uses start()."""
+        """Synchronous: run every queued job, any lane, in THIS thread, in queue
+        order. For the CLI and for tests; the daemon uses start()."""
         n = 0
-        while (job := self._next(store)) is not None:
+        while (job := self._take(store, None)) is not None:
             self._run_one(store, job)
             n += 1
         return n
 
-    def _next(self, store: Store) -> Job | None:
-        r = store.conn.execute(
-            "SELECT * FROM jobs WHERE state='queued' ORDER BY created_at LIMIT 1"
-        ).fetchone()
-        return Job.from_row(r) if r else None
+    def _take(self, store: Store, lane: str | None) -> Job | None:
+        """The next job this lane may run (None = any lane), claimed. The claim
+        is a conditional UPDATE: of two workers racing for an `any` job, one wins
+        and the other looks again."""
+        while True:
+            if lane is None:
+                r = store.conn.execute(
+                    "SELECT * FROM jobs WHERE state='queued' ORDER BY position, created_at LIMIT 1"
+                ).fetchone()
+            else:
+                r = store.conn.execute(
+                    "SELECT * FROM jobs WHERE state='queued' AND lane IN (?, ?) "
+                    "ORDER BY position, created_at LIMIT 1",
+                    (lane, ANY),
+                ).fetchone()
+            if r is None:
+                return None
+            job = Job.from_row(r)
+            worker = lane or (job.lane if job.lane != ANY else self.lanes[0])
+            started = _now()
+            cur = store.conn.execute(
+                "UPDATE jobs SET state='running', started_at=?, worker=? "
+                "WHERE id=? AND state='queued'",
+                (started, worker, job.id),
+            )
+            if cur.rowcount == 1:
+                job.state, job.started_at, job.worker = RUNNING, started, worker
+                return job
 
-    def _loop(self) -> None:
-        """The one worker thread. It must not die: a job's own failure is caught
-        in _run_one, but an error around it -- the queue query, the bookkeeping,
-        a database the container lost its grip on ("disk I/O error") -- used to
-        end the thread silently, leaving every later job queued forever while
-        the API still answered "idle". Now it is logged, the job it was on is
-        marked failed, the connection is reopened, and the loop backs off."""
+    def _loop(self, lane: str) -> None:
+        """One lane's worker thread. It must not die: a job's own failure is
+        caught in _run_one, but an error around it -- the queue query, the
+        bookkeeping, a database the container lost its grip on ("disk I/O
+        error") -- used to end the thread silently, leaving every later job
+        queued forever while the API still answered "idle". Now it is logged,
+        the job it was on is marked failed, the connection is reopened, and the
+        loop backs off."""
         store = self._factory()
         backoff = 2.0
         try:
             while not self._stop.is_set():
                 job: Job | None = None
                 try:
-                    job = self._next(store)
+                    job = None if self._held.is_set() else self._take(store, lane)
                     if job is None:
                         self._wake.wait(timeout=2.0)
                         self._wake.clear()
                     else:
                         self._run_one(store, job)
+                        self._wake.set()  # the other lane may be waiting on an `any` job
                     backoff = 2.0
                 except Exception:
-                    log.exception("worker: error outside a job; retrying in %.0fs", backoff)
+                    log.exception(
+                        "worker %s: error outside a job; retrying in %.0fs", lane, backoff
+                    )
                     store = self._recover(store, job)
                     self._stop.wait(backoff)
                     backoff = min(backoff * 2, 30.0)
@@ -376,16 +571,14 @@ class JobRunner:
         return fresh
 
     def _run_one(self, store: Store, job: Job) -> None:
+        """`job` is already claimed (state running, worker set) by _take."""
         handler = self.handlers.get(job.type)
-        started = _now()
-        store.conn.execute(
-            "UPDATE jobs SET state='running', started_at=? WHERE id=?", (started, job.id)
-        )
-        job.state, job.started_at = RUNNING, started
+        lane = job.worker or job.lane
         ctx = JobContext(store, job, self.subscribers)
         with self._lock:
-            self._current = ctx
-        ctx.emit("stage", "started", type=job.type, params=job.params)
+            self._current[lane] = ctx
+        METER.bind(job.id)  # this thread's requests count as this job's
+        ctx.emit("stage", "started", type=job.type, params=job.params, worker=lane)
         # The running process's own age. A daemon older than the code on disk is
         # running the old code -- invisible otherwise, and the cause of every
         # "I changed it and nothing happened" during development.
@@ -408,10 +601,13 @@ class JobRunner:
             state, error = FAILED, f"{type(e).__name__}: {e}"[:2000]
             log.exception("job %s failed", job.id)
         finally:
+            METER.bind(None)
             with self._lock:
-                self._current = None
+                self._current.pop(lane, None)
+        counters = {**ctx.live, **counters}
         store.conn.execute(
-            "UPDATE jobs SET state=?, error=?, counters=?, finished_at=? WHERE id=?",
+            "UPDATE jobs SET state=?, error=?, counters=?, finished_at=?, pause_requested=0 "
+            "WHERE id=?",
             (state, error, json.dumps(counters, default=str), _now(), job.id),
         )
         job.state, job.error, job.counters = state, error, counters

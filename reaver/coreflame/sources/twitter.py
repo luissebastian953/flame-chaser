@@ -45,11 +45,16 @@ from urllib.parse import quote_plus
 
 from pydantic import ValidationError
 
-from ..http import SourceClient
+from ..http import METER, SourceClient
 from ..models import IllustRecord, Watch
 from .specs import TWITTER_ENTRY, extract
 
 log = logging.getLogger(__name__)
+
+
+# gallery-dl paces itself; the panel shows its invocations, not a rate
+METER.declare("gallery-dl", "gallery-dl", None)
+METER.declare("twitter", "pbs.twimg.com", 2.0)
 
 
 class GalleryDLError(RuntimeError):
@@ -79,7 +84,13 @@ class TwitterAdapter:
         self.extra_args = extra_args or []
         # gallery-dl does its own pacing for metadata; this client is only for
         # pulling pbs.twimg.com bytes, which needs no auth.
-        self.client = SourceClient(base_headers={}, rate=rate * 4, burst=4.0, proxy=proxy)
+        self.client = SourceClient(
+            base_headers={},
+            rate=rate * 4,
+            burst=4.0,
+            proxy=proxy,
+            meter=("twitter", "pbs.twimg.com"),
+        )
 
     def available(self) -> bool:
         return shutil.which(self.binary) is not None
@@ -116,6 +127,7 @@ class TwitterAdapter:
             cmd += ["--cookies-from-browser", self.cookies_from_browser]
         cmd += [*self.extra_args, url]
 
+        METER.hit("gallery-dl")
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
         if proc.returncode != 0 and not proc.stdout.strip():
             raise GalleryDLError(

@@ -11,6 +11,7 @@ import logging
 import random
 import threading
 import time
+from collections import deque
 from typing import Any
 
 import httpx
@@ -51,6 +52,65 @@ class TokenBucket:
             time.sleep(deficit)
 
 
+class Meter:
+    """Requests actually sent, per budget, over the last minute -- what the
+    pipeline's Rate budget panel and each worker's req/min read. Process-wide
+    because adapters are built per job; a budget is declared once with its
+    configured rate and re-declared when a later adapter is built with another.
+    A hit is tagged with the job bound to the sending thread, so a worker's
+    req/min is its own requests, not its lane's neighbour's."""
+
+    WINDOW = 60.0
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._budgets: dict[str, tuple[str, float | None]] = {}
+        self._hits: deque[tuple[float, str, str | None]] = deque()
+        self._local = threading.local()
+
+    def declare(self, key: str, label: str, rate: float | None) -> None:
+        """`rate` is requests per second; None = paced by something else (gallery-dl)."""
+        with self._lock:
+            self._budgets[key] = (label, rate)
+
+    def bind(self, job_id: str | None) -> None:
+        self._local.job = job_id
+
+    def hit(self, key: str) -> None:
+        now = time.monotonic()
+        with self._lock:
+            self._hits.append((now, key, getattr(self._local, "job", None)))
+            self._trim(now)
+
+    def _trim(self, now: float) -> None:
+        while self._hits and now - self._hits[0][0] > self.WINDOW:
+            self._hits.popleft()
+
+    def snapshot(self) -> list[dict[str, Any]]:
+        """Every declared budget, in declaration order, with its last minute."""
+        with self._lock:
+            self._trim(time.monotonic())
+            counts: dict[str, int] = {}
+            for _, key, _ in self._hits:
+                counts[key] = counts.get(key, 0) + 1
+            return [
+                {"key": k, "label": label, "rate": rate, "per_min": counts.get(k, 0)}
+                for k, (label, rate) in self._budgets.items()
+            ]
+
+    def per_job(self) -> dict[str, int]:
+        with self._lock:
+            self._trim(time.monotonic())
+            out: dict[str, int] = {}
+            for _, _, job in self._hits:
+                if job is not None:
+                    out[job] = out.get(job, 0) + 1
+            return out
+
+
+METER = Meter()
+
+
 class RetryableError(RuntimeError):
     pass
 
@@ -68,7 +128,10 @@ class SourceClient:
         max_retries: int = 4,
         resolver: DohResolver | None = None,
         proxy: str | None = None,
+        meter: tuple[str, str] | None = None,
     ) -> None:
+        """`meter` = (key, label) under which METER counts this client's
+        requests; an endpoint limited later is counted as `key.endpoint`."""
         headers = {"User-Agent": DEFAULT_UA, **base_headers}
         # Layer 1: DoH resolver (defeats DNS hijacking). Layer 2: a proxy
         # (the only thing that survives SNI/DPI, and the only setting shared
@@ -90,17 +153,29 @@ class SourceClient:
         self._global = TokenBucket(rate, burst)
         self._endpoint: dict[str, TokenBucket] = {}
         self.max_retries = max_retries
+        self._meter = meter[0] if meter else None
+        if meter:
+            METER.declare(meter[0], meter[1], rate)
 
-    def limit_endpoint(self, name: str, rate: float, burst: float = 1.0) -> None:
+    def limit_endpoint(
+        self, name: str, rate: float, burst: float = 1.0, label: str | None = None
+    ) -> None:
         self._endpoint[name] = TokenBucket(rate, burst)
+        if self._meter:
+            METER.declare(f"{self._meter}.{name}", label or name, rate)
 
     def get(self, url: str, *, bucket: str | None = None, **kw: Any) -> httpx.Response:
         if bucket and bucket in self._endpoint:
             self._endpoint[bucket].take()
         self._global.take()
 
+        metered = None
+        if self._meter:
+            metered = f"{self._meter}.{bucket}" if bucket in self._endpoint else self._meter
         last: Exception | None = None
         for attempt in range(self.max_retries):
+            if metered:
+                METER.hit(metered)  # every attempt is a request the site sees
             try:
                 r = self._client.get(url, **kw)
             except httpx.TransportError as e:  # DNS, TLS, timeouts

@@ -356,3 +356,17 @@ CREATE TABLE IF NOT EXISTS image_characters (
 );
 CREATE INDEX IF NOT EXISTS image_characters_name ON image_characters(name)
 """
+
+
+@migration(9, "job_lanes")
+def _v9() -> str:
+    # one worker per source (coreflame/jobs.py): the lane a job may run on,
+    # the lane that ran it, its place in the queue (reorder / run now), and a
+    # pause flag that, like cancel_requested, any process can set
+    return """
+ALTER TABLE jobs ADD COLUMN lane TEXT NOT NULL DEFAULT 'pixiv';
+ALTER TABLE jobs ADD COLUMN worker TEXT;
+ALTER TABLE jobs ADD COLUMN position REAL NOT NULL DEFAULT 0;
+ALTER TABLE jobs ADD COLUMN pause_requested INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(state, lane, position)
+"""
