@@ -17,6 +17,8 @@ declare global {
   const IDENT_STATES: typeof import('./stores/library').IDENT_STATES
   const KIND_FILTERS: typeof import('./stores/library').KIND_FILTERS
   const REGIONS: typeof import('./stores/formats').REGIONS
+  const TOAST_MAX: typeof import('./stores/toasts').TOAST_MAX
+  const TOAST_TTL: typeof import('./stores/toasts').TOAST_TTL
   const TYPES: typeof import('./lib/api').TYPES
   const WORKER_COLORS: typeof import('./lib/pipeline').WORKER_COLORS
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
@@ -123,6 +125,7 @@ declare global {
   const useSources: typeof import('./stores/sources').useSources
   const useTemplateRef: typeof import('vue').useTemplateRef
   const useTheme: typeof import('./stores/theme').useTheme
+  const useToasts: typeof import('./stores/toasts').useToasts
   const useUpdater: typeof import('./stores/updater').useUpdater
   const watch: typeof import('vue').watch
   const watchEffect: typeof import('vue').watchEffect
@@ -145,6 +148,9 @@ declare global {
   // @ts-ignore
   export type { Corners, Glow, ThemeSpec, WindowSpec, ThemeSettings, Preset } from './stores/theme'
   import('./stores/theme')
+  // @ts-ignore
+  export type { RunToast, ErrorToast, Toast } from './stores/toasts'
+  import('./stores/toasts')
   // @ts-ignore
   export type { Phase } from './stores/updater'
   import('./stores/updater')
@@ -173,6 +179,8 @@ declare module 'vue' {
     readonly IDENT_STATES: UnwrapRef<typeof import('./stores/library')['IDENT_STATES']>
     readonly KIND_FILTERS: UnwrapRef<typeof import('./stores/library')['KIND_FILTERS']>
     readonly REGIONS: UnwrapRef<typeof import('./stores/formats')['REGIONS']>
+    readonly TOAST_MAX: UnwrapRef<typeof import('./stores/toasts')['TOAST_MAX']>
+    readonly TOAST_TTL: UnwrapRef<typeof import('./stores/toasts')['TOAST_TTL']>
     readonly TYPES: UnwrapRef<typeof import('./lib/api')['TYPES']>
     readonly WORKER_COLORS: UnwrapRef<typeof import('./lib/pipeline')['WORKER_COLORS']>
     readonly acceptHMRUpdate: UnwrapRef<typeof import('pinia')['acceptHMRUpdate']>
@@ -278,6 +286,7 @@ declare module 'vue' {
     readonly useSources: UnwrapRef<typeof import('./stores/sources')['useSources']>
     readonly useTemplateRef: UnwrapRef<typeof import('vue')['useTemplateRef']>
     readonly useTheme: UnwrapRef<typeof import('./stores/theme')['useTheme']>
+    readonly useToasts: UnwrapRef<typeof import('./stores/toasts')['useToasts']>
     readonly useUpdater: UnwrapRef<typeof import('./stores/updater')['useUpdater']>
     readonly watch: UnwrapRef<typeof import('vue')['watch']>
     readonly watchEffect: UnwrapRef<typeof import('vue')['watchEffect']>

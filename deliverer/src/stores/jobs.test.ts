@@ -194,6 +194,16 @@ describe('useJobs actions', () => {
     expect(jobs.queued.map((j) => j.id)).toEqual(['j9']);
   });
 
+  it('submitMany() returns every planned job id, and just the one from an older daemon', async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({ job_id: 'a', job_ids: ['a', 'b'] });
+    vi.mocked(api.get).mockResolvedValueOnce([]);
+    expect(await useJobs().submitMany('poll', { watches: ['kiana'] })).toEqual(['a', 'b']);
+
+    vi.mocked(api.post).mockResolvedValueOnce({ job_id: 'only' });
+    vi.mocked(api.get).mockResolvedValueOnce([]);
+    expect(await useJobs().submitMany('poll')).toEqual(['only']);
+  });
+
   it('submit() defaults params to an empty object', async () => {
     vi.mocked(api.post).mockResolvedValueOnce({ job_id: 'j1' });
     vi.mocked(api.get).mockResolvedValueOnce([]);

@@ -9,8 +9,8 @@ deliverer/
 │   ├── i18n.ts (+ .test.ts)   LOCALES, glob-loaded messages, setLocale
 │   ├── pages/            Gallery · CharacterDetail* · Config* · PipelineList* · PipelineDetail* · Settings
 │   ├── components/       AuthBadge* · AuthGate · BrandMark · DetailAside · EmberField · GenderFilter* · Icon* · IdentityFilter* · InfoTip* · KindFilter* ·
-│   │                     QueuedPanel · RateBudget · SourceCard* · StatCard* · ThemePanel* · ThemePreview · UpdateBanner* · UpdatesPanel · WatchForm* · WorkerAvatar   (* = has a .test.ts)
-│   ├── stores/           characterDefaults* · endpoint · jobs* · library* · sources* · theme* · updater*  (Pinia)
+│   │                     QueuedPanel · RateBudget · RunToast* · RunToasts* · SourceCard* · StatCard* · ThemePanel* · ThemePreview · UpdateBanner* · UpdatesPanel · WatchForm* · WorkerAvatar   (* = has a .test.ts)
+│   ├── stores/           characterDefaults* · endpoint · jobs* · library* · sources* · theme* · toasts* · updater*  (Pinia)
 │   ├── lib/api.ts (+ .test.ts)   endpoint discovery, fetch wrapper, mediaUrl, EventSource, heartbeat
 │   ├── lib/types.ts      the API shapes — keep in step with dawnmaker/app.py
 │   ├── lib/pipeline.ts (+ .test.ts)   what the pipeline screens derive from a job: stages, character, counters, worker colour

@@ -122,6 +122,7 @@ onMounted(async () => {
       <div v-if="ep.error" class="empty err">{{ ep.error }}</div>
       <template v-else-if="ep.ready">
         <RouterView />
+        <RunToasts />
         <AuthGate v-if="src.needsGate" />
       </template>
       <div v-else class="empty">{{ $t('app.connectingDaemon') }}</div>

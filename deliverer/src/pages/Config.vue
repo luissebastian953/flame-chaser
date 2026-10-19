@@ -11,6 +11,7 @@ const fm = useFormats();
 const router = useRouter();
 const editing = ref<Watch | null>(null);
 const isNew = ref(false);
+const toasts = useToasts();
 const status = reactive({ msg: '' });
 
 const RUNS = 8; // bars in the run history
@@ -126,12 +127,54 @@ async function saved(w: Watch, runNow: boolean) {
 }
 
 /** Each character crawls to its own posts-per-run (set in its form). One
- *  character's run stays here -- its row shows the job; Run all opens the
- *  pipeline, which is where a whole-archive crawl is watched. */
+ *  character's run stays here -- a toast says where it went and its row
+ *  chip pulses once; Run all opens the pipeline, which is where a
+ *  whole-archive crawl is watched. A refused run is a toast too. */
 async function run(slug?: string) {
-  await jobs.submit('poll', slug ? { watches: [slug] } : {});
-  if (!slug) router.push('/pipeline');
+  const w = slug ? lib.watches.find((x) => x.slug === slug) : undefined;
+  const label = w?.label || slug || '';
+  const sources = w?.sources ?? [];
+
+  try {
+    const ids = await jobs.submitMany('poll', slug ? { watches: [slug] } : {});
+    if (!slug) {
+      router.push('/pipeline');
+      return;
+    }
+
+    // the planner adds an X timelines job for everyone; the toast follows this character's own crawls
+    const jobIds = ids.filter((id) => {
+      const j = jobs.jobs.find((x) => x.id === id);
+      return !!j && Array.isArray(j.params.watches) && j.params.watches.includes(slug);
+    });
+
+    toasts.run({ slug, label, sources, jobIds, retry: () => run(slug) });
+    pulse(slug);
+  } catch (e) {
+    toasts.error({
+      slug: slug ?? null,
+      label,
+      sources,
+      terms: w?.match_terms.length ?? 0,
+      code: e instanceof ApiError ? e.code : 'unreachable',
+      message: e instanceof Error ? e.message : String(e),
+      retry: () => run(slug),
+    });
+  }
 }
+
+// the row chip of a character just run gets one ember pulse so the eye lands on it
+const PULSE_MS = 600;
+const pulsing = ref<string | null>(null);
+let pulseTimer: ReturnType<typeof setTimeout> | undefined;
+
+function pulse(slug: string) {
+  clearTimeout(pulseTimer);
+  pulsing.value = slug;
+  pulseTimer = setTimeout(() => (pulsing.value = null), PULSE_MS + 100);
+}
+
+onUnmounted(() => clearTimeout(pulseTimer));
 
 const RECENT_MS = 60_000; // "done" stays on the row this long after a job ends
 
@@ -356,6 +399,7 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
                   v-if="rowState(w.slug)?.kind === 'running'"
                   :to="`/pipeline/${rowState(w.slug)!.job.worker ?? 'pixiv'}`"
                   class="chip live"
+                  :class="{ pulse: pulsing === w.slug }"
                   :style="{ '--wc': rowColor(rowState(w.slug)!.job) }"
                 >
                   <Icon name="loader" class="spin" :size="11" />
@@ -366,7 +410,12 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
                     })
                   }}
                 </RouterLink>
-                <RouterLink v-else-if="rowState(w.slug)?.kind === 'queued'" to="/pipeline" class="chip off">
+                <RouterLink
+                  v-else-if="rowState(w.slug)?.kind === 'queued'"
+                  to="/pipeline"
+                  class="chip off"
+                  :class="{ pulse: pulsing === w.slug }"
+                >
                   <Icon name="clock" :size="11" />
                   {{ $t('crawl.row.queued', { n: rowState(w.slug)!.n }, rowState(w.slug)!.n) }}
                 </RouterLink>
@@ -610,6 +659,25 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
   border-color: var(--wc);
   background: color-mix(in oklch, var(--wc) 12%, var(--color-bg));
   box-shadow: 0 0 8px color-mix(in oklch, var(--wc) 35%, transparent);
+}
+/* one ember pulse the moment a run is submitted (clip-path clips box-shadow,
+   so the ring is a drop-shadow); none under reduced motion */
+.actions .chip.pulse {
+  animation: chip-pulse 600ms ease-out 1;
+}
+@keyframes chip-pulse {
+  0% {
+    border-color: var(--color-ember);
+    filter: drop-shadow(0 0 0 var(--color-ember)) drop-shadow(0 0 2px var(--color-ember));
+  }
+  100% {
+    filter: drop-shadow(0 0 9px transparent) drop-shadow(0 0 9px transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .actions .chip.pulse {
+    animation: none;
+  }
 }
 .actions .chip.ok {
   color: var(--color-moss);

@@ -146,6 +146,52 @@ describe('Config row job state', () => {
     await flushPromises();
     expect(router.currentRoute.value.path).toBe('/pipeline');
   });
+
+  it("Run raises a toast that follows the character's own crawl jobs, not the shared timelines job", async () => {
+    const w = await mountPage();
+
+    const planned = [
+      { ...queued('tw'), params: { watches: ['raiden-mei'], source: 'twitter' }, lane: 'twitter' as const },
+      { ...queued('tl'), type: 'timelines', params: { accounts: 3 }, lane: 'twitter' as const },
+    ];
+
+    vi.mocked(api.post).mockResolvedValueOnce({ job_id: 'tw', job_ids: ['tw', 'tl'] });
+
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path === '/api/watches' ? [mei] : path.startsWith('/api/jobs') ? planned : [],
+    );
+
+    await button(w, 'Run').trigger('click');
+    await flushPromises();
+
+    const toasts = useToasts().items;
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]).toMatchObject({ kind: 'run', slug: 'raiden-mei', label: 'Raiden Mei', jobIds: ['tw'] });
+    // the row chip pulses once
+    expect(w.find('.actions .chip.pulse').exists()).toBe(true);
+  });
+
+  it('a refused run is an error toast with the daemon code; Run all then stays on Crawl', async () => {
+    await router.push('/config');
+    const w = await mountPage();
+    vi.mocked(api.post).mockRejectedValueOnce(new ApiError(400, 'nothing_to_run', 'no character matches'));
+
+    await button(w, 'Run all now').trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/config');
+    expect(useToasts().items[0]).toMatchObject({ kind: 'error', slug: null, code: 'nothing_to_run' });
+  });
+
+  it('no answer from the daemon is an "unreachable" error toast', async () => {
+    const w = await mountPage();
+    vi.mocked(api.post).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    await button(w, 'Run').trigger('click');
+    await flushPromises();
+
+    expect(useToasts().items[0]).toMatchObject({ kind: 'error', slug: 'raiden-mei', code: 'unreachable' });
+  });
 });
 
 describe('Config new characters', () => {

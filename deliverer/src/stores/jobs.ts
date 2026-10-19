@@ -99,10 +99,19 @@ export const useJobs = defineStore('jobs', {
       const onSlots = new Set(this.slots.map((s) => s.job?.id));
       return this.jobs.find((j) => !onSlots.has(j.id) && (j.worker ?? j.lane) === lane) ?? null;
     },
-    async submit(type: string, params: Record<string, unknown> = {}) {
-      const r = await api.post<{ job_id: string }>('/api/jobs', { type, params });
+    /**
+     * Submit one request and get back every job the daemon planned for it
+     * (a crawl becomes one per source per character; older daemons answer
+     * `job_id` alone).
+     */
+    async submitMany(type: string, params: Record<string, unknown> = {}): Promise<string[]> {
+      const r = await api.post<{ job_id: string; job_ids?: string[] }>('/api/jobs', { type, params });
       await this.load();
-      return r.job_id;
+      return r.job_ids?.length ? r.job_ids : [r.job_id];
+    },
+    async submit(type: string, params: Record<string, unknown> = {}) {
+      const ids = await this.submitMany(type, params);
+      return ids[0]!;
     },
     async cancel(id: string) {
       await api.post(`/api/jobs/${id}/cancel`);

@@ -75,5 +75,24 @@
     "running": "{stage} · {posts} new",
     "done": "done · +{n}",
     "failed": "failed"
+  },
+  "toast": {
+    "queued": "{label} queued on {source}",
+    "running": "{label} crawling on {source}",
+    "multi": "{label} running on {n} sources",
+    "behind": "starting next | behind 1 job | behind {n} jobs",
+    "position": "queued on {source} · position {n}",
+    "chipQueued": "queued · {n}",
+    "paused": "Queue is paused — {label} will wait",
+    "noMatch": "Couldn't start: no character matches",
+    "noMatchSub": "{label} · {sources}",
+    "terms": "0 match terms | 1 match term | {n} match terms",
+    "noSources": "no source selected",
+    "unreachable": "Couldn't start: daemon unreachable",
+    "failed": "Couldn't start",
+    "open": "Open pipeline",
+    "resume": "Resume queue",
+    "retry": "Retry",
+    "close": "Dismiss"
   }
 }

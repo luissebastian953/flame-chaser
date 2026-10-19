@@ -6,6 +6,7 @@ person using the app, not for git log.
 
 ## Unreleased
 
+- Added: pressing Run on a character (or Save & run) now shows a toast in the corner saying where the crawl went — queued behind another job, or already crawling with its current stage — with an Open pipeline button; the row's state chip pulses once. The toast turns amber with Resume queue while the queue is paused, and red with Retry when the crawl could not start (no source selected, or the daemon did not answer)
 - Added: Japanese interface — every screen is translated; pick 日本語 in Settings › Language, or leave “Follow system language” on and it switches on by itself on a Japanese system
 - Changed: Settings › Theme is rebuilt — five presets (Nightglass, Bloodline, Phosphor, Hanami, Graphite), a custom theme with primary, accent, background and surface colours, cut / square / round corners, glow off / soft / neon and a scanline strength, a Live preview drawn with your draft, Apply and Reset to default, Save as preset, and Export / Import as JSON through the clipboard; the window can be see-through with the desktop blurred behind it (the desktop app only)
 - Added: pixiv and X are crawled at the same time — one worker per source, so each site still sees a single stream of requests; a crawl becomes one job per source per character, and the Pipeline shows one card per worker with its stages, posts this run, requests per minute and an Open button to that worker's own stages, counters and log

@@ -658,8 +658,19 @@ log with tracebacks.
 - Credential status from `/api/sources/status` — the `doctor` output, surfaced:
   PHPSESSID present, gallery-dl found, X cookies present/expiring.
 - Folder picker → `PUT /api/config {library_root}`.
-- Dispatch: run-now buttons per job type, optional per-watch. Posts to
-  `/api/jobs` and routes to the pipeline page.
+- Dispatch: Run per character (and Save & run from the form) posts to
+  `/api/jobs` and **stays on Crawl**: a toast rises bottom-right of the
+  content area (`RunToasts`, max three, newest last) and the row's state chip
+  pulses once. The toast holds only the character and the job ids the planner
+  returned for it (`job_ids`, minus the shared `timelines` job) and reads the
+  rest live off the jobs store, so "queued on X · behind 1 job" becomes
+  "crawling on X · download" by itself; two sources are two chips in one
+  toast. Ember with a 6 s countdown (held while the pointer is on the stack);
+  amber and sticky while the queue is paused, with Resume queue; rose and
+  sticky when the daemon refused (`nothing_to_run`) or did not answer, with
+  Retry. Open pipeline goes to `/pipeline/<lane>` for one source, `/pipeline`
+  for two. Run all keeps navigating to the pipeline: a whole-archive crawl is
+  watched there, not from a toast.
 - Schedule: a cron expression per job type, evaluated by the daemon.
 
 ### 5.2 Worker pipeline — *live*

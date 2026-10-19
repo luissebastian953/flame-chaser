@@ -28,6 +28,8 @@ declare module 'vue' {
     RateBudget: typeof import('./components/RateBudget.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    RunToast: typeof import('./components/RunToast.vue')['default']
+    RunToasts: typeof import('./components/RunToasts.vue')['default']
     SelectContent: typeof import('reka-ui')['SelectContent']
     SelectItem: typeof import('reka-ui')['SelectItem']
     SelectItemText: typeof import('reka-ui')['SelectItemText']

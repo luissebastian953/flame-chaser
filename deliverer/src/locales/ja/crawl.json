@@ -75,5 +75,24 @@
     "running": "{stage} · 新規 {posts}",
     "done": "完了 · +{n}",
     "failed": "失敗"
+  },
+  "toast": {
+    "queued": "{label} — {source} で待機中",
+    "running": "{label} — {source} で収集中",
+    "multi": "{label} — {n} ソースで実行中",
+    "behind": "次に開始 | 前に 1 件 | 前に {n} 件",
+    "position": "{source} で待機 · {n} 番目",
+    "chipQueued": "待機 · {n}",
+    "paused": "キューは一時停止中 — {label} は待機します",
+    "noMatch": "開始できません: 一致するキャラクターがありません",
+    "noMatchSub": "{label} · {sources}",
+    "terms": "一致語 0 | 一致語 1 | 一致語 {n}",
+    "noSources": "ソース未選択",
+    "unreachable": "開始できません: デーモンに接続できません",
+    "failed": "開始できません",
+    "open": "パイプラインを開く",
+    "resume": "キューを再開",
+    "retry": "再試行",
+    "close": "閉じる"
   }
 }
