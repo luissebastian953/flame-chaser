@@ -17,7 +17,7 @@ flowchart TB
     chk["check job · ubuntu-latest<br/>check-version.sh · reaver/check.sh · deliverer check"]
     subgraph matrix["build matrix · fail-fast off"]
       m1["macos-latest<br/>aarch64 · dmg"]
-      m2["macos-13<br/>x86_64 · dmg"]
+      m2["macos-15-intel<br/>x86_64 · app,dmg"]
       m3["windows-latest<br/>x86_64 · nsis"]
       m4["ubuntu-22.04<br/>x86_64 · appimage + deb"]
     end

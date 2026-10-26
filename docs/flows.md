@@ -396,7 +396,7 @@ flowchart TD
   check --> m
   subgraph m["build matrix · fail-fast off"]
     mac1["macos-latest · aarch64 · dmg"]
-    mac2["macos-13 · x86_64 · dmg"]
+    mac2["macos-15-intel · x86_64 · app,dmg"]
     win["windows-latest · nsis"]
     lin["ubuntu-22.04 · appimage + deb"]
   end

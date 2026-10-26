@@ -22,7 +22,7 @@ git tag vX.Y.Z && git push origin master --tags
 
 `.github/workflows/release.yml` on a `v*` tag: job `check` (check-version,
 `reaver/check.sh`, deliverer `check`) → matrix `build` on macos-latest
-(aarch64 dmg), macos-13 (x86_64 dmg), windows-latest (nsis), ubuntu-22.04
+(aarch64 dmg), macos-15-intel (x86_64 app,dmg), windows-latest (nsis), ubuntu-22.04
 (appimage,deb). In every build job the **sidecar is built before
 `tauri-action`** (`deliverer/scripts/build-sidecar.sh`, PyInstaller
 `--onedir` → `src-tauri/resources/sidecar/`, smoke-tested with `--help`),

@@ -1509,7 +1509,7 @@ promotes `## Unreleased` in `CHANGELOG.md` and refreshes the lockfile;
 
 Differs from §8b.5 in three ways: a separate `check` job (version gate,
 `reaver/check.sh`, deliverer `check`) runs first; the Intel build uses
-`macos-13` (the last Intel runner) and Linux `ubuntu-22.04` (oldest glibc we
+`macos-15-intel` (the Intel runner, until fall 2027) and Linux `ubuntu-22.04` (oldest glibc we
 ship); each build job builds the sidecar, **smokes it** (`dawnmaker --help`),
 then runs `tauri-action` with `--target` and `--bundles` (`dmg` / `nsis` /
 `appimage,deb`), `releaseDraft: true` and `includeUpdaterJson: true`. A
