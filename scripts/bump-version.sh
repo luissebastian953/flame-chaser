@@ -15,7 +15,7 @@ import json, re, sys
 from pathlib import Path
 v = sys.argv[1]
 def sub(path, pattern, repl):
-    p = Path(path); s = p.read_text(); n = re.subn(pattern, repl, s, count=1)
+    p = Path(path); s = p.read_text(); n = re.subn(pattern, repl, s, count=1, flags=re.M)
     assert n[1] == 1, f"{path}: pattern not found"
     p.write_text(n[0]); print(f"  {path}")
 for jf in ("deliverer/src-tauri/tauri.conf.json", "deliverer/package.json"):

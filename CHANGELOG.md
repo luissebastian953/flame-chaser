@@ -6,6 +6,8 @@ person using the app, not for git log.
 
 ## Unreleased
 
+## 0.2.0 - 2026-10-26
+
 - Added: the pipeline pauses itself when the internet goes away - a request that fails because the connection is gone (not because pixiv or X had a bad moment) puts the crawl it was running back at the front of the queue, holds the whole queue, and the Pipeline page, the mini window and the crawl's toast say "paused · no internet"; the daemon keeps probing and everything resumes on its own when the connection is back. Pause queue by hand while offline keeps it paused until you resume it
 - Changed: Settings › Storage is four plates - Library with a disk bar (library · other · free) and Show in folder, Database with its size and the never-in-the-library rule, Layout with each tree's count and size, Trash - and the app, daemon and schema versions in the header
 - Added: Settings › Storage › Backup - Export writes the whole archive (characters, settings, the database, the images and thumbnails) as one file, a `.curio` bundle or a `.zip`, verified after writing; Import inspects a bundle first, shows every character with a merge / keep / take choice where yours collides, then merges into or restores over the archive; a damaged file is named by entry and what is intact can still be imported, with hurt images re-downloaded on the next crawl. `coreflame bundle export|inspect|verify|import` from the terminal
