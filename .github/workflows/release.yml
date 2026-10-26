@@ -88,18 +88,36 @@ jobs:
           "$BIN" --help | head -1
         shell: bash
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Apple signing env (only when a Developer ID is configured)
+        # An unset secret still arrives as an EMPTY variable, and the Tauri
+        # bundler treats a present APPLE_CERTIFICATE as "sign": it then runs
+        # `security import` on nothing and the dmg job dies. So the APPLE_*
+        # variables are exported only when the certificate secret is non-empty;
+        # without them the dmg is unsigned (right-click > Open on first launch).
+        if: runner.os == 'macOS'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS notarization (optional until you have a Developer ID)
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "APPLE_CERTIFICATE secret not set: building an unsigned, un-notarised dmg"
+            exit 0
+          fi
+          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            { echo "$v<<__EOV__"; printf '%s\n' "${!v}"; echo "__EOV__"; } >> "$GITHUB_ENV"
+          done
+        shell: bash
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # the APPLE_* variables come from the step above, when configured
         with:
           projectPath: deliverer
           tauriScript: pnpm tauri
