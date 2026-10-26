@@ -134,7 +134,7 @@ describe('IdentityFilter chips', () => {
     expect(button(w, 'fewer')).toBeTruthy();
   });
 
-  it('By tag shows the whole cast, the characters already picked first', () => {
+  it('By tag shows the whole cast in place, the picked character marked where it stands', () => {
     const many = Array.from({ length: 10 }, (_, i) => ({ name: `c${i}`, label: `C${i}`, count: 20 - i }));
 
     const w = mountWithPlugins(IdentityFilter, {
@@ -152,9 +152,10 @@ describe('IdentityFilter chips', () => {
 
     const cast = w.findAll('button.chip.pick').filter((b) => /^C\d/.test(b.text()));
     expect(cast).toHaveLength(10);
-    expect(cast[0]!.text()).toMatch(/^C9/);
-    expect(cast[0]!.classes()).toContain('sel');
-    expect(cast[1]!.text()).toMatch(/^C0/);
+    expect(cast[0]!.text()).toMatch(/^C0/);
+    expect(cast[0]!.classes()).not.toContain('sel');
+    expect(cast[9]!.text()).toMatch(/^C9/);
+    expect(cast[9]!.classes()).toContain('sel');
   });
 });
 

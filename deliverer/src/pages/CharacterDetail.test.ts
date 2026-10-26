@@ -99,7 +99,7 @@ function respond(path: string) {
   if (path.startsWith('/api/gallery/ganyu/images?')) {
     // By tag: the daemon's list for one term, filtered like the grid
     return path.includes('tag=')
-      ? { shas: ['sha1'], sources: { sha1: 'pixiv' } }
+      ? { shas: ['sha2'], sources: { sha2: 'twitter' } }
       : { shas: ['sha1', 'sha2'], sources: { sha1: 'pixiv', sha2: 'twitter' } };
   }
   if (path === '/api/gallery/ganyu/artists')
@@ -357,11 +357,15 @@ describe('CharacterDetail deleting images', () => {
     );
 
     expect(w.text()).toContain('1 selected');
-    expect(w.text()).toContain('by 1 tag · pixiv 1 · X 0');
+    expect(w.text()).toContain('by 1 tag · pixiv 0 · X 1');
     expect(w.text()).toContain('原神 1 = 1 images · 0 overlap · −0 excluded');
+    // the chip's images lead the grid; the chip itself stays where its row puts it
+    expect(tiles(w)[0]!.attributes('data-sha')).toBe('sha2');
     expect(tiles(w)[0]!.attributes('aria-pressed')).toBe('true');
+    expect(tiles(w)[1]!.attributes('data-sha')).toBe('sha1');
     expect(tiles(w)[1]!.classes()).toContain('ex'); // not a candidate
-    expect(w.findAll('.tags button.chip')[0]!.text()).toContain('原神'); // the picked chip leads its row
+    expect(w.findAll('.tags button.chip')[0]!.text()).toContain('甘雨');
+    expect(w.findAll('.tags button.chip')[2]!.text()).toContain('原神');
 
     await tiles(w)[0]!.trigger('click'); // kept back out
     expect(w.text()).toContain('0 selected');

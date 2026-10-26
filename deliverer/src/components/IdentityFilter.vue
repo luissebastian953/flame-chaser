@@ -5,7 +5,6 @@
  * named, to narrow the grid. Names only label -- nothing is removed. Offers
  * the `label` job for images stored before naming existed.
  */
-import { pickedFirst } from '@/lib/chips';
 import type { IdentState } from '@/lib/types';
 
 const props = defineProps<{ slug: string }>();
@@ -32,9 +31,9 @@ const ident = computed(() => lib.characters?.identifier ?? null);
 const states = computed(() => IDENT_STATES.filter((s) => s !== 'pending' || pending.value > 0));
 const named = computed(() => lib.characters?.characters ?? []);
 
-// By tag shows every character, the picked ones first: a folded row hides exactly what the user is looking for
+// By tag shows every character, in place: a folded row hides exactly what the user is looking for
 const visible = computed(() => {
-  if (selecting.value) return pickedFirst(named.value, (c) => del.isTerm('character', c.name));
+  if (selecting.value) return named.value;
   return all.value ? named.value : named.value.slice(0, SHOWN);
 });
 

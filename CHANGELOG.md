@@ -6,6 +6,8 @@ person using the app, not for git log.
 
 ## Unreleased
 
+- Changed: while choosing images to delete By tag, the chips stay where they are in their row; it is the images behind the picked chips that move to the front of the grid, so the selection reads in one place without the rows reshuffling
+
 ## 0.2.0 - 2026-10-26
 
 - Added: the pipeline pauses itself when the internet goes away - a request that fails because the connection is gone (not because pixiv or X had a bad moment) puts the crawl it was running back at the front of the queue, holds the whole queue, and the Pipeline page, the mini window and the crawl's toast say "paused · no internet"; the daemon keeps probing and everything resumes on its own when the connection is back. Pause queue by hand while offline keeps it paused until you resume it

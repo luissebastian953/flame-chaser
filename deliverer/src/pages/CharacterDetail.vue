@@ -97,9 +97,9 @@ const orderedTags = computed(() => [
   ...lib.tags.filter((x) => x.state === 'ignored'),
 ]);
 
-// By tag shows every chip, the picked ones first: a folded row hides exactly what the user is looking for
+// By tag shows every chip, in place: a folded row hides exactly what the user is looking for
 const shownTags = computed(() => {
-  if (del.mode === 'tag') return pickedFirst(orderedTags.value, (x) => del.isTerm('tag', x.tag_norm));
+  if (del.mode === 'tag') return orderedTags.value;
   return allTags.value
     ? orderedTags.value
     : orderedTags.value.slice(0, Math.max(TAGS_SHOWN, watchedTags.value.length));
@@ -329,8 +329,6 @@ const formula = computed(() => {
 });
 
 const artistKey = (a: GalleryArtist) => `${a.source}:${a.artist_id}`;
-// the picked artists lead their row too
-const shownArtists = computed(() => pickedFirst(artists.value, (a) => del.isTerm('artist', artistKey(a))));
 
 // Smart: matches float to the top in the chosen order, the rest below (or hidden)
 const smartMatches = computed(() => {
@@ -353,9 +351,15 @@ const smartMatches = computed(() => {
   return list;
 });
 
-const rest = computed(() =>
-  del.mode === 'smart' ? lib.grid.items.filter((it) => !del.smartBySha.has(it.sha256)) : lib.grid.items,
-);
+// By tag: the images the picked chips stand for lead the grid; Smart: its matches have a grid of their own
+const rest = computed(() => {
+  if (del.mode === 'smart') return lib.grid.items.filter((it) => !del.smartBySha.has(it.sha256));
+  if (del.mode === 'tag' && del.terms.length) {
+    const inTerm = new Set(del.terms.flatMap((x) => x.shas));
+    return pickedFirst(lib.grid.items, (it) => inTerm.has(it.sha256));
+  }
+  return lib.grid.items;
+});
 
 // Masonry as real columns, packed in order (shortest column first), not CSS
 // `column-count`: that balances column heights, so two images land in
@@ -703,7 +707,7 @@ watch(() => props.slug, load);
         <div v-if="del.mode === 'tag' && artists.length" class="artists">
           <span class="ptitle">{{ $t('gallery.delete.tag.artists') }}</span>
           <button
-            v-for="a in shownArtists"
+            v-for="a in artists"
             :key="artistKey(a)"
             class="chip pick"
             :class="{ sel: del.isTerm('artist', artistKey(a)) }"
