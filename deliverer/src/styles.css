@@ -1,5 +1,5 @@
 /*
- * Curio — "cyber build" tokens. Tailwind v4 is CSS-first: everything under
+ * Curio - "cyber build" tokens. Tailwind v4 is CSS-first: everything under
  * @theme becomes both a CSS variable and a utility family (bg-ember, text-mut,
  * p-15, text-small, ...). Component classes below are plain CSS on the same
  * variables so templates can mix `class="btn pri"` with `class="mt-10 flex"`.
@@ -13,7 +13,7 @@
 @theme {
   /* ---- colors (utilities: bg-*, text-*, border-*) ---- */
   --color-*: initial;
-  /* Sampled from the Settings — Theme board: a much deeper navy than the
+  /* Sampled from the Settings - Theme board: a much deeper navy than the
      first pass, plates only ~4% above the canvas, hairlines ~9%. */
   --color-bg: #080b16;
   --color-rail: #050812;
@@ -124,7 +124,7 @@
   min-height: var(--custom-height-screen);
 }
 
-/* Cut corners — the signature of the build. --cut is per-element overridable. */
+/* Cut corners - the signature of the build. --cut is per-element overridable. */
 @utility cut {
   --cut: 8px;
   clip-path: polygon(
@@ -185,6 +185,10 @@
   /* Settings › Theme writes these at runtime. */
   --plate-opacity: 1;
   --plate-blur: 0px;
+  /* the plate colour panels paint: the surface at the plate opacity. Anything that
+     fades INTO a panel (a clipped row's "+N more") ends on this, never on the opaque
+     surface, or it reads as a darker block once the theme makes plates translucent */
+  --plate: color-mix(in oklch, var(--color-surf) calc(var(--plate-opacity) * 100%), transparent);
   --grid-alpha: 0.035;
   --scan-alpha: 0.025; /* Settings › Theme: scanline strength on plates */
   --window-alpha: 1; /* < 1 only with a transparent window: the desktop shows through the canvas */
@@ -457,7 +461,7 @@
     padding: 18px 24px;
   }
 
-  /* Buttons — components sheet "live": corners cut top-right + bottom-left.
+  /* Buttons - components sheet "live": corners cut top-right + bottom-left.
      hover: lifts one step in surface + border · active: drops 1px · on: ember
      tint + ember text (a pressed toggle, e.g. the source filter). */
   .btn {
@@ -547,7 +551,7 @@
     cursor: default;
   }
 
-  /* Chips — same silhouette at chip scale; `.on` = ember tint, `.off` = dim */
+  /* Chips - same silhouette at chip scale; `.on` = ember tint, `.off` = dim */
   .chip {
     --cut: 5px;
     display: inline-flex;
@@ -580,6 +584,25 @@
     border-color: color-mix(in oklch, var(--color-rose) 45%, transparent);
     color: var(--color-rose);
   }
+  /* By tag (stores/deletion.ts): a chip stands for the images to delete.
+     `.sel` = marked, rose outline with the × in front -- never ember, which
+     means filtering. */
+  button.chip.pick {
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+  }
+  .chip.pick.sel {
+    border-color: var(--color-rose);
+    background: color-mix(in srgb, var(--color-rose) 12%, var(--color-bg));
+    color: var(--color-rose);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--color-rose) 40%, transparent);
+  }
+  .chip.pick.sel em,
+  .chip.pick.sel .name,
+  .chip.pick.sel .pct {
+    color: inherit;
+  }
 
   /* Panels are square by default. Two ways to get cut corners:
      - globally: Settings › Theme sets `corners-cut` on <html>
@@ -588,7 +611,7 @@
     --cut: 10px;
     position: relative;
     border: 1px solid var(--color-line-soft);
-    background: color-mix(in oklch, var(--color-surf) calc(var(--plate-opacity) * 100%), transparent);
+    background: var(--plate);
     backdrop-filter: blur(var(--plate-blur));
     overflow: hidden;
   }
@@ -764,7 +787,7 @@
     color: var(--color-dim);
   }
 
-  /* Reka primitives — headless, skinned here */
+  /* Reka primitives - headless, skinned here */
   /* ---- selection controls: state reads from the box, never from the label.
      Selected = ember fill + glow. Checkbox is the cut-corner polygon (glow via
      drop-shadow because clip-path clips box-shadow). ---- */

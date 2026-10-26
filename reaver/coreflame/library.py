@@ -22,6 +22,7 @@ import shutil
 from collections.abc import Iterable
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -130,3 +131,80 @@ class LibraryView:
     def orphans(self, live: Iterable[Path]) -> list[Path]:
         keep = {p.resolve() for p in live}
         return [p for p in self.view.rglob("*") if p.is_file() and p.resolve() not in keep]
+
+
+def _tree_size(root: Path) -> tuple[int, int]:
+    """(files, bytes) under `root`; (0, 0) when it does not exist. Counts
+    every name once, so a hardlinked file is counted where it is listed."""
+    files = total = 0
+    if not root.is_dir():
+        return 0, 0
+    stack = [root]
+    while stack:
+        d = stack.pop()
+        try:
+            with os.scandir(d) as it:
+                for e in it:
+                    if e.is_dir(follow_symlinks=False):
+                        stack.append(Path(e.path))
+                    elif e.is_file(follow_symlinks=False) and not e.name.endswith(".part"):
+                        files += 1
+                        total += e.stat(follow_symlinks=False).st_size
+        except OSError:
+            continue
+    return files, total
+
+
+def _nearest(path: Path) -> Path:
+    while not path.exists():
+        if path.parent == path:
+            break
+        path = path.parent
+    return path
+
+
+def _mount_of(path: Path) -> Path:
+    p = _nearest(path).resolve()
+    while not os.path.ismount(p) and p.parent != p:
+        p = p.parent
+    return p
+
+
+def usage(root: Path, db_path: Path, store: Any) -> dict[str, Any]:
+    """Settings › Storage: what the library holds and the disk it sits on.
+    Blobs and thumbs come from a walk of their trees (an archive of a few
+    thousand files is a few milliseconds); the hardlink view costs no extra
+    bytes, so it reports characters only."""
+    root, db_path = Path(root).expanduser(), Path(db_path).expanduser()
+    blob_files, blob_bytes = _tree_size(root / "blobs")
+    thumb_files, thumb_bytes = _tree_size(root / "thumbs")
+    _, trash_bytes = _tree_size(root / "trash")
+    characters = 0
+    view = root / "by-character"
+    if view.is_dir():
+        with contextlib.suppress(OSError):
+            characters = sum(1 for e in os.scandir(view) if e.is_dir(follow_symlinks=False))
+    du = shutil.disk_usage(_nearest(root))
+    db_bytes = 0
+    for suffix in ("", "-wal", "-shm"):
+        f = db_path.with_name(db_path.name + suffix)
+        if f.exists():
+            db_bytes += f.stat().st_size
+    library_bytes = blob_bytes + thumb_bytes + trash_bytes
+    return {
+        "library_root": str(root),
+        "db_path": str(db_path),
+        "db_bytes": db_bytes,
+        "schema_version": int(store.stats()["schema_version"]),
+        "disk": {
+            "total": du.total,
+            "free": du.free,
+            "used": du.used,
+            "library": library_bytes,
+            "other": max(0, du.used - library_bytes),
+            "mount": str(_mount_of(root)),
+        },
+        "blobs": {"files": blob_files, "bytes": blob_bytes},
+        "thumbs": {"files": thumb_files, "bytes": thumb_bytes},
+        "by_character": {"characters": characters},
+    }

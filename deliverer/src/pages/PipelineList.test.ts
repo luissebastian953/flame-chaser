@@ -62,6 +62,8 @@ const timelines = job('q2', { type: 'timelines', lane: 'twitter', params: { acco
 
 const pipeline: PipelineState = {
   paused: false,
+  pause_reason: null,
+  online: true,
   workers: [
     { lane: 'pixiv', job_id: 'r1' },
     { lane: 'twitter', job_id: null },
@@ -181,15 +183,80 @@ describe('PipelineList', () => {
     expect(wrapper.text()).toContain('Ganyu');
   });
 
-  it('says so when nothing runs: idle pill, no embers, empty queue', async () => {
+  it('Completed today is one row per character run, unfolding into its pixiv, X and timelines parts', async () => {
+    const today = new Date().toISOString();
+
+    const px = job('d1', {
+      state: 'failed',
+      error: 'pixiv: not signed in',
+      worker: 'pixiv',
+      params: { source: 'pixiv', watches: ['ganyu'] },
+      created_at: today,
+      finished_at: today,
+      counters: { new_posts: 2, downloaded: 1 },
+    });
+
+    const tw = job('d2', {
+      state: 'succeeded',
+      lane: 'twitter',
+      worker: 'twitter',
+      params: { source: 'twitter', watches: ['ganyu'] },
+      created_at: today,
+      finished_at: today,
+      counters: { new: 5, downloaded: 4, rejected: 1 },
+    });
+
+    const tl = job('d3', {
+      type: 'timelines',
+      state: 'succeeded',
+      lane: 'twitter',
+      worker: 'twitter',
+      params: { accounts: 3 },
+      created_at: today,
+      finished_at: today,
+      counters: { downloaded: 1 },
+    });
+
+    const { wrapper } = await mountList([running, px, tw, tl]);
+
+    const rows = wrapper.findAll('.drow');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.text()).toContain('Ganyu');
+    expect(rows[0]!.text()).toContain('failed');
+    expect(rows[0]!.text()).toContain('+7 new · 5 kept · 1 dropped');
+    expect(wrapper.text()).not.toContain('followed timelines');
+
+    await rows[0]!.trigger('click');
+    const parts = wrapper.findAll('.prow');
+    expect(parts.map((p) => p.find('.pn').text())).toEqual(['pixiv', 'X', 'X · followed timelines']);
+    expect(parts[0]!.text()).toContain('failed');
+    expect(parts[2]!.text()).toContain('+0 new · 1 kept · 0 dropped');
+
+    await rows[0]!.trigger('click');
+    expect(wrapper.findAll('.prow')).toHaveLength(0);
+  });
+
+  it('says so when nothing runs: idle pill, no embers, empty queue, Pause queue greyed out', async () => {
     pipeline.workers[0]!.job_id = null;
     const { wrapper } = await mountList([]);
     pipeline.workers[0]!.job_id = 'r1';
 
+    const pause = wrapper.findAll('button').find((b) => b.text().includes('Pause queue'))!;
+    expect(pause.attributes('disabled')).toBeDefined();
     expect(wrapper.text()).toContain('idle');
     expect(wrapper.text()).toContain('queue empty');
     expect(wrapper.find('[data-pipeline-running="false"]').exists()).toBe(true);
     expect(wrapper.find('.embers').exists()).toBe(false);
+  });
+
+  it('a hold for a lost connection reads as paused with no internet, and Resume queue stays available', async () => {
+    Object.assign(pipeline, { paused: true, pause_reason: 'offline', online: false });
+    const { wrapper } = await mountList();
+    Object.assign(pipeline, { paused: false, pause_reason: null, online: true });
+
+    expect(wrapper.text()).toContain('paused · no internet');
+    expect(wrapper.text()).toContain('the pipeline paused itself');
+    expect(wrapper.findAll('button').some((b) => b.text().includes('Resume queue'))).toBe(true);
   });
 
   it('shows the rate budgets and what each sent', async () => {

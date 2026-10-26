@@ -23,10 +23,6 @@
       "newest": "新しい順",
       "oldest": "古い順"
     },
-    "delete": {
-      "label": "キャラクターを削除",
-      "armed": "もう一度クリックで削除"
-    },
     "observedTags": "観測されたタグ",
     "tagsHint": "この{posts}に実際に付いているタグ · 投稿に占める割合",
     "seeAll": "{n} 件すべて表示",
@@ -42,17 +38,15 @@
   },
   "aside": {
     "title": "画像の詳細",
-    "pages": "0ページ | 1ページ | {n}ページ",
     "close": "閉じる",
     "untitled": "（無題）",
     "source": {
       "pixiv": "pixiv",
       "twitter": "X"
     },
-    "gone": "ソースで削除済み — ここには保持、再取得はしません",
+    "gone": "ソースで削除済み - ここには保持、再取得はしません",
     "dimensions": "サイズ",
     "file": "ファイル",
-    "fileSize": "{n} MB",
     "bookmarks": "ブックマーク",
     "hash": "sha256",
     "characters": "キャラクター",
@@ -60,7 +54,38 @@
     "notIdentified": "まだ特定していません",
     "score": "{n}%",
     "sameImageOn": "{source} の同じ画像",
-    "openOn": "{source} で開く"
+    "openOn": "{source} で開く",
+    "fullscreen": "全画面 (F)",
+    "counter": "{n} / {total}",
+    "related": {
+      "title": "関連画像",
+      "samePost": "同じ投稿 · {id} · {n}ページ",
+      "more": "+ {n} 件 · {source} の {'@'}{handle}",
+      "caption": "同じ {source} 投稿のページ、続いて同じ {other} 投稿（{id}）の画像。クリックで切り替え、← → で移動します。",
+      "captionPages": "同じ {source} 投稿のページ。クリックで切り替え、← → で移動します。",
+      "page": "p{n}"
+    },
+    "fileInfo": "{n} MB · {ext}",
+    "stored": "保存先",
+    "notStored": "未保存",
+    "keptNote": "{kept} のオリジナルを保存。{other} のコピーは記録のみで、保存していません。",
+    "reveal": "ファイルを表示",
+    "revealHint": "Finder / エクスプローラーでファイルを表示",
+    "revealNone": "ローカルに未保存",
+    "revealDesktop": "デスクトップ版でのみ使えます",
+    "viewer": {
+      "close": "閉じる (Esc)",
+      "prev": "前へ (←)",
+      "next": "次へ (→)",
+      "fit": "fit",
+      "one": "1:1",
+      "two": "200%",
+      "zoom": "ズーム",
+      "pageOf": "p{n} / {total}",
+      "related": "{n} / {total} 件",
+      "recorded": "記録のみ · 未保存",
+      "meta": "{w} × {h} · {mb} MB · {ext}"
+    }
   },
   "kinds": {
     "show": "表示",
@@ -75,7 +100,7 @@
     "labelNow": "0枚をラベル付け | 1枚をラベル付け | {n}枚をラベル付け",
     "removeNow": "0枚を削除 | 1枚を削除 | {n}枚を削除",
     "checkPeople": "0枚を性別フィルターで確認 | 1枚を性別フィルターで確認 | {n}枚を性別フィルターで確認",
-    "policy": "イラストとアニメのキャプチャだけを残します — 写真、コスプレ、3D、フィギュア、スクリーンショットは除外されます",
+    "policy": "イラストとアニメのキャプチャだけを残します - 写真、コスプレ、3D、フィギュア、スクリーンショットは除外されます",
     "labeling": "ラベル付け中… {done} / {total}",
     "labelingStarting": "ラベル付け中…",
     "firstUse": "初回実行時に分類器（約 34 MB）をダウンロードします",
@@ -95,10 +120,200 @@
     "identifyNow": "0枚を特定 | 1枚を特定 | {n}枚を特定",
     "identifying": "特定中… {done} / {total}",
     "identifyingStarting": "特定中…",
-    "policy": "名前は画像にラベルを付けるだけ — 何も削除されません",
+    "policy": "名前は画像にラベルを付けるだけ - 何も削除されません",
     "firstUse": "初回実行時にキャラクタータガーを 2 つダウンロードします（最大約 1.3 GB）",
-    "off": "キャラクター名はオフです — 設定 › キャラクター でオンにできます",
+    "off": "キャラクター名はオフです - 設定 › キャラクター でオンにできます",
     "unavailable": "キャラクター名はオフです: 任意の分類器がインストールされていません（{cmd}）",
     "failed": "特定に失敗: {error}"
+  },
+  "delete": {
+    "menu": {
+      "button": "削除",
+      "title": "画像を削除",
+      "sub": "選び方を選択",
+      "image": {
+        "title": "画像ごと",
+        "desc": "グリッドのタイルを選びます。クリック、Shift+クリックで範囲、ドラッグで囲み選択。"
+      },
+      "tag": {
+        "title": "タグごと",
+        "desc": "タグ・キャラクター・作者のチップをクリックすると、それを持つ画像をすべてマークします。"
+      },
+      "smart": {
+        "title": "スマート · AI 識別",
+        "desc": "認識スコアが低い、別のキャラクター、ほぼ同じ画像、写真。事前にチェック済み、削除前に確認します。",
+        "suggested": "{n} 件の候補"
+      },
+      "all": {
+        "title": "{n} 枚すべて",
+        "desc": "{label} のアーカイブを空にします。キャラクターとクロール設定は残ります。名前の入力で確認。"
+      },
+      "foot": "まずゴミ箱へ · {days} 日間",
+      "character": "キャラクターの削除 → その他メニュー"
+    },
+    "more": {
+      "label": "その他",
+      "deleteCharacter": "キャラクターを削除",
+      "armed": "もう一度クリックで削除"
+    },
+    "bar": {
+      "close": "選択を終了",
+      "selected": "0 件選択 | 1 件選択 | {n} 件選択",
+      "of": "全 {total} 件 · pixiv {pixiv} · X {x}",
+      "ofTags": "{tags}から · pixiv {pixiv} · X {x}",
+      "tagCount": "0 件のタグ | 1 件のタグ | {n} 件のタグ",
+      "ofAll": "すべて · pixiv {pixiv} · X {x} · {size}",
+      "minus": "{n} − {kept} = {left}",
+      "mode": {
+        "image": "画像ごと",
+        "tag": "タグごと",
+        "smart": "スマート",
+        "all": "すべての画像"
+      },
+      "switchMode": "モードを切り替え",
+      "any": "いずれかのタグ",
+      "all": "すべてのタグ",
+      "matchLabel": "タグの組み合わせ",
+      "reviewOnly": "候補のみ表示",
+      "clear": "クリア",
+      "delete": "{n} 件を削除",
+      "leaveConfirm": "選択を破棄して終了しますか？ もう一度 Esc"
+    },
+    "hint": {
+      "image": "タイルをクリックでマーク。{shift} で範囲、空白をドラッグで囲み選択、{a} で表示中をすべてマーク、{esc} で終了。",
+      "shift": "⇧クリック",
+      "a": "A",
+      "esc": "Esc",
+      "tag": "タグ・キャラクター・作者のチップをクリックすると、それを持つ画像をすべてマークします。タイルをクリックで 1 枚だけ外せます。",
+      "smart": "候補は事前にチェック済みです。左の条件を調整し、残したいものはチェックを外してから削除してください。",
+      "all": "すべての画像がマークされています。タイルをクリックで残せます。キャラクターとクロール設定は残ります。",
+      "hides": "最初の操作で非表示"
+    },
+    "tile": {
+      "mark": "{title} をマーク",
+      "keep": "{title} を残す"
+    },
+    "tag": {
+      "artists": "作者",
+      "union": " ∪ ",
+      "intersection": " ∩ ",
+      "term": "{label} {n}",
+      "formula": "{terms} = {n} 枚 · 重複 {overlap} · 除外 −{dropped}",
+      "none": "上のチップをクリックすると、それを持つ画像をすべてマークします。",
+      "everything": "これは全部です。「すべて」を使いますか？",
+      "useAll": "すべてを使う",
+      "keepTerm": "このまま"
+    },
+    "smart": {
+      "title": "条件",
+      "score": "認識スコアが低い",
+      "scoreValue": "{n} 未満",
+      "scoreAria": "スコアのしきい値",
+      "scoreNote": "クロール時の基準は {n} - 基準が上がる前に取り込まれたもの",
+      "other": "{label} ではない",
+      "otherNote": "別のキャラクターとしてのみ識別",
+      "otherUnknown": "このギャラリーにはまだ名前の付いたキャラクターがいません - 先に画像を識別してください",
+      "dupes": "ほぼ同じ画像",
+      "dupesValue": "距離 ≤ {n}",
+      "dupesAria": "phash 距離",
+      "dupesNote": "大きいファイルを残し、各グループの残りを選択",
+      "kinds": "写真・3D・スクリーンショット",
+      "kindsNote": "クロール時の認識フィルターが除外するもの - コスプレ、人物、フィギュア、レンダリング、UI - がオフの間に取り込まれたもの",
+      "unidentified": "未識別",
+      "unidentifiedNote": "キャラクターが見つからない - 誤検出が多い",
+      "matched": "一致 {n}",
+      "unchecked": "チェック解除 {n}",
+      "applyAtCrawl": "クロール時にも適用",
+      "applyNote": "条件を設定 › 重複に書き込みます",
+      "applied": "ルール有効",
+      "matches": "一致 · {n}",
+      "sorted": "確信度順 · スコアが低い順",
+      "sortLabel": "一致の並び順",
+      "sort": {
+        "score": "スコア",
+        "reason": "理由",
+        "newest": "新しい順"
+      },
+      "rest": "非該当 · {n}",
+      "loading": "集計中…",
+      "off": "キャラクター名はオフです - 設定 › キャラクターでオンにしてください",
+      "badge": {
+        "other": "{label} · {score}",
+        "score": "{score}",
+        "dupe": "重複 · d{n}",
+        "unidentified": "未識別",
+        "kept": "{text} · 保持"
+      }
+    },
+    "sheet": {
+      "title": "0 枚の画像を削除 | 1 枚の画像を削除 | {n} 枚の画像を削除",
+      "titleAll": "{n} 枚すべてを削除",
+      "sub": "{label} · {mode} · {size}",
+      "subAll": "{label} は監視したまま · {size} · {posts}",
+      "modeName": {
+        "image": "手動で選択",
+        "tag": "タグごと",
+        "smart": "スマート選択",
+        "all": "すべて"
+      },
+      "close": "閉じる",
+      "more": "+{n}",
+      "review": "{n} 枚を確認",
+      "bySource": "ソース別",
+      "byReason": "理由別",
+      "posts": "対象の投稿",
+      "keepOther": "{n} 件は他の画像を保持",
+      "reason": {
+        "score": "スコア {n}",
+        "other": "別キャラ {n}",
+        "dupe": "重複 {n}",
+        "unidentified": "未識別 {n}",
+        "kind": "イラスト以外 {n}",
+        "hand": "手動 {n}",
+        "tag": "{label} {n}"
+      },
+      "trash": "ゴミ箱へ移動",
+      "trashNote": "{days} 日間復元可能 · 設定 › ストレージ · ゴミ箱は現在 {size}",
+      "trashForced": "500 枚または 1 GB を超えると必須",
+      "forget": "0 件の投稿を忘れる | この投稿を忘れる | {n} 件の投稿を忘れる",
+      "forgetNote": "訪問済みにして、次の {target} 件の実行で戻ってこないようにします",
+      "forgetNoteAll": "オフのままにすると、次の実行が現在のルールで作り直します",
+      "warnShared": "{n} 枚は別のキャラクターのギャラリーにもあります。削除するとそちらからも消えます。",
+      "warnMany": "500 枚または 1 GB を超えています: 完全削除はせず、ゴミ箱へ移動します。",
+      "warnWhole": "これは {label} のすべての画像です。",
+      "allStrip": "キャラクター全体を空にします。{label} のクロールも止めるには、ヘッダーのその他メニューからキャラクターを削除してください。",
+      "typeName": "確認のため {label} と入力",
+      "keys": "Esc でキャンセル · ⌘⏎ で確定",
+      "cancel": "キャンセル",
+      "confirm": "{n} 件をゴミ箱へ",
+      "confirmPermanent": "{n} 件を完全に削除",
+      "hold": "長押しで確定",
+      "lightbox": {
+        "close": "閉じる",
+        "prev": "前へ",
+        "next": "次へ",
+        "counter": "{i} / {n}"
+      }
+    },
+    "toast": {
+      "trashed": "0 枚をゴミ箱へ移動 | 1 枚をゴミ箱へ移動 | {n} 枚をゴミ箱へ移動",
+      "deleted": "0 枚を削除 | 1 枚を削除 | {n} 枚を削除",
+      "sub": "{label} · {size}",
+      "forgotten": "0 件の投稿を忘れました | 1 件の投稿を忘れました | {n} 件の投稿を忘れました",
+      "undo": "元に戻す",
+      "close": "閉じる",
+      "failed": "削除できませんでした: {error}"
+    },
+    "empty": {
+      "title": "画像はありません",
+      "sub": "キャラクターとクロール設定は残っています - クロールから実行すると再び集まります",
+      "crawl": "クロールを開く"
+    }
+  },
+  "review": {
+    "title": "{characters}で {n} 枚が {score} 未満",
+    "characters": "0 キャラクター | 1 キャラクター | {n} キャラクター",
+    "review": "確認",
+    "each": "{label} · {n}"
   }
 }

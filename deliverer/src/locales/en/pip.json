@@ -1,0 +1,28 @@
+{
+  "crawling": "crawling",
+  "paused": "paused",
+  "offline": "paused · no internet",
+  "queued": "queued",
+  "more": "{n}+ more",
+  "less": "Show less",
+  "pauseAll": "Pause all",
+  "resumeAll": "Resume all",
+  "newToday": "+{n} new",
+  "rpm": "{n} req/min",
+  "open": "Open Curio",
+  "hide": "Hide",
+  "finished": "done · +{n} new",
+  "tray": {
+    "tooltip": "Curio · {name} · {progress} · +{new} new",
+    "idle": "Curio · idle",
+    "pause": "Pause all",
+    "resume": "Resume all",
+    "showPip": "Show mini window",
+    "quit": "Quit Curio"
+  },
+  "notify": {
+    "title": "Run finished",
+    "finished": "{name} · {source} · +{n} new",
+    "ended": "{name} · {source} · {state}"
+  }
+}

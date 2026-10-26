@@ -11,6 +11,10 @@ import type { KindFilter } from '@/lib/types';
 const props = defineProps<{ slug: string }>();
 const lib = useLibrary();
 const jobs = useJobs();
+const del = useDeletion();
+const { t } = useI18n();
+// By tag (stores/deletion.ts): a chip marks the images of that kind instead of filtering
+const selecting = computed(() => del.mode === 'tag');
 
 // data, not prose: shown verbatim inside the translated sentence
 const INSTALL = "pip install 'reaver[classify]'";
@@ -37,6 +41,11 @@ const can = computed(() => lib.kindsFor(props.slug));
 const chips = computed(() => can.value.filter((k) => k !== 'unlabeled' || unlabeled.value > 0));
 
 function toggle(k: KindFilter) {
+  if (selecting.value) {
+    const total = Object.values(lib.kinds?.counts ?? {}).reduce((a, b) => a + b, 0);
+    void del.toggleTerm('kind', k, t(`gallery.kinds.name.${k}`), lib.gridQuery(props.slug), total);
+    return;
+  }
   const on = lib.show.includes(k);
   const next = on ? lib.show.filter((x) => x !== k) : [...lib.show, k];
   if (!next.some((x) => can.value.includes(x))) return; // never an empty grid by accident
@@ -66,10 +75,11 @@ watch(
       v-for="k in chips"
       :key="k"
       class="chip"
-      :class="{ on: lib.show.includes(k) }"
-      :aria-pressed="lib.show.includes(k)"
+      :class="selecting ? { pick: true, sel: del.isTerm('kind', k) } : { on: lib.show.includes(k) }"
+      :aria-pressed="selecting ? del.isTerm('kind', k) : lib.show.includes(k)"
       @click="toggle(k)"
     >
+      <Icon v-if="selecting && del.isTerm('kind', k)" name="close" :size="10" />
       {{ $t(`gallery.kinds.name.${k}`) }}
       <em>{{ lib.kinds?.counts[k] ?? 0 }}</em>
     </button>

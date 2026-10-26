@@ -9,7 +9,7 @@ description: Add a new illustration source to reaver (Misskey, Mastodon/pawoo, B
 
 1. **Verify access against primary sources, today.** Official API? What does it
    cost *now*? Documented rate limits? Auth? Response shape? Free tiers get
-   removed — X's did in Feb 2026. Put the date on every figure you record.
+   removed - X's did in Feb 2026. Put the date on every figure you record.
 2. **Rank the source honestly:** official API > permitted/community API >
    the site's own frontend endpoints > HTML. Say which tier it lands in.
 3. **Decide discovery or follow.** This is the question that shapes everything:
@@ -18,7 +18,7 @@ description: Add a new illustration source to reaver (Misskey, Mastodon/pawoo, B
    > *"show me this artist's posts"*?
 
    Sources with real character tags (pixiv) are discovery. Sources with only
-   hashtags or free-text (X, Bluesky, Misskey) are weaker — decide deliberately
+   hashtags or free-text (X, Bluesky, Misskey) are weaker - decide deliberately
    whether the adapter sets `supports_discovery = True`, and if not, make
    `discover()` raise with a message saying why. Do NOT fake discovery with
    text search that will quietly miss most of the corpus.
@@ -37,10 +37,10 @@ description: Add a new illustration source to reaver (Misskey, Mastodon/pawoo, B
 - **Normalize at the edge.** Return `IllustRecord` (`coreflame/models.py`);
   nothing downstream may see a source-shaped dict. Field extraction is a glom
   spec in `coreflame/sources/specs.py` where every path is
-  `Coalesce(..., default=None)` — a shape change becomes a validation
+  `Coalesce(..., default=None)` - a shape change becomes a validation
   failure routed to quarantine and a DRIFT note, not silent nulls or a crash.
 - **Wire the visited gate.** Check `seen_posts` from the cheapest point in the
-  listing — before any per-item detail request. Record `gone` on 404/410 or the
+  listing - before any per-item detail request. Record `gone` on 404/410 or the
   crawl re-fetches deleted posts forever.
 - **Watermark on a monotonic id** if the source has one (most post ids are), and
   walk one full page past the floor before stopping.
@@ -68,7 +68,7 @@ description: Add a new illustration source to reaver (Misskey, Mastodon/pawoo, B
 
 The same illustration on four sources is four copies, and the artist-scoped
 phash only catches them if artist identity links across all four. Beyond a third
-source, the single `pixiv profile → X handle` hop is not enough — it needs to
+source, the single `pixiv profile → X handle` hop is not enough - it needs to
 become an identity graph (union-find over asserted edges). Raise this rather
 than quietly letting dedupe degrade.
 

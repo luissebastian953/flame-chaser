@@ -95,6 +95,25 @@ export const useLibrary = defineStore('library', {
     /** The kinds a character's grid can hold: all of them with its filter off. */
     kindsFor: (s) => (slug: string) =>
       s.watches.find((w) => w.slug === slug)?.kind_filter === false ? ALL_KIND_FILTERS : KIND_FILTERS,
+    /**
+     * The grid's filters as query parameters (kinds, identification state or
+     * character, source) -- what every page of the grid sends, and what a
+     * selection list (stores/deletion.ts) sends so it never picks an image
+     * the grid is not showing.
+     */
+    gridQuery(): (slug: string) => URLSearchParams {
+      return (slug: string) => {
+        const q = new URLSearchParams();
+        const can = this.kindsFor(slug);
+        const kinds = this.show.filter((k) => can.includes(k));
+        q.set('kinds', (kinds.length ? kinds : can).join(','));
+        // a chosen character replaces the identified/unidentified choice
+        if (this.character) q.set('character', this.character);
+        else if (this.who.length && this.who.length < IDENT_STATES.length) q.set('ident', this.who.join(','));
+        if (this.source) q.set('source', this.source);
+        return q;
+      };
+    },
   },
   actions: {
     async loadWatches() {
@@ -115,7 +134,7 @@ export const useLibrary = defineStore('library', {
     /**
      * Keyset pages; `reset` starts over for a new slug or filter. One request
      * per grid at a time: a reset empties the grid, which brings the "load
-     * more" sentinel into view while the reset's own page is still in flight —
+     * more" sentinel into view while the reset's own page is still in flight -
      * without the guard both land and every image shows twice. A reset also
      * orphans any older request, whose page is then dropped.
      */
@@ -129,13 +148,7 @@ export const useLibrary = defineStore('library', {
       grid.loading = true;
       try {
         const q = new URLSearchParams({ limit: '120' });
-        const can = this.kindsFor(slug);
-        const kinds = this.show.filter((k) => can.includes(k));
-        q.set('kinds', (kinds.length ? kinds : can).join(','));
-        // a chosen character replaces the identified/unidentified choice
-        if (this.character) q.set('character', this.character);
-        else if (this.who.length && this.who.length < IDENT_STATES.length) q.set('ident', this.who.join(','));
-        if (this.source) q.set('source', this.source);
+        for (const [k, v] of this.gridQuery(slug)) q.set(k, v);
         if (this.order !== 'newest') q.set('order', this.order);
         if (grid.cursor) q.set('cursor', grid.cursor);
         const page = await api.get<GalleryPage>(`/api/gallery/${slug}?${q}`);

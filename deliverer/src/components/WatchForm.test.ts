@@ -141,7 +141,7 @@ describe('WatchForm crawl target', () => {
     await w.get('#posts-per-run').setValue('5000');
     await w.get('#posts-per-run').trigger('change');
     await box(w, 'kind-filter').trigger('click');
-    expect(w.text()).toContain('off — keep every image');
+    expect(w.text()).toContain('off - keep every image');
 
     await saveBtn(w).trigger('click');
     const [saved] = w.emitted('save')![0] as [Watch, boolean];
@@ -165,7 +165,7 @@ describe('WatchForm crawl target', () => {
       'run 3 next 300 new skips 1–2',
     ]);
 
-    expect(w.text()).toContain('Images per run vary — one post can hold several pages.');
+    expect(w.text()).toContain('Images per run vary - one post can hold several pages.');
   });
 
   it('X-only: no total to count down from, and the footer says only what is known', async () => {
@@ -217,6 +217,7 @@ describe('WatchForm name suggestions (Danbooru + Wikidata)', () => {
       nm('雷電芽衣', { lang: 'ja', sources: ['danbooru', 'wikidata'] }),
       nm('라이덴 메이', { lang: 'ko', sources: ['wikidata'] }),
       nm('芽衣', { lang: 'cjk', risky: true }),
+      nm('薩姆', { lang: 'yue', sources: ['wikidata'] }), // a code the locale does not name
       ...['Thunder', 'APHO', 'Origin', 'Bladestrike', 'Crescent', 'Fulminata', 'Empress'].map((f, i) =>
         nm(`Herrscher ${f}`, { kind: 'form', posts: 1600 - i * 100, form: f }),
       ),
@@ -250,7 +251,7 @@ describe('WatchForm name suggestions (Danbooru + Wikidata)', () => {
     const w = mountForm(xOnly());
     // through the debounce and the request alike: placeholders, no "nothing found"
     expect(w.findAll('.nm-row.skel')).toHaveLength(5);
-    expect(w.text()).not.toContain('no co-occurring tags');
+    expect(w.text()).not.toContain('no names found');
     await new Promise((r) => setTimeout(r, 700));
     expect(w.findAll('.nm-row.skel')).toHaveLength(5);
 
@@ -268,7 +269,9 @@ describe('WatchForm name suggestions (Danbooru + Wikidata)', () => {
     expect(panel).toContain('라이덴 메이');
     expect(panel).toContain('KO');
     expect(panel).toContain('雷電芽衣');
-    expect(panel).toContain('short — loose as an X term'); // 芽衣
+    expect(panel).toContain('short - loose as an X term'); // 芽衣
+    expect(panel).toContain('YUE'); // an unnamed code shows as itself, never as a key path
+    expect(panel).not.toContain('character.suggestions.lang');
     // "Raiden Mei" is already a term (case-insensitive): not suggested again
     expect(w.findAll('.nm-row .jp').map((x) => x.text())).not.toContain('Raiden Mei');
   });
@@ -281,6 +284,42 @@ describe('WatchForm name suggestions (Danbooru + Wikidata)', () => {
 
     expect(w.findAll('.chips .chip').map((c) => c.text().replace('✕', '').trim())).toContain('라이덴 메이');
     expect(w.findAll('.nm-row .jp').map((x) => x.text())).not.toContain('라이덴 메이');
+  });
+
+  it('taking a name for one source keeps the row for the other until both have it, and brings it back on removal', async () => {
+    const w = await mountWith(blank({ label: 'Raiden Mei' }));
+    const row = () => w.findAll('.nm-row').find((r) => r.find('.jp').text() === '라이덴 메이');
+    const btn = (label: string) => w.find(`button[aria-label="${label}"]`);
+
+    await btn('Add 라이덴 메이 as an X search term').trigger('click');
+    expect(row()).toBeTruthy();
+    expect(btn('Add 라이덴 메이 as an X search term').exists()).toBe(false);
+    expect(btn('Add 라이덴 메이 as a pixiv tag').exists()).toBe(true);
+
+    await btn('Add 라이덴 메이 as a pixiv tag').trigger('click');
+    expect(row()).toBeUndefined();
+
+    // taking the X term out again brings the row back, with only +X left to offer
+    const chip = w
+      .findAll('.chips .chip')
+      .find((c) => c.text().includes('라이덴 메이') && c.find('button[aria-label="remove term"]').exists())!;
+
+    await chip.find('button[aria-label="remove term"]').trigger('click');
+    expect(row()).toBeTruthy();
+    expect(btn('Add 라이덴 메이 as an X search term').exists()).toBe(true);
+    expect(btn('Add 라이덴 메이 as a pixiv tag').exists()).toBe(false);
+  });
+
+  it('the refresh button beside the heading looks the names up again, past the cache', async () => {
+    const w = await mountWith(xOnly());
+    vi.mocked(api.post).mockClear();
+
+    await w.get('button[aria-label="Refresh suggestions and load more"]').trigger('click');
+
+    expect(api.post).toHaveBeenCalledWith('/api/names', {
+      queries: ['Raiden Mei', 'raiden mei'],
+      refresh: true,
+    });
   });
 
   it('forms come ranked with post counts, six at a time', async () => {
@@ -296,21 +335,38 @@ describe('WatchForm name suggestions (Danbooru + Wikidata)', () => {
   it('says which source did not answer, and still shows the rest', async () => {
     const w = await mountWith(xOnly(), { ...MEI, errors: { danbooru: 'ConnectError: blocked' } });
 
-    expect(w.text()).toContain("danbooru didn't answer — showing the rest");
+    expect(w.text()).toContain("danbooru didn't answer - showing the rest");
     expect(w.text()).toContain('라이덴 메이');
   });
 
-  it('with pixiv signed in, its co-occurring tags join as their own group', async () => {
+  it('is the names list only: the ranked co-occurring tags from the probe are not shown', async () => {
     const w = await mountWith(blank({ label: 'Raiden Mei', pixiv_tags: ['雷電芽衣'] }), MEI, {
       suggestions: [
         { tag_raw: '雷電芽衣(雷の律者)', tag_norm: 'x', posts: 9, share: 0.4, characters: 1, score: 0.8 },
       ],
     });
 
-    expect(w.text()).toContain('Co-occurring on pixiv');
-    expect(w.text()).toContain('雷電芽衣(雷の律者)');
+    expect(w.text()).not.toContain('雷電芽衣(雷の律者)');
     expect(w.text()).toContain('Names');
-    expect(w.find('button[aria-label="Add 라이덴 메이 as a pixiv tag"]').exists()).toBe(true);
+    expect(w.find('button[aria-label="Add 라이덴 메이 as a pixiv tag"]').text()).toBe('+ pixiv');
+  });
+
+  it('the refresh-plus button looks the names up again and shows one more batch of rows', async () => {
+    const many = {
+      ...MEI,
+      suggestions: Array.from({ length: 9 }, (_, i) => nm(`name ${i}`, { posts: 10 })),
+    };
+
+    const w = await mountWith(xOnly(), many);
+    expect(w.findAll('.nm-row:not(.skel)')).toHaveLength(6);
+    expect(w.text()).toContain('+ 3 more');
+
+    vi.mocked(api.post).mockClear();
+    await w.find('button[aria-label="Refresh suggestions and load more"]').trigger('click');
+    expect(api.post).toHaveBeenCalledWith('/api/names', expect.objectContaining({ refresh: true }));
+    await flushPromises();
+    expect(w.findAll('.nm-row:not(.skel)')).toHaveLength(9);
+    expect(w.text()).not.toContain('more');
   });
 });
 

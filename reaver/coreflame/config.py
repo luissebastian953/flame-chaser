@@ -28,6 +28,9 @@ class Config:
     doh_endpoints: list[str] | None = None  # defaults to net.DEFAULT_DOH
     proxy_url: str | None = None  # applied to httpx AND gallery-dl
     identify_characters: bool = True  # name the character in every kept image (identify.py)
+    # the Smart cleanup criteria applied at crawl time (coreflame/trash.py
+    # crawl_verdict): {"min_score": float | None, "other_character": bool}; None = off
+    cleanup_rule: dict | None = None
 
     def __post_init__(self) -> None:
         self.home = Path(self.home).expanduser()

@@ -133,6 +133,29 @@ describe('IdentityFilter chips', () => {
     expect(w.findAll('button.chip')).toHaveLength(2 + 11);
     expect(button(w, 'fewer')).toBeTruthy();
   });
+
+  it('By tag shows the whole cast, the characters already picked first', () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({ name: `c${i}`, label: `C${i}`, count: 20 - i }));
+
+    const w = mountWithPlugins(IdentityFilter, {
+      props: { slug: 'mei' },
+      pinia: {
+        initialState: {
+          library: { characters: chars({}, many) },
+          deletion: {
+            mode: 'tag',
+            terms: [{ key: 'character:c9', kind: 'character', value: 'c9', label: 'C9', shas: [] }],
+          },
+        },
+      },
+    });
+
+    const cast = w.findAll('button.chip.pick').filter((b) => /^C\d/.test(b.text()));
+    expect(cast).toHaveLength(10);
+    expect(cast[0]!.text()).toMatch(/^C9/);
+    expect(cast[0]!.classes()).toContain('sel');
+    expect(cast[1]!.text()).toMatch(/^C0/);
+  });
 });
 
 describe('IdentityFilter backlog', () => {

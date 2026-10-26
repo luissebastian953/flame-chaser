@@ -1,9 +1,9 @@
 ---
 name: conventions-python
-description: Conventions for reaver/ (coreflame engine + dawnmaker daemon) — Python floor, ruff/mypy, offline tests, http/rate limits, models, secrets, and the checklist for adding a daemon endpoint.
+description: Conventions for reaver/ (coreflame engine + dawnmaker daemon) - Python floor, ruff/mypy, offline tests, http/rate limits, models, secrets, and the checklist for adding a daemon endpoint.
 ---
 
-# Python conventions — `reaver/`
+# Python conventions - `reaver/`
 
 Two packages, one direction: `dawnmaker` imports `coreflame`; `coreflame`
 never imports `dawnmaker` or FastAPI. `./check.sh` is the definition of done.
@@ -15,13 +15,13 @@ never imports `dawnmaker` or FastAPI. `./check.sh` is the definition of done.
   `target-version = "py310"` with `UP017`/`UP042` ignored for exactly this.
 - **ruff** selects `E F I UP B SIM RUF S T20 PL`; every ignore has a comment
   saying why. `S501` (`verify=False`) is deliberately NOT ignored. Format:
-  double quotes, 100 cols (`E501` ignored — long SQL is fine).
+  double quotes, 100 cols (`E501` ignored - long SQL is fine).
   `tests/*` may assert freely (`S`, `PL` off); `coreflame/net.py` may name
   `verify=False` only to refuse it.
 - **mypy** on `coreflame` + `dawnmaker` with the `pydantic.mypy` plugin,
   `check_untyped_defs`, `warn_return_any`, `warn_unused_ignores`,
   `ignore_missing_imports` (glom, gallery-dl have no stubs). Run with
-  `--cache-dir /tmp/mypy_cache` — the cache must be off the synced folder.
+  `--cache-dir /tmp/mypy_cache` - the cache must be off the synced folder.
 
 ```
 cd reaver && ./check.sh      # ruff check · ruff format --check · mypy · tests · verify=False grep
@@ -39,19 +39,19 @@ images are generated with Pillow. Never write a test that hits pixiv or X.
 A new `tests/test_*.py` is picked up by `check.sh` automatically; it only
 needs its own `__main__` block that calls every test function.
 
-## HTTP — `coreflame/http.py`
+## HTTP - `coreflame/http.py`
 
 - One `SourceClient` per source: owns cookies, headers, the global
   `TokenBucket(rate, burst)` and per-endpoint buckets via
   `limit_endpoint(name, rate)`; call `get(url, bucket="search")`.
 - Retry only 429 (honour `Retry-After`) and 5xx. Any other 4xx raises at
-  once — retrying it is how an IP ban happens. Rates stay conservative
+  once - retrying it is how an IP ban happens. Rates stay conservative
   (default 1 req/s, burst 3); a new endpoint gets its own, stricter bucket.
-- **Never `verify=False`** — as an option, flag or fallback. `check.sh` greps
+- **Never `verify=False`** - as an option, flag or fallback. `check.sh` greps
   for it and fails. A cert failure is evidence of interception; stop.
 - `Referer` is mandatory on `i.pximg.net`.
 
-## Normalisation — three layers, kept separate
+## Normalisation - three layers, kept separate
 
 ```
 store.put_raw()  → every raw payload retained, zlib'd, content-addressed
@@ -74,15 +74,18 @@ validation's failure, not extraction's. Re-normalise by re-parsing
 - Jobs: one worker thread per source lane, never two on one source;
   `ctx.check()` between records and at each
   `ctx.stage()`, never inside a write; `ctx.progress(done, total=None)` when
-  there is no honest denominator. A job `running` at boot becomes `interrupted`.
+  there is no honest denominator. A job `running` at boot becomes `interrupted` -
+  unless the queue was paused (persisted in `queue_state`): then it is
+  requeued at the front and the queue stays paused. `JobRunner.retry` queues a
+  fresh copy of a finished job.
 
-## Daemon rules — `dawnmaker/`
+## Daemon rules - `dawnmaker/`
 
 - **stdout is the handshake channel** (`DAWNMAKER_READY {json}`); all logging
   to stderr. A stray `print()` breaks the shell's spawn.
 - One `Store` per request: `Depends(store)` yields
   `Store(db_path, check_same_thread=False)` and closes it. No thread-local
-  cache — the dependency and the endpoint run on different threads and the
+  cache - the dependency and the endpoint run on different threads and the
   SSE stream pins one for its lifetime. SQLite access stays sequential.
 - Secrets: only `Config.save_secrets()` writes `~/.reaver/secrets.json`
   (chmod 0600). `config.json` never contains a cookie; `GET /api/config`
@@ -97,7 +100,7 @@ validation's failure, not extraction's. Re-normalise by re-parsing
 - Legal posture: private archive, attribution permalink on every post, no
   redistribution, deleted/privated works removed. Do not add sharing features.
 
-## Adding an endpoint — checklist
+## Adding an endpoint - checklist
 
 1. Body model `class XIn(BaseModel)` in `dawnmaker/app.py` (pydantic, no
    `Any` unless it is a job params bag).

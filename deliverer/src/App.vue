@@ -4,18 +4,17 @@ const jobs = useJobs();
 const lib = useLibrary();
 const src = useSources();
 const up = useUpdater();
+const viewer = useViewer();
+const net = useNetwork();
 useTheme().apply(); // before first paint: no flash of default palette
+useBackgroundController(); // mini window, tray, notifications; desktop only
 
-// Desktop only: the browser build has no process to end. Two-step when a
-// crawl is running so a stray click doesn't cut a backfill mid-page.
-const armed = ref(false);
+// Desktop only: the browser build has no process to end. The button opens
+// ShutdownConfirm, which says what is running before anything is cut.
+const asking = ref(false);
 
 async function shutdown() {
-  if (ep.health && !ep.health.idle && !armed.value) {
-    armed.value = true;
-    setTimeout(() => (armed.value = false), 4000);
-    return;
-  }
+  asking.value = false;
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('shutdown_app');
 }
@@ -26,6 +25,7 @@ onMounted(async () => {
     jobs.listen();
     await Promise.all([jobs.load(), lib.loadWatches(), src.load()]);
     up.schedule(); // daily check; desktop only
+    net.start(); // the rail's signal card, every 30 s
   }
 });
 </script>
@@ -59,16 +59,17 @@ onMounted(async () => {
           {{ $t('app.nav.gallery') }}
           <span class="ct">{{ lib.totalPosts ? lib.totalPosts.toLocaleString() : '' }}</span>
         </RouterLink>
-        <RouterLink to="/settings" class="mt-10">
+        <RouterLink to="/settings">
           <Icon name="settings" class="ic" />
           {{ $t('app.nav.settings') }}
         </RouterLink>
       </nav>
       <div class="railbottom">
         <UpdateBanner />
-        <button v-if="src.inTauri" class="btn danger shutdown" @click="shutdown">
+        <NetworkCard v-if="ep.ready" />
+        <button v-if="src.inTauri" class="btn danger shutdown" @click="asking = true">
           <Icon name="power" class="ic" :size="14" />
-          {{ armed ? $t('app.shutdown.armed') : $t('app.shutdown.label') }}
+          {{ $t('app.shutdown.label') }}
         </button>
         <div class="railfoot">
           <div>
@@ -128,4 +129,8 @@ onMounted(async () => {
       <div v-else class="empty">{{ $t('app.connectingDaemon') }}</div>
     </main>
   </div>
+  <!-- over everything, the rail included -->
+  <ImageViewer v-if="viewer.open" />
+  <ShutdownConfirm v-if="asking" @close="asking = false" @confirm="shutdown" />
+  <NetworkDetail v-if="net.open" />
 </template>

@@ -18,7 +18,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 <template>
   <div class="toasts" @mouseenter="toasts.pauseTimers()" @mouseleave="toasts.resumeTimers()">
     <TransitionGroup name="toast">
-      <RunToast v-for="toast in toasts.items" :key="toast.id" :toast="toast" />
+      <template v-for="toast in toasts.items" :key="toast.id">
+        <DeleteToast v-if="toast.kind === 'delete'" :toast="toast" />
+        <RunToast v-else :toast="toast" />
+      </template>
     </TransitionGroup>
   </div>
 </template>

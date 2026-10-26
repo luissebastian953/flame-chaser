@@ -108,6 +108,8 @@ describe('useJobs pipeline getters', () => {
 
     jobs.pipeline = {
       paused: false,
+      pause_reason: null,
+      online: true,
       workers: [
         { lane: 'pixiv', job_id: 'p' },
         { lane: 'twitter', job_id: null },
@@ -275,6 +277,24 @@ describe('useJobs listen()', () => {
     onEvent({ id: 4, type: 'job.log', data: {} });
 
     expect(api.get).toHaveBeenCalledTimes(3);
+  });
+
+  it('refetches the pipeline when the hold changes hands, and reads an offline hold', () => {
+    vi.mocked(api.get).mockResolvedValue({
+      paused: true,
+      pause_reason: 'offline',
+      online: false,
+      workers: [],
+      budgets: [],
+      req_per_min: 0,
+    });
+
+    const { jobs, onEvent } = listenAndCapture();
+    expect(jobs.offline).toBe(false);
+    onEvent({ id: 1, type: 'pipeline.paused', data: { paused: true, reason: 'offline' } });
+
+    expect(api.get).toHaveBeenCalledWith('/api/pipeline');
+    return vi.waitFor(() => expect(jobs.offline).toBe(true));
   });
 
   it('caps the event log at 400 entries, dropping the oldest', () => {

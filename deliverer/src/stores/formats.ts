@@ -52,9 +52,9 @@ export const useFormats = defineStore('formats', {
       return new Intl.NumberFormat(this.tag).format(n);
     },
     date(iso: string | Date | null | undefined, withTime = false): string {
-      if (!iso) return '—';
+      if (!iso) return '-';
       const d = typeof iso === 'string' ? new Date(iso) : iso;
-      if (Number.isNaN(d.getTime())) return '—';
+      if (Number.isNaN(d.getTime())) return '-';
       let day: string;
       if (this.dateStyle === 'iso') {
         const p = (n: number) => String(n).padStart(2, '0');
@@ -73,7 +73,7 @@ export const useFormats = defineStore('formats', {
       return `${day} ${time}`;
     },
     bytes(n: number | null | undefined): string {
-      if (n == null) return '—';
+      if (n == null) return '-';
       const base = this.sizeUnit === 'binary' ? 1024 : 1000;
 
       const units =

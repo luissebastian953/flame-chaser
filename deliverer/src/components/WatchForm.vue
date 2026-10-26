@@ -7,11 +7,18 @@
  */
 import type { CharacterNames, NameSuggestion, ProbeResult, Source, Watch } from '@/lib/types';
 
-const props = defineProps<{ watch: Watch; isNew: boolean }>();
+/** `error`: the page's reason a save failed (daemon refused or gone); shown in the footer like a validation error */
+const props = defineProps<{ watch: Watch; isNew: boolean; error?: string | null }>();
 const emit = defineEmits<{ save: [w: Watch, run: boolean]; close: [] }>();
 const src = useSources();
 const router = useRouter();
-const { t } = useI18n();
+const { t, te } = useI18n();
+
+/** a language code's short label; a code the locale does not name shows as itself, never as a key path */
+function langLabel(code: string) {
+  const key = `character.suggestions.lang.${code}`;
+  return te(key) ? t(key) : code.toUpperCase();
+}
 
 /** Desktop: the login window. Browser mode: hand off to Settings › Accounts. */
 function connect(source: 'pixiv' | 'twitter') {
@@ -74,10 +81,6 @@ function addTerm() {
   newTerm.value = '';
 }
 
-function addSuggested(raw: string) {
-  if (!w.pixiv_tags.includes(raw)) w.pixiv_tags.push(raw);
-}
-
 const tagStatus = (t: string) => probe.value?.tags.find((p) => p.tag === t) ?? null;
 
 // ---- probe (debounced) -----------------------------------------------------
@@ -121,28 +124,36 @@ onBeforeUnmount(() => {
   if (namesTimer) clearTimeout(namesTimer);
 });
 
-const suggestions = computed(() =>
-  (probe.value?.suggestions ?? []).filter((s) => !w.pixiv_tags.includes(s.tag_raw)),
-);
-
 // ---- names from Danbooru + Wikidata (debounced; no pixiv session needed) -----
 const names = ref<CharacterNames | null>(null);
 const looking = ref(false); // the request is out
 const namesPending = ref(false); // a lookup is due (debounce) or out: placeholders until the first answers
 const showAll = reactive({ name: false, form: false });
 const GROUP_N = 6;
+const limit = ref(GROUP_N); // rows per group before "+N more"; the refresh button adds a batch
 const SKELETON_N = 5;
 let namesTimer: ReturnType<typeof setTimeout> | null = null;
 
 const norm = (x: string) => x.normalize('NFKC').toLowerCase().trim();
-const have = computed(() => new Set([...w.pixiv_tags, ...w.match_terms].map(norm)));
+const inPixiv = computed(() => new Set(w.pixiv_tags.map(norm)));
+const inX = computed(() => new Set(w.match_terms.map(norm)));
+/** this suggestion is not yet in that source's list */
+const missing = (text: string, s: Source) => !(s === 'pixiv' ? inPixiv : inX).value.has(norm(text));
+
+/** still somewhere to go: a source the character uses whose list lacks it. Taking it
+ *  for one source only drops that button; removing it again brings the row back. */
+const wanted = (text: string) => {
+  const slots = w.sources.length ? w.sources : (['pixiv', 'twitter'] as Source[]);
+  return slots.some((s) => missing(text, s));
+};
 
 /** the display name first: it is what Danbooru and Wikidata know best */
 const nameQueries = computed(() =>
   [...new Set([w.label, ...w.pixiv_tags, ...w.match_terms].map((x) => x.trim()).filter(Boolean))].slice(0, 8),
 );
 
-async function lookUpNames() {
+/** `again`: past the daemon's day-long cache -- the refresh button */
+async function lookUpNames(again = false) {
   const queries = nameQueries.value;
   if (!queries.length) {
     names.value = null;
@@ -151,7 +162,10 @@ async function lookUpNames() {
   }
   looking.value = true;
   try {
-    names.value = await api.post<CharacterNames>('/api/names', { queries });
+    names.value = await api.post<CharacterNames>(
+      '/api/names',
+      again ? { queries, refresh: true } : { queries },
+    );
   } catch {
     names.value = null; // the panel just shows no names; the form still works
   } finally {
@@ -165,13 +179,13 @@ watch(
   () => {
     if (namesTimer) clearTimeout(namesTimer);
     namesPending.value = nameQueries.value.length > 0;
-    namesTimer = setTimeout(lookUpNames, 600);
+    namesTimer = setTimeout(() => lookUpNames(), 600);
   },
   { immediate: true },
 );
 
 const fresh = (kind: NameSuggestion['kind']) =>
-  (names.value?.suggestions ?? []).filter((x) => x.kind === kind && !have.value.has(norm(x.text)));
+  (names.value?.suggestions ?? []).filter((x) => x.kind === kind && wanted(x.text));
 
 const nameRows = computed(() => fresh('name'));
 const formRows = computed(() => fresh('form'));
@@ -179,7 +193,13 @@ const formRows = computed(() => fresh('form'));
 const skeleton = computed(() => namesPending.value && !nameRows.value.length && !formRows.value.length);
 
 const visible = (rows: NameSuggestion[], kind: 'name' | 'form') =>
-  showAll[kind] ? rows : rows.slice(0, GROUP_N);
+  showAll[kind] ? rows : rows.slice(0, limit.value);
+
+/** the refresh button: past the daemon's day-long cache, and one more batch of rows shown */
+function refreshNames() {
+  limit.value += GROUP_N;
+  void lookUpNames(true);
+}
 
 const downSources = computed(() => Object.keys(names.value?.errors ?? {}));
 
@@ -538,19 +558,30 @@ function submit(run: boolean) {
                 v-for="p in probe.preview"
                 :key="p.illust_id"
                 class="tile"
-                :title="`${p.title} — ${p.artist_name}`"
+                :title="`${p.title} - ${p.artist_name}`"
               >
                 <img v-if="p.thumb" :src="authedUrl(p.thumb)" loading="lazy" alt="" />
               </div>
             </div>
           </div>
-
-          <div v-if="err" class="err">{{ err }}</div>
         </div>
 
         <!-- ============================== suggestions -->
         <aside class="side-col">
-          <div class="ptitle">{{ $t('character.suggestions.heading') }}</div>
+          <div class="sug-head">
+            <div class="ptitle">{{ $t('character.suggestions.heading') }}</div>
+            <button
+              type="button"
+              class="btn gh sq"
+              :class="{ busy: looking }"
+              :disabled="looking || !nameQueries.length"
+              :aria-label="$t('character.suggestions.refreshLabel')"
+              :title="$t('character.suggestions.refreshLabel')"
+              @click="refreshNames()"
+            >
+              <Icon name="refresh-plus" :size="15" />
+            </button>
+          </div>
           <div class="hint">{{ $t('character.suggestions.lead') }}</div>
           <!-- a fixed-height box that scrolls, so the run cycle stays in view -->
           <div class="sug-scroll">
@@ -575,7 +606,7 @@ function submit(run: boolean) {
                   <div class="nm-text">
                     <span class="jp">{{ s.text }}</span>
                     <span class="nm-meta data">
-                      <span v-if="s.lang" class="lang">{{ $t(`character.suggestions.lang.${s.lang}`) }}</span>
+                      <span v-if="s.lang" class="lang">{{ langLabel(s.lang) }}</span>
                       <span v-if="s.posts">
                         {{ $t('character.suggestions.posts', { n: s.posts.toLocaleString() }, s.posts) }}
                       </span>
@@ -584,29 +615,27 @@ function submit(run: boolean) {
                   </div>
                   <div class="nm-add">
                     <button
-                      v-if="uses('pixiv')"
+                      v-if="uses('pixiv') && missing(s.text, 'pixiv')"
                       type="button"
                       class="add"
                       :aria-label="$t('character.suggestions.addPixivLabel', { text: s.text })"
                       @click="addAsTag(s.text)"
                     >
-                      <Icon name="plus" :size="11" />
                       {{ $t('character.suggestions.addPixiv') }}
                     </button>
                     <button
-                      v-if="uses('twitter')"
+                      v-if="uses('twitter') && missing(s.text, 'twitter')"
                       type="button"
                       class="add"
                       :aria-label="$t('character.suggestions.addXLabel', { text: s.text })"
                       @click="addAsTerm(s.text)"
                     >
-                      <Icon name="plus" :size="11" />
                       {{ $t('character.suggestions.addX') }}
                     </button>
                   </div>
                 </div>
                 <button
-                  v-if="(group === 'name' ? nameRows : formRows).length > GROUP_N"
+                  v-if="(group === 'name' ? nameRows : formRows).length > limit"
                   type="button"
                   class="more"
                   @click="showAll[group] = !showAll[group]"
@@ -617,7 +646,7 @@ function submit(run: boolean) {
                     showAll[group]
                       ? $t('character.suggestions.less')
                       : $t('character.suggestions.more', {
-                          n: (group === 'name' ? nameRows : formRows).length - GROUP_N,
+                          n: (group === 'name' ? nameRows : formRows).length - limit,
                         })
                   }}
                 </button>
@@ -636,42 +665,13 @@ function submit(run: boolean) {
               <span class="sr-only">{{ $t('character.suggestions.looking') }}</span>
             </div>
 
-            <div v-if="suggestions.length" class="nm-group">
-              <div class="nm-h">{{ $t('character.suggestions.pixiv') }}</div>
-              <div class="sug">
-                <div
-                  v-for="s in suggestions"
-                  :key="s.tag_norm"
-                  class="sug-row"
-                  :class="{ low: s.score < 0.3 }"
-                >
-                  <span class="jp">{{ s.tag_raw }}</span>
-                  <span class="data text-small text-right">
-                    <span :class="s.score >= 0.3 ? 'text-ember' : 'text-dim'">{{ s.score.toFixed(2) }}</span>
-                    <br />
-                    <span class="text-dim">{{ Math.round(s.share * 100) }}%</span>
-                  </span>
-                  <button v-if="s.score >= 0.3" class="add" @click="addSuggested(s.tag_raw)">
-                    <Icon name="plus" :size="11" />
-                    {{ $t('character.suggestions.add') }}
-                  </button>
-                  <span v-else class="text-dim">—</span>
-                </div>
-              </div>
-            </div>
-
-            <div
-              v-if="!skeleton && !nameRows.length && !formRows.length && !suggestions.length"
-              class="hint mt-15"
-            >
+            <div v-if="!skeleton && !nameRows.length && !formRows.length" class="hint mt-15">
               {{
-                probing
-                  ? $t('character.suggestions.checking')
-                  : !nameQueries.length
-                    ? $t('character.suggestions.empty')
-                    : names
-                      ? $t('character.suggestions.nothing')
-                      : $t('character.suggestions.none')
+                !nameQueries.length
+                  ? $t('character.suggestions.empty')
+                  : names
+                    ? $t('character.suggestions.nothing')
+                    : $t('character.suggestions.none')
               }}
             </div>
             <div v-else-if="looking && !skeleton" class="hint">{{ $t('character.suggestions.looking') }}</div>
@@ -727,7 +727,9 @@ function submit(run: boolean) {
       </div>
 
       <div class="foot">
-        <i18n-t v-if="total" keypath="character.run.line" tag="span" class="data text-small text-dim">
+        <!-- the error takes the run line's place: the footer is the one part never scrolled away -->
+        <span v-if="err || error" class="err data text-small" role="alert">{{ err || error }}</span>
+        <i18n-t v-else-if="total" keypath="character.run.line" tag="span" class="data text-small text-dim">
           <template #n>
             <b class="text-tx">{{ w.target }}</b>
           </template>
@@ -843,38 +845,45 @@ function submit(run: boolean) {
 }
 .nm-h {
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--dim);
-  padding: 6px 0 4px;
+  color: var(--mut);
+  padding: 6px 0 5px;
+  border-bottom: 1px solid var(--line);
 }
 .nm-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 0;
-  border-top: 1px solid var(--line-soft);
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
 }
 .nm-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
   flex: 1;
 }
 .nm-text .jp {
-  overflow-wrap: anywhere;
+  font-size: 13px;
+  color: var(--tx);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .nm-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0 8px;
-  font-size: 10px;
+  font-family: var(--mono);
+  font-size: 10.5px;
   color: var(--dim);
 }
 .nm-meta .lang {
-  color: var(--mut);
+  letter-spacing: 0.08em;
 }
 .nm-meta .warn {
   color: var(--rose);
@@ -884,7 +893,7 @@ function submit(run: boolean) {
 }
 .nm-add {
   display: flex;
-  gap: 6px;
+  gap: 10px;
   flex-shrink: 0;
 }
 /* placeholder rows, the shape of a name row, while the first lookup is out */
@@ -1101,35 +1110,19 @@ function submit(run: boolean) {
   object-fit: cover;
   display: block;
 }
-.sug {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sug-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 10px;
-  border: 1px solid var(--line-soft);
-  background: var(--surf2);
-}
-.sug-row.low {
-  color: var(--dim);
-  background: transparent;
-}
-.sug-row .add,
 .nm-add .add {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
   background: none;
   border: 0;
   color: var(--moss);
-  font: 600 12px var(--font);
+  font: 600 12px var(--mono);
   padding: 0;
   cursor: pointer;
+  white-space: nowrap;
+}
+.nm-add .add:hover {
+  text-decoration: underline;
 }
 .foot {
   display: flex;
@@ -1138,5 +1131,44 @@ function submit(run: boolean) {
   padding: 13px 20px;
   border-top: 1px solid var(--line-soft);
   background: var(--bg);
+}
+.sug-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+/* the refresh-plus: a quiet square beside the heading, ember under the pointer, spinning while it looks */
+.btn.sq {
+  --cut: 5px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  justify-content: center;
+  color: var(--mut);
+  background: var(--surf);
+  border-color: var(--line);
+}
+.btn.sq:hover:not(:disabled) {
+  color: var(--ember);
+  border-color: var(--ember);
+  background: var(--surf);
+}
+.btn.sq:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn.sq.busy .icon {
+  animation: sug-spin 1s linear infinite;
+}
+@keyframes sug-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn.sq.busy .icon {
+    animation: none;
+  }
 }
 </style>

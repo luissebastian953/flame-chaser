@@ -26,7 +26,8 @@
       "share": "{n}%",
       "unit": "の画像を保持",
       "kept": "保持",
-      "dropped": "除外"
+      "dropped": "除外",
+      "ruleActive": "ルール有効"
     },
     "sources": {
       "title": "ソース",
@@ -61,7 +62,7 @@
     "r18": "R-18",
     "posts": "投稿",
     "r18On": "オン",
-    "r18Off": "—",
+    "r18Off": "-",
     "perRun": "1 回あたり",
     "more": "+あと{n}件"
   },
@@ -74,16 +75,22 @@
     "queued": "待機中 | 待機中 | 待機中 ×{n}",
     "running": "{stage} · 新規 {posts}",
     "done": "完了 · +{n}",
-    "failed": "失敗"
+    "failed": "失敗 · 再試行",
+    "interrupted": "中断 · 再開",
+    "cancelled": "キャンセル · もう一度",
+    "retryTitle": "このジョブをもう一度キューに入れます。取り込み済みの投稿は飛ばします。",
+    "paused": "一時停止 · 再開",
+    "resumeTitle": "止まったところからこのクロールを続ける"
   },
   "toast": {
-    "queued": "{label} — {source} で待機中",
-    "running": "{label} — {source} で収集中",
-    "multi": "{label} — {n} ソースで実行中",
+    "queued": "{label} - {source} で待機中",
+    "running": "{label} - {source} で収集中",
+    "multi": "{label} - {n} ソースで実行中",
     "behind": "次に開始 | 前に 1 件 | 前に {n} 件",
     "position": "{source} で待機 · {n} 番目",
     "chipQueued": "待機 · {n}",
-    "paused": "キューは一時停止中 — {label} は待機します",
+    "paused": "キューは一時停止中 - {label} は待機します",
+    "offline": "インターネットなし - {label} は待機し、接続が復帰すると開始します",
     "noMatch": "開始できません: 一致するキャラクターがありません",
     "noMatchSub": "{label} · {sources}",
     "terms": "一致語 0 | 一致語 1 | 一致語 {n}",

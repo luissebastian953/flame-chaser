@@ -1,4 +1,4 @@
-# Curio — project instructions
+# Curio - project instructions
 
 **Curio** is a personal archive for illustrations of specific characters. It
 crawls pixiv and X (with more sources planned), dedupes across them, and stores
@@ -11,7 +11,9 @@ flame-chaser/                 one git repo, one pnpm workspace
 │   └── tests/                plain python3 test files, all offline
 ├── deliverer/                Tauri v2 shell + Vue 3 webview. The app the user opens.
 ├── docs/design/architecture.md   the reference; API contract in §6
-├── scripts/                  bump-version.sh · check-version.sh · install-linux.sh
+├── docs/design/system-design.md  the one-sitting engineering summary; ER diagram, failure and trade-off tables
+├── docs/uml/                     eight UML views (use case … deployment + versioning), Mermaid, drawn from the code
+├── scripts/                  bump-version.sh · check-version.sh · check-dash.sh · install-linux.sh
 ├── docker/ + docker-compose.yml   browser-mode dev stack (no Tauri window)
 ├── .github/workflows/release.yml  tag → installers → draft release + latest.json
 ├── .claude/skills/           procedures for future sessions (index below)
@@ -25,7 +27,7 @@ neither beyond the HTTP contract. **Do not invert this.** It is what keeps the
 CLI working as an escape hatch while the UI is mid-refactor.
 
 Full architecture, API contract and failure-mode tables: `docs/design/architecture.md`.
-Read it before changing anything structural — most "obvious improvements" below
+Read it before changing anything structural - most "obvious improvements" below
 were already considered and rejected for a stated reason.
 
 ---
@@ -33,7 +35,7 @@ were already considered and rejected for a stated reason.
 ## The decisions that are load-bearing
 
 Undoing any of these silently breaks something. If you think one is wrong, say
-so and stop — don't just change it.
+so and stop - don't just change it.
 
 1. **pixiv discovers, X follows (and searches, carefully).** A character is a
    first-class *tag* on pixiv (`s_mode=s_tag_full` matches exactly). X has no
@@ -41,7 +43,7 @@ so and stop — don't just change it.
    artworks → artworks give artists → artist pixiv profiles give X handles → X
    supplies those artists' timelines. X *search* exists only through
    `gallery-dl` (`TwitterAdapter.search_page`, `filter:images`, limits count
-   posts) — it is what X polices hardest. Changed 2026-09-29 by the owner:
+   posts) - it is what X polices hardest. Changed 2026-09-29 by the owner:
    search is **target-driven**, not capped small. Each character's posts per
    run N (`Watch.target`; `params.target` overrides) makes a crawl
    (`pipeline.search_to_target`) search that character until exactly N new
@@ -53,16 +55,16 @@ so and stop — don't just change it.
    requested.
 2. **Check the visited set before spending a request.** The search listing hands
    over `illustId` for free; `seen_posts` is consulted there, not after the
-   detail fetch. `posts` is NOT the gate — it only holds what we kept.
+   detail fetch. `posts` is NOT the gate - it only holds what we kept.
 3. **`seen_posts` has four states and they are four retry policies:**
    `indexed` (never revisit) · `skipped` (only if the config that rejected it
-   changes — store the `threshold`) · `gone` (404/410, never) · `failed`
+   changes - store the `threshold`) · `gone` (404/410, never) · `failed`
    (after `retry_after`). Collapsing them means either re-fetching deleted
    artworks forever or permanently blacklisting a transient 500.
 4. **Dedupe is two levels.** sha256 for exact; dHash (Hamming ≤ 6) **scoped to
    one artist** for the pixiv-PNG vs X-JPEG case. Scoping is what keeps it
    O(hundreds) instead of O(archive).
-5. **Watermarks are monotonic ids, not timestamps** — and the poller walks one
+5. **Watermarks are monotonic ids, not timestamps** - and the poller walks one
    full page *past* the floor before stopping.
 6. **`Referer` is mandatory on i.pximg.net.** Every image 403s without it.
 7. **Never `verify=False`.** An Indonesian ISP has been observed attempting TLS
@@ -98,11 +100,14 @@ so and stop — don't just change it.
   `models.py` ever sees a source-shaped dict.
 - Validation failures go to **quarantine with the raw payload hash**, never to a
   crash and never to a silent drop.
+- **No em-dash (U+2014) anywhere**: code, comments, docs, commit messages and
+  every i18n string use the plain hyphen-minus `-`. The long dash is a different
+  code point and renders wider; `scripts/check-dash.sh` (in `pnpm check`) fails on it.
 
 ## Testing
 
 `reaver/tests/test_*.py` (smoke, normalize, seen, tags, jobs, net, dawnmaker)
-are plain `python3` files, run by `reaver/check.sh`; all offline — fixture
+are plain `python3` files, run by `reaver/check.sh`; all offline - fixture
 payloads and generated images, no network. Any adapter change needs a fixture.
 `deliverer/src/**/*.test.ts` run under Vitest (happy-dom) and mock `@/lib/api`.
 Never write a test that hits pixiv or X.
@@ -111,8 +116,9 @@ Never write a test that hits pixiv or X.
 
 - **Definition of done is `pnpm check` at the root**: deliverer `check`
   (vue-tsc, eslint, prettier, i18n-check, vitest) → `reaver/check.sh` (ruff,
-  mypy, tests, `verify=False` grep) → `scripts/check-version.sh`. Green
-  before claiming anything is finished.
+  mypy, tests, `verify=False` grep) → `scripts/check-version.sh` →
+  `scripts/check-dash.sh` (no em-dash in tracked files). Green before claiming
+  anything is finished.
 - Prefer minimal targeted changes. This codebase is small and deliberate.
 - Read the `feature-workflow` skill before any feature request; the `commit`
   skill before committing; `add-source-adapter` before adding a source.
@@ -127,7 +133,7 @@ its terms. This is a private archive of publicly posted work: attribution
 permalinks stored on every post, no redistribution, no monetisation,
 conservative request rates, deleted or privated works removed. Keep it that way.
 
-## Commits — one repo, Conventional Commits
+## Commits - one repo, Conventional Commits
 
 `flame-chaser/` is a single git repo covering `reaver/`, `deliverer/`, docker
 and docs; there are no nested repos. JavaScript tooling is a **pnpm workspace**
@@ -135,7 +141,7 @@ and docs; there are no nested repos. JavaScript tooling is a **pnpm workspace**
 tooling here and the app in `deliverer/`; never `npm install` anywhere (no
 `package-lock.json` should exist). Commit with `pnpm commit` at the root
 (cz-git walks you through type → scope → subject) or write the message by
-hand in the same shape — `commitlint` rejects anything else on `commit-msg`:
+hand in the same shape - `commitlint` rejects anything else on `commit-msg`:
 
 ```
 feat(deliverer): sign-in gate on first launch
@@ -169,7 +175,7 @@ coreflame <cmd>` for the CLI. The daemon binds `0.0.0.0` inside the container
 Tauri window cannot run in Docker; that is still `pnpm tauri dev` on the host.
 Restart-vs-rebuild table and release pipeline summary: `.claude/skills/deploy`.
 
-## Skills — `.claude/skills/<name>/SKILL.md`
+## Skills - `.claude/skills/<name>/SKILL.md`
 
 Read `feature-workflow` before any feature request and `commit` before
 committing. Each is written for a future session: commands, paths, order,
@@ -177,7 +183,7 @@ done-criteria, traps.
 
 | Skill | Use it when |
 |---|---|
-| `feature-workflow` | adding or changing a feature — everything that must move together, in order |
+| `feature-workflow` | adding or changing a feature - everything that must move together, in order |
 | `commit` | committing: `pnpm check`, fixers, hooks, Conventional Commit types/scopes |
 | `conventions-python` | working in `reaver/`: toolchain, offline tests, http, models, secrets, adding an endpoint |
 | `conventions-typescript-vue` | working in `deliverer/src`: auto-imports, Tailwind tokens, i18n, tests, adding a page |

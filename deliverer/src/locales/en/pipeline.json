@@ -3,9 +3,11 @@
   "pill": {
     "running": "running",
     "paused": "paused",
+    "offline": "paused · no internet",
     "idle": "idle"
   },
   "sub": "{busy} of {total} workers busy · {queued}",
+  "offlineHint": "The internet is unreachable, so the pipeline paused itself - the crawl it was running is back at the front of the queue and everything resumes on its own when the connection is back",
   "queuedCount": "queue empty | 1 queued | {n} queued",
   "reqPerMin": "{n} req/min",
   "pauseQueue": "Pause queue",
@@ -39,7 +41,8 @@
     "link": "pixiv artists → X handles",
     "tags": "observed tags",
     "label": "image labels backlog",
-    "other": "{type}"
+    "other": "{type}",
+    "export": "archive backup"
   },
   "completed": "Completed today",
   "seeAll": "see all {n}",
@@ -82,14 +85,14 @@
     "cancelJob": "Cancel job",
     "postsThisRun": "posts this run · {left} left",
     "newThisRun": "new posts this run",
-    "split": "{skipped} skipped — already visited, no request spent",
+    "split": "{skipped} skipped - already visited, no request spent",
     "splitNew": "{n} new",
     "progress": "{stage} · {done} / {total}",
     "progressOpen": "{stage} · {done} so far",
     "kept": "kept {n}",
     "dropped": "dropped {n}",
     "eta": "eta ~{t}",
-    "noDenominator": "no honest denominator for this stage — unvisited work is only known as the listing unfolds",
+    "noDenominator": "no honest denominator for this stage - unvisited work is only known as the listing unfolds",
     "lastJob": "last job · {state}",
     "noJob": "This worker has not run anything yet. Start a crawl from Crawl.",
     "log": "Log",
@@ -103,7 +106,11 @@
     "download": "download",
     "label": "label",
     "people": "people",
-    "identify": "identify"
+    "identify": "identify",
+    "snapshot": "snapshot",
+    "images": "images",
+    "thumbs": "thumbs",
+    "verify": "verify"
   },
   "counter": {
     "indexed": "indexed",
@@ -112,5 +119,6 @@
     "dupes": "dupes",
     "dropped": "dropped",
     "failed": "failed"
-  }
+  },
+  "parts": "Unfold the pixiv and X halves and the timelines sweep that followed"
 }

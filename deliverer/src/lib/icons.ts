@@ -1,6 +1,6 @@
 /**
  * The Curio icon set (assets/icons/icons.json, verbatim from curio-icons.zip):
- * 86 line icons on a 24 grid, stroked with currentColor -- so they follow the
+ * 87 line icons on a 24 grid (86 from curio-icons.zip + refresh-plus, 2026-10-25), stroked with currentColor -- so they follow the
  * theme -- with square caps and miter joins to match the cut corners. Render
  * with <Icon name="…">. To update the set, replace the JSON file.
  */

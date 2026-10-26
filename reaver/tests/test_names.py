@@ -54,7 +54,10 @@ WIKIDATA = {
                     "zh-hans": {"value": "雷电芽衣"},
                     "zh-hant": {"value": "雷電芽衣"},
                 },
-                "aliases": {},
+                "aliases": {
+                    "zh": [{"value": "芽衣"}],  # Wikidata's plain zh: folded to zh-hans
+                    "en-gb": [{"value": "Mei Raiden"}],
+                },
             }
         }
     },
@@ -116,6 +119,8 @@ def test_lookup_merges_both_sources() -> None:
     assert s["雷電芽衣"].sources == ["danbooru", "wikidata"] and s["雷電芽衣"].lang == "ja"
     assert s["라이덴 메이"].lang == "ko" and s["라이덴 메이"].sources == ["wikidata"]
     assert s["芽衣"].risky and not s["雷電芽衣"].risky
+    # alias codes are folded like label codes: the UI only names en ja ko zh-hans zh-hant
+    assert s["芽衣"].lang == "zh-hans" and s["Mei Raiden"].lang == "en"
     assert s["Raiden Mei"].posts == 5833
     forms = [x for x in r.suggestions if x.kind == "form"]
     assert [f.text for f in forms][:2] == ["Herrscher of Thunder", "雷の律者"]
@@ -159,13 +164,17 @@ def test_daemon_caches_good_answers_only(tmp: Path) -> None:
     asked = len(d.urls) + len(w.urls)
     client.post("/api/names", json={"queries": ["raiden mei ", "雷電芽衣"]})  # same, normalised
     assert len(d.urls) + len(w.urls) == asked  # served from the cache
+    client.post("/api/names", json={"queries": ["Raiden Mei", "雷電芽衣"], "refresh": True})
+    assert len(d.urls) + len(w.urls) > asked  # refresh asks again
     assert client.post("/api/names", json={"queries": ["x"] * 9}).status_code == 422
 
     d.fail = OSError("down")
     for _ in range(2):  # an answer with an error is not cached: each call retries
         r = client.post("/api/names", json={"queries": ["Kiana"]}).json()
     assert "danbooru" in r["errors"] and d.urls.count(d.urls[-1]) == 2
-    print("  daemon /api/names:    ok (cached per queries; errors retried; max 8 queries)")
+    print(
+        "  daemon /api/names:    ok (cached per queries; refresh asks again; errors retried; max 8)"
+    )
 
 
 if __name__ == "__main__":

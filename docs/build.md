@@ -52,8 +52,8 @@ pnpm tauri dev
 `tauri.conf.json` runs `pnpm run dev` (Vite on `127.0.0.1:5173`, strict port)
 as `beforeDevCommand`, compiles the Rust shell, and opens the window. In a debug
 build the shell does not look for a PyInstaller bundle: `sidecar.rs` spawns
-`python -m dawnmaker` from whatever `python` is first on `PATH` — hence the
-active venv — and reads the same `DAWNMAKER_READY` handshake line a packaged
+`python -m dawnmaker` from whatever `python` is first on `PATH` - hence the
+active venv - and reads the same `DAWNMAKER_READY` handshake line a packaged
 build would. Override the command with `REAVER_DEV_CMD`, e.g.
 
 ```sh
@@ -98,7 +98,7 @@ docker compose run --rm dev coreflame status     # the CLI inside the same image
 to Vite through `VITE_DAEMON_URL` / `VITE_DAEMON_TOKEN`, then runs Vite in the
 foreground. Compose publishes both ports on `127.0.0.1` only (`5173` webview,
 `8765` daemon), so the daemon is loopback from the host's point of view even
-though it binds `0.0.0.0` inside the container — which `--host` only allows
+though it binds `0.0.0.0` inside the container - which `--host` only allows
 together with `--dev`.
 
 - Secrets go in a root `.env` (gitignored): `PIXIV_PHPSESSID=…`, optionally
@@ -112,15 +112,15 @@ When to do what:
 
 | Change | Command |
 |---|---|
-| Python or Vue source | nothing — editable install + Vite HMR pick it up; the daemon needs `docker compose restart dev` for Python |
-| A dependency added to `package.json` / `pnpm-lock.yaml` | `docker compose restart dev` — the entrypoint runs `pnpm install --frozen-lockfile` on every start |
+| Python or Vue source | nothing - editable install + Vite HMR pick it up; the daemon needs `docker compose restart dev` for Python |
+| A dependency added to `package.json` / `pnpm-lock.yaml` | `docker compose restart dev` - the entrypoint runs `pnpm install --frozen-lockfile` on every start |
 | A Python dependency in `pyproject.toml`, or `docker/Dockerfile` | `docker compose up -d --build` |
 | `docker-compose.yml` (ports, volumes, env) | `docker compose up -d` recreates the container |
 | Wipe `node_modules` volumes | `docker compose down -v` (the archive in `./data` is a bind mount and survives) |
 
 ### (b) Without Docker
 
-Terminal 1 — the daemon, from the venv:
+Terminal 1 - the daemon, from the venv:
 
 ```sh
 . reaver/.venv/bin/activate
@@ -133,7 +133,7 @@ cd reaver && python -m dawnmaker --no-heartbeat --dev
 origins (Vite). Without it every browser request is refused with 403
 `bad_origin`.
 
-Terminal 2 — the webview. Copy `deliverer/.env.example` to `deliverer/.env`
+Terminal 2 - the webview. Copy `deliverer/.env.example` to `deliverer/.env`
 and paste the handshake values:
 
 ```
@@ -198,15 +198,15 @@ git tag v0.2.0 && git push origin master --tags
 `.github/workflows/release.yml` runs on `v*` tags (and by hand via
 `workflow_dispatch`):
 
-1. **check** — `scripts/check-version.sh` (all four version strings agree and
+1. **check** - `scripts/check-version.sh` (all four version strings agree and
    match the tag), `reaver/check.sh`, and `pnpm --filter deliverer run check`.
-2. **build** matrix — `macos-latest` (aarch64, dmg), `macos-13` (x86_64, dmg),
+2. **build** matrix - `macos-latest` (aarch64, dmg), `macos-13` (x86_64, dmg),
    `windows-latest` (nsis), `ubuntu-22.04` (appimage,deb). Each job builds the
    sidecar **before** `tauri-action`, smokes the built binary (`--help` must
    print the right version), then `tauri-action` builds, signs and uploads to a
    **draft** release named `Curio v<version>` with `latest.json` (the updater
    endpoint) generated from the `.sig` files.
-3. **linux-installer** — attaches `scripts/install-linux.sh` to the same draft.
+3. **linux-installer** - attaches `scripts/install-linux.sh` to the same draft.
 
 Publish the draft by hand after the verification list in the skill; a draft's
 `latest.json` 404s, so nobody updates until you do.
@@ -219,7 +219,7 @@ Required repository secrets: `TAURI_SIGNING_PRIVATE_KEY`,
 `APPLE_PASSWORD`, `APPLE_TEAM_ID`. `GITHUB_TOKEN` is provided by Actions.
 Replace `luissebastian953` in `tauri.conf.json` (updater endpoint) and
 `scripts/install-linux.sh` before the first tag; the signing key is the update
-channel's root of trust — losing it strands every install.
+channel's root of trust - losing it strands every install.
 
 ## Checks
 
@@ -231,9 +231,9 @@ pnpm check          # root: deliverer check + reaver/check.sh + scripts/check-ve
   prettier --check . && node scripts/i18n-check.mjs && vitest run`.
 - `reaver/check.sh` = `ruff check`, `ruff format --check`, `mypy`, every
   `tests/test_*.py` (all offline), and a grep that fails on any `verify=False`.
-  mypy's cache is put in `/tmp/mypy_cache` on purpose — a synced folder breaks
+  mypy's cache is put in `/tmp/mypy_cache` on purpose - a synced folder breaks
   its SQLite cache.
-- `scripts/check-version.sh` — the four version strings agree.
+- `scripts/check-version.sh` - the four version strings agree.
 
 Day to day, from `deliverer/`: `pnpm test` (Vitest once), `pnpm test:watch`,
 `pnpm lint:fix`, `pnpm format`, `pnpm i18n:check`. From `reaver/`:
@@ -252,7 +252,7 @@ Day to day, from `deliverer/`: `pnpm test` (Vitest once), `pnpm test:watch`,
 | Docker: `ModuleNotFoundError` after adding a Python dependency | Image built before the change | `docker compose up -d --build` |
 | Docker: Vite cannot resolve a newly added package | Container `node_modules` volume behind the lockfile | `docker compose restart dev` (entrypoint reinstalls) |
 | pixiv 401 / "search needs a signed-in session" | Not signed in, or the stored `PHPSESSID` expired | Settings › Accounts → Sign in (or paste in browser mode). `poll` refuses to start unauthenticated |
-| Tag probe shows `⚠ 0 — fullwidth（）won't match` | pixiv's exact-tag search does not match fullwidth parentheses | Use ASCII `( )` |
+| Tag probe shows `⚠ 0 - fullwidth（）won't match` | pixiv's exact-tag search does not match fullwidth parentheses | Use ASCII `( )` |
 | `ERR_BLOCKED_BY_CLIENT` on `/api/media/...` or `/api/preview/...` in a browser tab | An ad/tracker blocker extension matching the URL | Allow-list `127.0.0.1` in the extension, or test in the Tauri window |
 | `resolver_blocked` from `coreflame net` inside a sandbox or container | The sandbox's own egress rules, not your ISP | Run `coreflame net www.pixiv.net` from a normal terminal on the host (or `docker compose run --rm dev coreflame net`) |
 | mypy dies with a sqlite I/O error | Cache directory on a synced folder | `mypy --cache-dir /tmp/mypy_cache` (what `check.sh` does) |

@@ -4,6 +4,7 @@
   "tabs": {
     "accounts": "Accounts",
     "language": "Language",
+    "notifications": "Notifications",
     "updates": "Updates",
     "theme": "Theme",
     "storage": "Storage",
@@ -19,7 +20,7 @@
     "soon": "coming soon",
     "followSystem": "Follow system language",
     "systemIs": "system is set to {name}",
-    "systemNotReady": "system is set to {name} — not translated yet, so English is shown",
+    "systemNotReady": "system is set to {name} - not translated yet, so English is shown",
     "coverage": {
       "title": "Translation coverage",
       "sub": "counted from the bundled message files",
@@ -27,7 +28,7 @@
       "keys": "{translated} / {total} keys",
       "complete": "complete",
       "pending": "{n} pending",
-      "contributeHint": "Translations live in deliverer/src/locales — one folder per language, one JSON file per page. A language switches on once its coverage is real."
+      "contributeHint": "Translations live in deliverer/src/locales - one folder per language, one JSON file per page. A language switches on once its coverage is real."
     },
     "formats": {
       "title": "Formats",
@@ -60,6 +61,35 @@
       "previewSize": "Size"
     }
   },
+  "notifications": {
+    "title": "While crawling in background",
+    "sub": "what Curio shows when another app is in front",
+    "mode": {
+      "mini": {
+        "label": "Mini window",
+        "desc": "floating panel over other apps · workers, progress, Pause all"
+      },
+      "notify": {
+        "label": "Notifications",
+        "desc": "one system notification when a run finishes · tray icon shows progress"
+      },
+      "none": {
+        "label": "Nothing",
+        "desc": "stay quiet · check Pipeline when you come back"
+      }
+    },
+    "miniUnsupported": "not supported on this desktop (Wayland) · needs X11 / XWayland",
+    "browserOnly": "needs the desktop app",
+    "miniHint": "Appears 1.5 s after Curio loses focus while a worker runs, over every other app; drag it anywhere and it snaps to the nearer screen edge. × hides it until the queue empties; the tray menu brings it back.",
+    "notifyHint": "One system notification per finished run - “Ganyu · pixiv · +38 new” - and nothing else. The first one asks the system for permission.",
+    "noneHint": "No window, no notification. The tray icon stays, without progress.",
+    "startExpanded": "Start expanded",
+    "startExpandedHint": "all workers and the queue, not just the focused one",
+    "trayKeeps": "Tray icon keeps progress",
+    "trayKeepsHint": "after ×, the tray tooltip still shows posts / target",
+    "coerced": "On Linux Wayland the {mini} option is disabled (the compositor won’t keep a window on top) and the setting falls back to {notify}.",
+    "browserNote": "The mini window and the tray icon need the desktop app; in the browser this setting has no effect."
+  },
   "status": {
     "saving": "saving…",
     "savedNextJob": "saved · applies to the next job",
@@ -69,7 +99,7 @@
   "accounts": {
     "title": "Accounts",
     "local": "your login stays on this computer",
-    "intro": "Curio browses pixiv and X as you, the way your browser does. Signing in happens on the site's own page — Curio never sees your password. pixiv is required for finding artworks; X is optional and adds the artists' own posts.",
+    "intro": "Curio browses pixiv and X as you, the way your browser does. Signing in happens on the site's own page - Curio never sees your password. pixiv is required for finding artworks; X is optional and adds the artists' own posts.",
     "skipped": "You skipped this at first launch; signing in here does the same thing."
   },
   "theme": {
@@ -141,31 +171,48 @@
   },
   "storage": {
     "title": "Storage",
+    "sub": "library · database · trash",
+    "versions": "app {app} · daemon dawnmaker v{daemon} · schema v{schema}",
     "library": "Library",
+    "reveal": "Show in folder",
+    "diskLibrary": "library {size}",
+    "diskOther": "other {size}",
+    "diskFree": "free {free} of {total} · {mount}",
     "database": "Database",
-    "schema": "Schema",
-    "schemaValue": "v{n}",
+    "databaseMeta": "{size} · schema v{schema}",
+    "hint": "The database never lives inside the library folder - moving the library to a synced drive is safe; the db is not.",
     "layout": "Layout",
-    "layoutValue": "blobs/ (content-addressed) · by-character/ (hardlinks) · thumbs/ (WebP 400px)",
-    "hint": "The database never lives inside the library folder — moving the library to a synced drive is safe; the db is not."
+    "blobs": "content-addressed",
+    "blobsValue": "0 files · {size} | 1 file · {size} | {n} files · {size}",
+    "byCharacter": "hardlinks",
+    "byCharacterValue": "0 characters · 0 B extra | 1 character · 0 B extra | {n} characters · 0 B extra",
+    "thumbs": "WebP 400 px",
+    "thumbsValue": "{n} · {size}",
+    "trash": "Trash",
+    "trashValue": "0 items | 1 item · {size} | {n} items · {size}",
+    "trashEmpty": "empty",
+    "trashKept": "kept {days} days, then removed",
+    "emptyTrash": "Empty trash now",
+    "trashEmptied": "0 images removed | 1 image removed | {n} images removed",
+    "loading": "reading the library…"
   },
   "network": {
     "title": "Network",
     "save": "Save",
     "resolver": "Resolver",
-    "resolverSystem": "system — OS DNS",
-    "resolverDoh": "doh — DNS over HTTPS (1.1.1.1 / 8.8.8.8 by IP)",
+    "resolverSystem": "system - OS DNS",
+    "resolverDoh": "doh - DNS over HTTPS (1.1.1.1 / 8.8.8.8 by IP)",
     "resolverHint": "Layer 1 of the bypass: names resolve over HTTPS to an IP endpoint, so ISP DNS hijack is skipped. TLS still verifies the real hostname.",
     "proxy": "Proxy",
     "proxyPlaceholder": "socks5://127.0.0.1:1080",
-    "proxyHint": "Layer 2, for SNI/DPI blocks. Also passed to gallery-dl. Certificate verification is never disabled — a proxy that needs that is an interceptor.",
+    "proxyHint": "Layer 2, for SNI/DPI blocks. Also passed to gallery-dl. Certificate verification is never disabled - a proxy that needs that is an interceptor.",
     "pixivRate": "pixiv rate",
     "pixivRateAria": "pixiv rate",
     "rateValue": "{n} req/s",
-    "rateHint": "Conservative on purpose — this is a private archive, not a mirror.",
+    "rateHint": "Conservative on purpose - this is a private archive, not a mirror.",
     "xSearch": "X search depth",
     "xSearchValue": "{n} posts per term",
-    "xSearchOff": "off — X never searches, only follows linked artists",
+    "xSearchOff": "off - X never searches, only follows linked artists",
     "xSearchHint": "For crawls started from the command line. Crawls from the app search until each character's “Posts per run”. Search is the request X rate-limits and suspends for. 0 turns X search off everywhere."
   },
   "duplicates": {
@@ -174,7 +221,13 @@
     "distance": "dHash distance",
     "distanceValue": "≤ {n}",
     "distanceAria": "hamming threshold",
-    "hint": "Exact sha256 always dedupes. Near-duplicates compare within the same artist only — cross-artist matches are far more often two people drawing the same pose than one repost. 6 is conservative; above 10 starts merging variants."
+    "hint": "Exact sha256 always dedupes. Near-duplicates compare within the same artist only - cross-artist matches are far more often two people drawing the same pose than one repost. 6 is conservative; above 10 starts merging variants.",
+    "rule": "Smart cleanup at crawl time",
+    "ruleScore": "Throw away when the character's score is below",
+    "ruleScoreOff": "off",
+    "ruleScoreAria": "minimum score",
+    "ruleOther": "Throw away images identified as another character",
+    "ruleHint": "The same criteria as a gallery's Smart deletion, judged as each image is stored. Near-duplicates are already caught by the distance above; the images a character has not been identified against yet are kept."
   },
   "about": {
     "title": "About",
@@ -187,7 +240,116 @@
   "characters": {
     "title": "New characters",
     "lead": "What a new character's form starts with. Each character can change it in its own form.",
+    "kinds": "Skip photos, cosplay, 3D and screenshots",
+    "kindsHint": "Two small classifiers judge each image as it is stored; a real photo - a cosplayer, a figure, a person - is rejected before it reaches the archive, as are 3D renders and UI screenshots. Only illustrations and anime screencaps are kept. Off keeps every image and labels it instead, so the gallery's Show row can still filter them.",
     "identify": "Name the character in every image",
-    "identifyHint": "Two taggers name who is in each kept image — any anime, game, manga or novel character they know. Unsure pictures are marked unidentified; nothing is removed. The first run downloads up to ~1.3 GB."
+    "identifyHint": "Two taggers name who is in each kept image - any anime, game, manga or novel character they know. Unsure pictures are marked unidentified; nothing is removed. The first run downloads up to ~1.3 GB."
+  },
+  "backup": {
+    "title": "Backup",
+    "sub": "the whole archive as one file",
+    "browserTag": "browser build",
+    "export": {
+      "title": "Export",
+      "format": "Format",
+      "curioHint": "Curio's own container. Every entry is hashed; a truncated copy still yields what is intact, damage is reported per entry.",
+      "zipHint": "Opens anywhere. Images stored as-is; only the database and settings are deflated.",
+      "include": "Include",
+      "images": "Include the images",
+      "imagesHint": "off = database + settings only; an import then re-downloads every image",
+      "thumbs": "Include the thumbnails",
+      "secrets": "Include the pixiv session cookie",
+      "secretsHint": "anyone holding the file can use the session",
+      "button": "Export…",
+      "buttonBrowser": "Export",
+      "opensDialog": "opens the save dialog",
+      "browserHint": "no save dialog here: the file is written under ~/.reaver/exports",
+      "exporting": "exporting → {path}",
+      "queued": "queued → {path}",
+      "stageCount": "{stage} {done} / {total}",
+      "cancel": "Cancel",
+      "retry": "Retry",
+      "exported": "exported",
+      "doneSize": "{size} · {images} images · {characters} characters",
+      "reveal": "Show in folder",
+      "copyPath": "Copy path",
+      "copied": "copied",
+      "failed": "export failed · {error}",
+      "partRemoved": "{path}.part removed",
+      "cancelled": "cancelled"
+    },
+    "import": {
+      "title": "Import",
+      "choose": "Choose a bundle…",
+      "chooseAgain": "Choose again",
+      "kinds": ".curio or .zip",
+      "lead": "Merge into this archive, or restore and replace it. You decide after the bundle is read.",
+      "notWhileExport": "not while an export runs",
+      "pathPlaceholder": "/path/to/archive.curio",
+      "pathHint": "a path on the machine running the daemon · .curio or .zip",
+      "inspect": "Inspect",
+      "reading": "reading the bundle…",
+      "errors": {
+        "not_a_bundle": "Not a Curio bundle",
+        "not_a_bundle_detail": "{name} · no manifest inside",
+        "bundle_too_new": "Made by a newer Curio",
+        "bundle_too_new_detail": "{message}",
+        "updateFirst": "Update first",
+        "damaged": "Damaged where it matters",
+        "damaged_detail": "{message} · nothing can be imported",
+        "no_file": "No such file",
+        "no_file_detail": "{path}",
+        "bad_manifest": "Not a Curio bundle",
+        "bad_manifest_detail": "{name} · manifest unreadable",
+        "busy": "The pipeline is still running",
+        "busy_detail": "pause it and let it drain, then import again",
+        "other": "Could not read the bundle",
+        "other_detail": "{message}"
+      },
+      "plateMeta": "{name} · {mode}",
+      "done": "done:",
+      "result": "{characters} characters · {posts} posts · {placed} images placed · {dupes} duplicates · {refetch} to re-download",
+      "damagedNote": "0 damaged entries skipped | 1 damaged entry skipped | {n} damaged entries skipped",
+      "which": "Which",
+      "reloading": "settings applied - reloading"
+    },
+    "sheet": {
+      "title": "Import",
+      "meta": "{format} · Curio {version} · schema v{schema} · created {date}",
+      "counts": "{characters} characters · {posts} posts · {images} images",
+      "close": "Close",
+      "noImages": "This bundle has no images. Every post's images will be re-downloaded.",
+      "mode": "Mode",
+      "merge": "Merge into this archive",
+      "mergeHint": "posts and images added, never duplicated; near-duplicates per artist",
+      "restore": "Restore - replace this archive",
+      "restoreHint": "everything here is replaced by the bundle",
+      "settings": "Settings",
+      "settingsRestore": "Settings · the bundle's are taken on restore",
+      "keep": "keep mine",
+      "take": "take the bundle's",
+      "takeHint": "daemon config, theme, language, notification mode",
+      "secrets": "Take the bundle's pixiv session cookie",
+      "characters": "Characters · {n}",
+      "postCount": "0 posts | 1 post | {n} posts",
+      "new": "new",
+      "same": "same config",
+      "replaced": "replaced",
+      "sameTags": "same tags as your {slug}",
+      "policy": {
+        "merge": "merge configs",
+        "keep": "keep mine",
+        "take": "take theirs"
+      },
+      "salvage": "If some entries are damaged, import what is intact",
+      "salvageHint": "a damaged image is re-downloaded on the next crawl; a damaged database refuses the import either way",
+      "gate": "The pipeline must be paused and empty before an import.",
+      "pauseNow": "Pause the pipeline",
+      "gateOk": "pipeline paused and empty",
+      "esc": "Esc closes",
+      "cancel": "Cancel",
+      "run": "Import",
+      "importing": "importing… the window will not respond until it is done"
+    }
   }
 }

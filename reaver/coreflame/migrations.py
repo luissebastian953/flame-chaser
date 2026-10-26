@@ -370,3 +370,58 @@ ALTER TABLE jobs ADD COLUMN position REAL NOT NULL DEFAULT 0;
 ALTER TABLE jobs ADD COLUMN pause_requested INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(state, lane, position)
 """
+
+
+@migration(10, "trash")
+def _v10() -> str:
+    # deleting images from a gallery (coreflame/trash.py): every deletion is a
+    # batch, each trashed image keeps its media row as JSON so Undo can put it
+    # back exactly, and a forgotten post rides along in the batch's snapshot
+    return """
+CREATE TABLE IF NOT EXISTS trash_batches (
+    id          TEXT PRIMARY KEY,
+    slug        TEXT NOT NULL,
+    mode        TEXT NOT NULL,              -- image | tag | smart | all
+    created_at  TEXT NOT NULL,
+    images      INTEGER NOT NULL,
+    bytes       INTEGER NOT NULL,
+    forgotten   INTEGER NOT NULL DEFAULT 0,
+    snapshot    TEXT NOT NULL DEFAULT '{}'  -- forgotten posts + reopened visited rows, JSON
+);
+CREATE TABLE IF NOT EXISTS trash_items (
+    source      TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    idx         INTEGER NOT NULL,
+    sha256      TEXT NOT NULL,
+    ext         TEXT NOT NULL DEFAULT '',
+    bytes       INTEGER,
+    batch_id    TEXT NOT NULL,
+    row         TEXT NOT NULL,              -- the media row, JSON
+    deleted_at  TEXT NOT NULL,
+    PRIMARY KEY (source, external_id, idx)
+);
+CREATE INDEX IF NOT EXISTS trash_items_batch ON trash_items(batch_id);
+CREATE INDEX IF NOT EXISTS trash_items_age ON trash_items(deleted_at)
+"""
+
+
+@migration(11, "media_variant")
+def _v11() -> str:
+    # which size the source handed over (pixiv `original`; X `orig`, or
+    # `4096x4096` when orig 404s) so a later pass can find rows worth
+    # refetching. Older rows keep '' and the detail route derives it from the url.
+    return "ALTER TABLE media ADD COLUMN source_variant TEXT NOT NULL DEFAULT ''"
+
+
+@migration(12, "queue_state")
+def _v12() -> str:
+    # the queue's own state, outside any job row: today only `held` ("1" while
+    # the queue is paused). It is what makes a pause survive a restart -- the
+    # runner reads it at boot, and a crawl that died while the queue was held
+    # goes back to the front of the queue instead of being marked interrupted.
+    return """
+CREATE TABLE IF NOT EXISTS queue_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+)
+"""

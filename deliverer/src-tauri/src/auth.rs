@@ -35,13 +35,13 @@ fn site(source: &str) -> Result<Site, String> {
                 "https://accounts.pixiv.net/login?return_to=https%3A%2F%2Fwww.pixiv.net%2F&lang=en",
             home: "https://www.pixiv.net/",
             needed: &["PHPSESSID"],
-            title: "Sign in to pixiv — Curio",
+            title: "Sign in to pixiv - Curio",
         },
         "twitter" => Site {
             login: "https://x.com/i/flow/login",
             home: "https://x.com/",
             needed: &["auth_token", "ct0"],
-            title: "Sign in to X — Curio",
+            title: "Sign in to X - Curio",
         },
         other => return Err(format!("unknown source {other}")),
     })

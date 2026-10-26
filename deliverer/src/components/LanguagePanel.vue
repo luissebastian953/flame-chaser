@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Settings › Language: interface language (or follow the system), how far
- * each translation has come, and the number/date/size formats — those are
+ * each translation has come, and the number/date/size formats - those are
  * independent of the language on purpose.
  */
 import { LOCALES, coverage, savedChoice, setLocale, systemLocale, type LocaleCode } from '@/i18n';
@@ -108,7 +108,7 @@ watch(
           {{ $t('settings.language.coverage.contribute') }}
         </button>
       </div>
-      <div class="p-15 flex flex-col gap-12">
+      <div class="p-15 flex flex-col gap-15">
         <div v-for="r in rows" :key="r.code" class="cov">
           <span class="native" :class="{ jp: r.code === 'ja' || r.code === 'zh' }">{{ r.native }}</span>
           <span class="data text-small text-dim">{{ r.label }}</span>

@@ -50,7 +50,7 @@ const startedAt = computed(() => clock(job.value?.started_at));
 
 const elapsedText = computed(() => {
   const j = job.value;
-  if (!j?.started_at) return '—';
+  if (!j?.started_at) return '-';
   const end = j.finished_at ? new Date(j.finished_at).getTime() : now.value;
   return elapsed(j.started_at, end);
 });

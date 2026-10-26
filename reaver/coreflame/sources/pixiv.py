@@ -30,6 +30,7 @@ from pydantic import ValidationError
 
 from ..http import METER, SourceClient
 from ..models import DiscoverStats, IllustRecord, Watch
+from ..online import Offline
 from ..seen import Seen, SeenState, SkipReason
 from .specs import PIXIV_DETAIL, PIXIV_LISTING, extract
 
@@ -208,6 +209,8 @@ class PixivAdapter:
                 log.info("pixiv illust %s gone (%s)", illust_id, code)
                 return None
             raise
+        except Offline:
+            raise  # the connection, not this artwork: the runner holds the queue
         except Exception as e:
             stats.failed += 1
             if seen is not None:
@@ -295,6 +298,8 @@ class PixivAdapter:
         return handle.lstrip("@") or None
 
     # -- media ------------------------------------------------------------
+    last_variant = "original"  # pixiv has one full-size url per page; see _pages
+
     def fetch_media(self, url: str, referer: str | None = None) -> bytes:
         return self.client.get(
             url, bucket="pximg", headers={"Referer": referer or f"{BASE}/"}

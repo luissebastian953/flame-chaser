@@ -40,6 +40,7 @@ export function stagesOf(job: Job): string[] {
   if (job.type === 'link') return ['link'];
   if (job.type === 'tags') return ['tags'];
   if (job.type === 'label') return ['label', 'people', 'identify'];
+  if (job.type === 'export') return ['snapshot', 'images', 'thumbs', 'verify'];
   return job.stage ? [job.stage] : [];
 }
 
@@ -71,6 +72,86 @@ export function characterOf(job: Job, watches: readonly Watch[]): Character | nu
   return { slug, name, jp: jp && !again ? jp : null, cover: w?.cover_sha ?? null };
 }
 
+/**
+ * One character's run as the Completed list shows it: the per-source jobs
+ * the planner split it into, folded back into one row that unfolds into its
+ * parts -- the pixiv half, the X half, and the X timelines sweep the same
+ * request queued behind them. Nothing else makes a row: not a sweep on its
+ * own, not a label or tags job, not a whole-archive CLI poll.
+ */
+export interface CompletedRun {
+  /** the first job's id; stable for a `key` */
+  id: string;
+  slug: string;
+  /** the character's own poll jobs; what the row's counts add up */
+  jobs: Job[];
+  /** `jobs`, then the timelines sweep(s) of the same request, in start order */
+  parts: Job[];
+  /** the worst ending among its jobs */
+  state: Job['state'];
+  error: string | null;
+  /** the latest ending */
+  finished_at: string | null;
+  counters: { new: number; kept: number; dropped: number };
+}
+
+const ENDING_RANK: Record<string, number> = { interrupted: 3, failed: 2, cancelled: 1 };
+/** jobs the planner made in one request land within this of each other */
+const RUN_WINDOW_MS = 5_000;
+
+/** Fold finished jobs into character runs, newest first. */
+export function runsOf(jobs: readonly Job[]): CompletedRun[] {
+  const byStart = [...jobs]
+    .filter((j) => j.type === 'poll' && Array.isArray(j.params.watches) && j.params.watches.length === 1)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  const sweeps = jobs
+    .filter((j) => j.type === 'timelines')
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  const runs: CompletedRun[] = [];
+  const open = new Map<string, CompletedRun>();
+
+  for (const j of byStart) {
+    const slug = String((j.params.watches as unknown[])[0]);
+    const first = open.get(slug)?.jobs[0];
+    let run = open.get(slug);
+
+    if (!run || !first || Date.parse(j.created_at) - Date.parse(first.created_at) > RUN_WINDOW_MS) {
+      run = {
+        id: j.id,
+        slug,
+        jobs: [],
+        parts: [],
+        state: 'succeeded',
+        error: null,
+        finished_at: null,
+        counters: { new: 0, kept: 0, dropped: 0 },
+      };
+
+      open.set(slug, run);
+      runs.push(run);
+    }
+    run.jobs.push(j);
+    if ((ENDING_RANK[j.state] ?? 0) > (ENDING_RANK[run.state] ?? 0)) run.state = j.state;
+    run.error ??= j.error;
+    if (j.finished_at && (!run.finished_at || j.finished_at > run.finished_at))
+      run.finished_at = j.finished_at;
+    const c = j.counters ?? {};
+    run.counters.new += Number(c.new_posts ?? c.new ?? 0);
+    run.counters.kept += Number(c.downloaded ?? 0);
+    run.counters.dropped += Number(c.rejected ?? 0);
+  }
+
+  for (const run of runs) {
+    const t0 = Date.parse(run.jobs[0]!.created_at);
+    const mine = sweeps.filter((s) => Math.abs(Date.parse(s.created_at) - t0) <= RUN_WINDOW_MS);
+    run.parts = [...run.jobs, ...mine];
+  }
+
+  return runs.sort((a, b) => (b.finished_at ?? '').localeCompare(a.finished_at ?? ''));
+}
+
 /** posts this run: pixiv = new artworks, X = posts kept against the target */
 export function postsOf(job: Job): number {
   const c = job.counters ?? {};
@@ -85,7 +166,7 @@ export function targetOf(job: Job): number | null {
 
 /** "1m 45s" / "12s" / "2h 05m" */
 export function elapsed(fromIso: string | null, now: number = Date.now()): string {
-  if (!fromIso) return '—';
+  if (!fromIso) return '-';
   const sec = Math.max(0, Math.floor((now - new Date(fromIso).getTime()) / 1000));
   if (sec < 60) return `${sec}s`;
   if (sec < 3600) return `${Math.floor(sec / 60)}m ${sec % 60}s`;
@@ -121,6 +202,7 @@ export function jobTitle(job: Job): { key: string; params: Record<string, unknow
   if (job.type === 'link') return { key: 'pipeline.job.link', params: {} };
   if (job.type === 'tags') return { key: 'pipeline.job.tags', params: {} };
   if (job.type === 'label') return { key: 'pipeline.job.label', params: {} };
+  if (job.type === 'export') return { key: 'pipeline.job.export', params: {} };
   return { key: 'pipeline.job.other', params: { type: job.type } };
 }
 

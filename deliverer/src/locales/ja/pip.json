@@ -1,0 +1,28 @@
+{
+  "crawling": "クロール中",
+  "paused": "一時停止",
+  "offline": "一時停止 · インターネットなし",
+  "queued": "待機中",
+  "more": "あと {n} 件",
+  "less": "少なく表示",
+  "pauseAll": "すべて一時停止",
+  "resumeAll": "すべて再開",
+  "newToday": "新規 +{n}",
+  "rpm": "{n} req/分",
+  "open": "Curio を開く",
+  "hide": "隠す",
+  "finished": "完了 · 新規 +{n}",
+  "tray": {
+    "tooltip": "Curio · {name} · {progress} · 新規 +{new}",
+    "idle": "Curio · 待機中",
+    "pause": "すべて一時停止",
+    "resume": "すべて再開",
+    "showPip": "ミニウィンドウを表示",
+    "quit": "Curio を終了"
+  },
+  "notify": {
+    "title": "実行が完了",
+    "finished": "{name} · {source} · 新規 +{n}",
+    "ended": "{name} · {source} · {state}"
+  }
+}

@@ -5,7 +5,6 @@ export const useEndpoint = defineStore('endpoint', {
     ready: false,
     error: null as string | null,
     health: null as Health | null,
-    stopHeartbeat: null as null | (() => void),
   }),
   actions: {
     async boot() {
@@ -13,7 +12,6 @@ export const useEndpoint = defineStore('endpoint', {
         await discover();
         this.health = await api.get<Health>('/api/health');
         this.ready = true;
-        this.stopHeartbeat ??= startHeartbeat();
       } catch (e) {
         this.error = e instanceof Error ? e.message : String(e);
       }

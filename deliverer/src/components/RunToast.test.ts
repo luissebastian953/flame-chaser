@@ -1,7 +1,7 @@
 import { flushPromises } from '@vue/test-utils';
 import RunToast from './RunToast.vue';
 import type { Job, PipelineState } from '@/lib/types';
-import type { RunToast as RunToastItem, Toast } from '@/stores/toasts';
+import type { ErrorToast, RunToast as RunToastItem } from '@/stores/toasts';
 import { mountWithPlugins } from '@/test/utils';
 import { createMemoryHistory, createRouter } from 'vue-router';
 
@@ -40,6 +40,8 @@ function job(id: string, state: Job['state'], over: Partial<Job> = {}): Job {
 
 const pipeline = (paused = false): PipelineState => ({
   paused,
+  pause_reason: paused ? 'user' : null,
+  online: true,
   workers: [
     { lane: 'pixiv', job_id: null },
     { lane: 'twitter', job_id: null },
@@ -59,7 +61,7 @@ const runToast = (jobIds: string[], over: Partial<RunToastItem> = {}): RunToastI
   ...over,
 });
 
-async function mountToast(toast: Toast, jobs: Job[], paused = false) {
+async function mountToast(toast: RunToastItem | ErrorToast, jobs: Job[], paused = false) {
   const w = mountWithPlugins(RunToast, {
     props: { toast },
     global: { plugins: [router] },
@@ -140,7 +142,7 @@ describe('RunToast', () => {
     );
 
     expect(w.find('.toast').classes()).toContain('warn');
-    expect(squash(w.text())).toContain('Queue is paused — Firefly will wait');
+    expect(squash(w.text())).toContain('Queue is paused - Firefly will wait');
     expect(squash(w.text())).toContain('queued on X · position 2');
     expect(w.find('.timer').exists()).toBe(false);
     expect(useToasts().armed(1)).toBe(false);

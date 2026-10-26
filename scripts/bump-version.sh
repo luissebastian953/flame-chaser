@@ -27,7 +27,7 @@ cl = Path("CHANGELOG.md"); s = cl.read_text()
 import datetime
 today = datetime.date.today().isoformat()
 if "## Unreleased" in s:
-    s = s.replace("## Unreleased", f"## Unreleased\n\n## {v} — {today}", 1)
+    s = s.replace("## Unreleased", f"## Unreleased\n\n## {v} - {today}", 1)
     cl.write_text(s); print("  CHANGELOG.md")
 PY
 pnpm install --lockfile-only >/dev/null && echo "  pnpm-lock.yaml"

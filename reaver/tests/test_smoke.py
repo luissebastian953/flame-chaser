@@ -250,6 +250,42 @@ def _img(seed: int, size=(400, 500), quality=None) -> bytes:
     return buf.getvalue()
 
 
+def test_twitter_full_size_fallback() -> None:
+    """Every stored X image is the largest file the site serves: `name=orig`,
+    or `4096x4096` when orig alone 404s. Anything else is never fetched."""
+    import httpx
+
+    tw = TwitterAdapter()
+    calls: list[str] = []
+
+    def get(url, **kw):
+        calls.append(url)
+        if "name=orig" in url and "GONE" in url:
+            req = httpx.Request("GET", url)
+            raise httpx.HTTPStatusError(
+                "404", request=req, response=httpx.Response(404, request=req)
+            )
+        return httpx.Response(200, content=b"img", request=httpx.Request("GET", url))
+
+    tw.client.get = get  # type: ignore[assignment]
+    assert tw.fetch_media("https://pbs.twimg.com/media/AAA?format=jpg") == b"img"
+    assert calls == ["https://pbs.twimg.com/media/AAA?format=jpg&name=orig"]
+    assert tw.last_variant == "orig"
+    calls.clear()
+    assert tw.fetch_media("https://pbs.twimg.com/media/GONE?format=png&name=orig") == b"img"
+    assert calls == [
+        "https://pbs.twimg.com/media/GONE?format=png&name=orig",
+        "https://pbs.twimg.com/media/GONE?format=png&name=4096x4096",
+    ]
+    assert tw.last_variant == "4096x4096"
+    print("  X full size:          ok (orig first, 4096x4096 only after a 404)")
+
+    from coreflame.thumbs import dims
+
+    assert dims(_img(1, size=(30, 20))) == (30, 20) and dims(b"not an image") is None
+    print("  decoded dims:         ok")
+
+
 def test_dedupe(tmp: Path) -> None:
     store = Store(tmp / "d.db")
     blobs = BlobStore(tmp / "blobs")
@@ -340,6 +376,51 @@ def test_library_view(tmp: Path) -> None:
     print("  name + sync guards:   ok")
 
 
+def test_gallery_dl_command() -> None:
+    """X is reached through the gallery_dl module we depend on, run by this
+    interpreter -- a venv has `-m gallery_dl`; the frozen sidecar re-enters
+    its own executable with --gallery-dl (sidecar_entry.py dispatches before
+    the daemon imports). No module and no binary means X is off, loudly."""
+    import subprocess
+    import sys
+
+    from coreflame.sources.twitter import GALLERY_DL_FLAG, TwitterAdapter, gallery_dl_command
+
+    cmd = gallery_dl_command()
+    assert cmd is not None and cmd[:2] == [sys.executable, "-m"], cmd
+    tw = TwitterAdapter()
+    assert tw.available() and tw.binary == sys.executable
+    print("  venv: python -m gallery_dl")
+
+    sys.frozen = True  # type: ignore[attr-defined]
+    try:
+        assert gallery_dl_command() == [sys.executable, GALLERY_DL_FLAG]
+    finally:
+        del sys.frozen  # type: ignore[attr-defined]
+    print("  frozen: <exe> --gallery-dl")
+
+    missing = TwitterAdapter(binary="definitely-not-installed")
+    assert not missing.available() and missing.binary == "definitely-not-installed"
+    try:
+        missing._run("https://x.com/x", 1)
+        raise AssertionError("ran without gallery-dl")
+    except RuntimeError as e:
+        assert "not found" in str(e)
+    print("  missing: refused with a reason")
+
+    entry = Path(__file__).resolve().parents[2] / "deliverer" / "scripts" / "sidecar_entry.py"
+    proc = subprocess.run(
+        [sys.executable, str(entry), GALLERY_DL_FLAG, "--version"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+        cwd=str(Path(__file__).resolve().parents[1]),
+    )
+    assert proc.returncode == 0 and proc.stdout.strip()[:1].isdigit(), (proc.stdout, proc.stderr)
+    print(f"  entry dispatch: gallery-dl {proc.stdout.strip()}")
+
+
 if __name__ == "__main__":
     import tempfile
 
@@ -349,8 +430,11 @@ if __name__ == "__main__":
         test_pixiv_normalizes_and_paginates(tmp)
         print("twitter adapter")
         test_twitter_flatten_and_match()
+        test_twitter_full_size_fallback()
         print("dedupe + store")
         test_dedupe(tmp)
         print("library view")
         test_library_view(tmp)
+    print("gallery-dl launch")
+    test_gallery_dl_command()
     print("\nall passed")

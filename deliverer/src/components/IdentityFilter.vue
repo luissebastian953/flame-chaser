@@ -5,11 +5,17 @@
  * named, to narrow the grid. Names only label -- nothing is removed. Offers
  * the `label` job for images stored before naming existed.
  */
+import { pickedFirst } from '@/lib/chips';
 import type { IdentState } from '@/lib/types';
 
 const props = defineProps<{ slug: string }>();
 const lib = useLibrary();
 const jobs = useJobs();
+const del = useDeletion();
+const { t } = useI18n();
+// By tag (stores/deletion.ts): a chip marks the images in that state / of that character
+const selecting = computed(() => del.mode === 'tag');
+const total = computed(() => Object.values(counts.value).reduce((a, b) => a + b, 0));
 
 const INSTALL = "pip install 'reaver[classify]'"; // data, shown verbatim
 const SHOWN = 8; // character chips before "+N more"
@@ -25,9 +31,18 @@ const ident = computed(() => lib.characters?.identifier ?? null);
 // "Not identified yet" only exists while something is
 const states = computed(() => IDENT_STATES.filter((s) => s !== 'pending' || pending.value > 0));
 const named = computed(() => lib.characters?.characters ?? []);
-const visible = computed(() => (all.value ? named.value : named.value.slice(0, SHOWN)));
+
+// By tag shows every character, the picked ones first: a folded row hides exactly what the user is looking for
+const visible = computed(() => {
+  if (selecting.value) return pickedFirst(named.value, (c) => del.isTerm('character', c.name));
+  return all.value ? named.value : named.value.slice(0, SHOWN);
+});
 
 function toggle(s: IdentState) {
+  if (selecting.value) {
+    void del.toggleTerm('ident', s, t(`gallery.who.state.${s}`), lib.gridQuery(props.slug), total.value);
+    return;
+  }
   const on = lib.who.includes(s);
   const next = on ? lib.who.filter((x) => x !== s) : [...lib.who, s];
   if (!next.some((x) => states.value.includes(x))) return; // never an empty grid by accident
@@ -36,7 +51,11 @@ function toggle(s: IdentState) {
   void lib.setWho(props.slug, next);
 }
 
-function pick(name: string) {
+function pick(name: string, chipLabel: string) {
+  if (selecting.value) {
+    void del.toggleTerm('character', name, chipLabel, lib.gridQuery(props.slug), total.value);
+    return;
+  }
   void lib.setCharacter(props.slug, lib.character === name ? null : name);
 }
 
@@ -63,10 +82,15 @@ watch(
         v-for="s in states"
         :key="s"
         class="chip"
-        :class="{ on: !lib.character && lib.who.includes(s) }"
-        :aria-pressed="!lib.character && lib.who.includes(s)"
+        :class="
+          selecting
+            ? { pick: true, sel: del.isTerm('ident', s) }
+            : { on: !lib.character && lib.who.includes(s) }
+        "
+        :aria-pressed="selecting ? del.isTerm('ident', s) : !lib.character && lib.who.includes(s)"
         @click="toggle(s)"
       >
+        <Icon v-if="selecting && del.isTerm('ident', s)" name="close" :size="10" />
         {{ $t(`gallery.who.state.${s}`) }}
         <em>{{ counts[s] }}</em>
       </button>
@@ -104,16 +128,19 @@ watch(
         v-for="c in visible"
         :key="c.name"
         class="chip"
-        :class="{ on: lib.character === c.name }"
-        :aria-pressed="lib.character === c.name"
+        :class="
+          selecting ? { pick: true, sel: del.isTerm('character', c.name) } : { on: lib.character === c.name }
+        "
+        :aria-pressed="selecting ? del.isTerm('character', c.name) : lib.character === c.name"
         :title="c.name"
-        @click="pick(c.name)"
+        @click="pick(c.name, c.label)"
       >
-        <Icon name="user" :size="11" />
+        <Icon v-if="selecting && del.isTerm('character', c.name)" name="close" :size="10" />
+        <Icon v-else name="user" :size="11" />
         {{ c.label }}
         <em>{{ c.count }}</em>
       </button>
-      <button v-if="named.length > SHOWN" class="more" @click="all = !all">
+      <button v-if="!selecting && named.length > SHOWN" class="more" @click="all = !all">
         {{ all ? $t('gallery.who.fewer') : $t('gallery.who.more', { n: named.length - SHOWN }) }}
       </button>
     </div>

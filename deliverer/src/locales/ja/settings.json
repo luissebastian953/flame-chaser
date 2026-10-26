@@ -4,6 +4,7 @@
   "tabs": {
     "accounts": "アカウント",
     "language": "言語",
+    "notifications": "通知",
     "updates": "アップデート",
     "theme": "テーマ",
     "storage": "ストレージ",
@@ -19,7 +20,7 @@
     "soon": "近日対応",
     "followSystem": "システムの言語に従う",
     "systemIs": "システムは {name} に設定されています",
-    "systemNotReady": "システムは {name} に設定されています — 未翻訳のため英語で表示しています",
+    "systemNotReady": "システムは {name} に設定されています - 未翻訳のため英語で表示しています",
     "coverage": {
       "title": "翻訳カバレッジ",
       "sub": "同梱のメッセージファイルから集計",
@@ -27,7 +28,7 @@
       "keys": "{translated} / {total} キー",
       "complete": "完了",
       "pending": "残り {n}",
-      "contributeHint": "翻訳は deliverer/src/locales にあります — 言語ごとに 1 フォルダー、ページごとに 1 つの JSON ファイル。カバレッジが実質的になった時点で言語が有効になります。"
+      "contributeHint": "翻訳は deliverer/src/locales にあります - 言語ごとに 1 フォルダー、ページごとに 1 つの JSON ファイル。カバレッジが実質的になった時点で言語が有効になります。"
     },
     "formats": {
       "title": "書式",
@@ -59,6 +60,35 @@
       "previewDateTime": "日付と時刻",
       "previewSize": "サイズ"
     }
+  },
+  "notifications": {
+    "title": "バックグラウンドでのクロール中",
+    "sub": "他のアプリが前面にあるときに Curio が表示するもの",
+    "mode": {
+      "mini": {
+        "label": "ミニウィンドウ",
+        "desc": "他のアプリの上に浮かぶパネル · ワーカー、進捗、すべて一時停止"
+      },
+      "notify": {
+        "label": "通知",
+        "desc": "実行が完了したときにシステム通知を 1 回 · トレイアイコンに進捗"
+      },
+      "none": {
+        "label": "なし",
+        "desc": "静かにしておく · 戻ったらパイプラインを確認"
+      }
+    },
+    "miniUnsupported": "このデスクトップ (Wayland) では非対応 · X11 / XWayland が必要",
+    "browserOnly": "デスクトップアプリが必要",
+    "miniHint": "ワーカー実行中に Curio がフォーカスを失うと 1.5 秒後に他のすべてのアプリの上に表示されます。どこへでもドラッグでき、近い方の画面端に吸着します。× でキューが空になるまで隠れ、トレイメニューから呼び戻せます。",
+    "notifyHint": "完了した実行ごとにシステム通知を 1 回 - 「甘雨 · pixiv · 新規 +38」 - それ以外はありません。初回はシステムの許可を求めます。",
+    "noneHint": "ウィンドウも通知もありません。トレイアイコンは残りますが進捗は表示しません。",
+    "startExpanded": "展開した状態で開始",
+    "startExpandedHint": "フォーカス中のものだけでなく、全ワーカーとキュー",
+    "trayKeeps": "トレイアイコンが進捗を保持",
+    "trayKeepsHint": "× の後もトレイのツールチップに投稿数 / 目標を表示",
+    "coerced": "Linux Wayland では {mini} は無効になり（コンポジターがウィンドウを最前面に保てないため）、設定は {notify} に戻ります。",
+    "browserNote": "ミニウィンドウとトレイアイコンにはデスクトップアプリが必要です。ブラウザではこの設定は効きません。"
   },
   "status": {
     "saving": "保存中…",
@@ -141,31 +171,48 @@
   },
   "storage": {
     "title": "ストレージ",
+    "sub": "ライブラリ · データベース · ゴミ箱",
+    "versions": "アプリ {app} · デーモン dawnmaker v{daemon} · スキーマ v{schema}",
     "library": "ライブラリ",
+    "reveal": "フォルダーで表示",
+    "diskLibrary": "ライブラリ {size}",
+    "diskOther": "その他 {size}",
+    "diskFree": "空き {free} / {total} · {mount}",
     "database": "データベース",
-    "schema": "スキーマ",
-    "schemaValue": "v{n}",
+    "databaseMeta": "{size} · スキーマ v{schema}",
+    "hint": "データベースはライブラリフォルダーの中には置かれません - ライブラリを同期ドライブに移すのは安全ですが、データベースはそうではありません。",
     "layout": "レイアウト",
-    "layoutValue": "blobs/（コンテンツアドレス） · by-character/（ハードリンク） · thumbs/（WebP 400px）",
-    "hint": "データベースはライブラリフォルダーの中には置かれません — ライブラリを同期ドライブに移すのは安全ですが、データベースはそうではありません。"
+    "blobs": "コンテンツアドレス",
+    "blobsValue": "0 ファイル · {size} | 1 ファイル · {size} | {n} ファイル · {size}",
+    "byCharacter": "ハードリンク",
+    "byCharacterValue": "0 キャラクター · 追加 0 B | 1 キャラクター · 追加 0 B | {n} キャラクター · 追加 0 B",
+    "thumbs": "WebP 400 px",
+    "thumbsValue": "{n} · {size}",
+    "trash": "ゴミ箱",
+    "trashValue": "0 件 | 1 件 · {size} | {n} 件 · {size}",
+    "trashEmpty": "空",
+    "trashKept": "{days} 日間保持後に削除",
+    "emptyTrash": "今すぐゴミ箱を空にする",
+    "trashEmptied": "0 枚を削除しました | 1 枚を削除しました | {n} 枚を削除しました",
+    "loading": "ライブラリを読み込み中…"
   },
   "network": {
     "title": "ネットワーク",
     "save": "保存",
     "resolver": "リゾルバー",
-    "resolverSystem": "system — OS の DNS",
-    "resolverDoh": "doh — DNS over HTTPS（1.1.1.1 / 8.8.8.8 に IP 指定）",
+    "resolverSystem": "system - OS の DNS",
+    "resolverDoh": "doh - DNS over HTTPS（1.1.1.1 / 8.8.8.8 に IP 指定）",
     "resolverHint": "迂回の第 1 層: 名前解決を HTTPS で IP エンドポイントに対して行うため、ISP の DNS 乗っ取りを回避します。TLS は引き続き本来のホスト名を検証します。",
     "proxy": "プロキシ",
     "proxyPlaceholder": "socks5://127.0.0.1:1080",
-    "proxyHint": "第 2 層、SNI/DPI によるブロック向け。gallery-dl にも渡されます。証明書の検証は決して無効になりません — それを要求するプロキシは傍受者です。",
+    "proxyHint": "第 2 層、SNI/DPI によるブロック向け。gallery-dl にも渡されます。証明書の検証は決して無効になりません - それを要求するプロキシは傍受者です。",
     "pixivRate": "pixiv のレート",
     "pixivRateAria": "pixiv のレート",
     "rateValue": "{n} req/秒",
-    "rateHint": "意図的に控えめです — これは個人のアーカイブで、ミラーではありません。",
+    "rateHint": "意図的に控えめです - これは個人のアーカイブで、ミラーではありません。",
     "xSearch": "X の検索深度",
     "xSearchValue": "1 語あたり {n} 件",
-    "xSearchOff": "オフ — X は検索せず、連携済みの絵師をフォローするだけ",
+    "xSearchOff": "オフ - X は検索せず、連携済みの絵師をフォローするだけ",
     "xSearchHint": "コマンドラインから始めたクロール用。アプリからのクロールは各キャラクターの「1 回あたりの投稿数」まで検索します。検索は X がレート制限と凍結の対象にするリクエストです。0 で X の検索を全面的にオフにします。"
   },
   "duplicates": {
@@ -174,7 +221,13 @@
     "distance": "dHash 距離",
     "distanceValue": "≤ {n}",
     "distanceAria": "ハミングしきい値",
-    "hint": "sha256 の完全一致は常に重複排除されます。近似重複は同じ絵師の中でだけ比較します — 絵師をまたいだ一致は、再投稿より同じポーズを 2 人が描いた場合のほうがはるかに多いためです。6 は控えめで、10 を超えるとバリエーションまで統合し始めます。"
+    "hint": "sha256 の完全一致は常に重複排除されます。近似重複は同じ絵師の中でだけ比較します - 絵師をまたいだ一致は、再投稿より同じポーズを 2 人が描いた場合のほうがはるかに多いためです。6 は控えめで、10 を超えるとバリエーションまで統合し始めます。",
+    "rule": "クロール時のスマート整理",
+    "ruleScore": "キャラクターのスコアがこれ未満なら除外",
+    "ruleScoreOff": "オフ",
+    "ruleScoreAria": "最小スコア",
+    "ruleOther": "別のキャラクターとして識別された画像を除外",
+    "ruleHint": "ギャラリーのスマート削除と同じ条件を、画像の保存時に判定します。ほぼ同じ画像は上の距離で既に検出されます。まだ識別の基準がないキャラクターの画像は保持されます。"
   },
   "about": {
     "title": "情報",
@@ -187,7 +240,116 @@
   "characters": {
     "title": "新しいキャラクター",
     "lead": "新しいキャラクターのフォームの初期値。各キャラクターは自分のフォームで変更できます。",
+    "kinds": "写真・コスプレ・3D・スクリーンショットを除外する",
+    "kindsHint": "2 つの小さな分類器が保存時に各画像を判定します。実写 - コスプレイヤー、フィギュア、人物 - は、3D レンダリングや UI のスクリーンショットと同様に、アーカイブに入る前に除外されます。保持されるのはイラストとアニメのスクリーンキャプチャのみです。オフにするとすべての画像を保持してラベル付けだけを行うため、ギャラリーの「表示」行で絞り込めます。",
     "identify": "すべての画像でキャラクター名を特定する",
-    "identifyHint": "2 つのタガーが、保持した各画像に写っているのが誰かを特定します — 知っているアニメ・ゲーム・漫画・小説のキャラクターなら何でも。確信のない画像は未特定とマークされ、何も削除されません。初回実行時に最大約 1.3 GB をダウンロードします。"
+    "identifyHint": "2 つのタガーが、保持した各画像に写っているのが誰かを特定します - 知っているアニメ・ゲーム・漫画・小説のキャラクターなら何でも。確信のない画像は未特定とマークされ、何も削除されません。初回実行時に最大約 1.3 GB をダウンロードします。"
+  },
+  "backup": {
+    "title": "バックアップ",
+    "sub": "アーカイブ全体を 1 つのファイルに",
+    "browserTag": "ブラウザー版",
+    "export": {
+      "title": "エクスポート",
+      "format": "形式",
+      "curioHint": "Curio 独自のコンテナ。すべてのエントリにハッシュが付き、途中で切れたコピーでも無事な部分は取り出せ、破損はエントリ単位で報告されます。",
+      "zipHint": "どこでも開けます。画像はそのまま格納され、データベースと設定だけが圧縮されます。",
+      "include": "含める内容",
+      "images": "画像を含める",
+      "imagesHint": "オフ = データベースと設定のみ。インポート時に各画像を再ダウンロードします",
+      "thumbs": "サムネイルを含める",
+      "secrets": "pixiv のセッション Cookie を含める",
+      "secretsHint": "このファイルを持つ人は誰でもセッションを使えます",
+      "button": "エクスポート…",
+      "buttonBrowser": "エクスポート",
+      "opensDialog": "保存ダイアログを開きます",
+      "browserHint": "ここでは保存ダイアログはありません: ファイルは ~/.reaver/exports の下に書き出されます",
+      "exporting": "エクスポート中 → {path}",
+      "queued": "待機中 → {path}",
+      "stageCount": "{stage} {done} / {total}",
+      "cancel": "中止",
+      "retry": "再試行",
+      "exported": "エクスポート完了",
+      "doneSize": "{size} · {images} 枚 · {characters} キャラクター",
+      "reveal": "フォルダーで表示",
+      "copyPath": "パスをコピー",
+      "copied": "コピーしました",
+      "failed": "エクスポート失敗 · {error}",
+      "partRemoved": "{path}.part を削除しました",
+      "cancelled": "中止しました"
+    },
+    "import": {
+      "title": "インポート",
+      "choose": "バンドルを選択…",
+      "chooseAgain": "選び直す",
+      "kinds": ".curio または .zip",
+      "lead": "このアーカイブに統合するか、復元して置き換えるか。バンドルを読み込んだ後に決めます。",
+      "notWhileExport": "エクスポート中は使えません",
+      "pathPlaceholder": "/path/to/archive.curio",
+      "pathHint": "デーモンが動いているマシン上のパス · .curio または .zip",
+      "inspect": "確認",
+      "reading": "バンドルを読み込み中…",
+      "errors": {
+        "not_a_bundle": "Curio のバンドルではありません",
+        "not_a_bundle_detail": "{name} · マニフェストがありません",
+        "bundle_too_new": "新しい Curio で作られています",
+        "bundle_too_new_detail": "{message}",
+        "updateFirst": "先に更新",
+        "damaged": "重要な部分が破損しています",
+        "damaged_detail": "{message} · 何もインポートできません",
+        "no_file": "ファイルがありません",
+        "no_file_detail": "{path}",
+        "bad_manifest": "Curio のバンドルではありません",
+        "bad_manifest_detail": "{name} · マニフェストを読めません",
+        "busy": "パイプラインがまだ動いています",
+        "busy_detail": "一時停止して空になってから、もう一度インポートしてください",
+        "other": "バンドルを読めませんでした",
+        "other_detail": "{message}"
+      },
+      "plateMeta": "{name} · {mode}",
+      "done": "完了:",
+      "result": "{characters} キャラクター · {posts} 投稿 · {placed} 枚を配置 · {dupes} 重複 · {refetch} 枚を再ダウンロード予定",
+      "damagedNote": "破損エントリ 0 件をスキップ | 破損エントリ 1 件をスキップ | 破損エントリ {n} 件をスキップ",
+      "which": "内訳",
+      "reloading": "設定を適用しました - 再読み込みします"
+    },
+    "sheet": {
+      "title": "インポート",
+      "meta": "{format} · Curio {version} · スキーマ v{schema} · 作成 {date}",
+      "counts": "{characters} キャラクター · {posts} 投稿 · {images} 枚",
+      "close": "閉じる",
+      "noImages": "このバンドルに画像は含まれていません。各投稿の画像は再ダウンロードされます。",
+      "mode": "モード",
+      "merge": "このアーカイブに統合",
+      "mergeHint": "投稿と画像を追加し、重複はしません。絵師ごとに近似重複を判定",
+      "restore": "復元 - このアーカイブを置き換える",
+      "restoreHint": "ここにあるものはすべてバンドルの内容に置き換わります",
+      "settings": "設定",
+      "settingsRestore": "設定 · 復元ではバンドルのものが使われます",
+      "keep": "自分のものを保持",
+      "take": "バンドルのものを使う",
+      "takeHint": "デーモン設定、テーマ、言語、通知モード",
+      "secrets": "バンドルの pixiv セッション Cookie を使う",
+      "characters": "キャラクター · {n}",
+      "postCount": "0 投稿 | 1 投稿 | {n} 投稿",
+      "new": "新規",
+      "same": "同じ設定",
+      "replaced": "置き換え",
+      "sameTags": "あなたの {slug} と同じタグ",
+      "policy": {
+        "merge": "設定を統合",
+        "keep": "自分のを保持",
+        "take": "相手のを使う"
+      },
+      "salvage": "一部のエントリが破損していても、無事な部分をインポートする",
+      "salvageHint": "破損した画像は次のクロールで再ダウンロードされます。データベースが破損している場合はどのみち拒否されます",
+      "gate": "インポートの前にパイプラインを一時停止して空にしてください。",
+      "pauseNow": "パイプラインを一時停止",
+      "gateOk": "パイプラインは停止中で空です",
+      "esc": "Esc で閉じる",
+      "cancel": "キャンセル",
+      "run": "インポート",
+      "importing": "インポート中… 完了までウィンドウは応答しません"
+    }
   }
 }

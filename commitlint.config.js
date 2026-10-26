@@ -58,7 +58,7 @@ export default {
       scope: 'Scope (which part of the repo):',
       subject: 'Short, imperative, lowercase, no period:\n',
       body: 'Why, not what (optional; the diff shows what):\n',
-      breaking: 'BREAKING CHANGE (schema, API contract, config format) — describe it:\n',
+      breaking: 'BREAKING CHANGE (schema, API contract, config format) - describe it:\n',
       footer: 'Issues closed, e.g. #12 (optional):\n',
       confirmCommit: 'Commit?',
     },

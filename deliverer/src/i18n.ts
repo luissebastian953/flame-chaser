@@ -6,7 +6,7 @@
  * dev, so a half-translated locale is usable, never broken.
  *
  * Adding a string: put it in src/locales/en/<page>.json first, then use
- * t('<page>.key') / $t(...) — never a literal in a template.
+ * t('<page>.key') / $t(...) - never a literal in a template.
  */
 import { createI18n } from 'vue-i18n';
 

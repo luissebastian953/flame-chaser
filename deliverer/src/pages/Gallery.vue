@@ -1,7 +1,20 @@
 <script setup lang="ts">
+import type { ReviewSummary } from '@/lib/types';
+
 const lib = useLibrary();
+const fm = useFormats();
 const { t } = useI18n();
-onMounted(() => lib.loadWatches());
+/** images the Smart deletion criteria would flag today, per character (coreflame/trash.py) */
+const review = ref<ReviewSummary | null>(null);
+
+onMounted(async () => {
+  await lib.loadWatches();
+  try {
+    review.value = await api.get<ReviewSummary>('/api/gallery/review');
+  } catch {
+    review.value = null;
+  }
+});
 
 const totalPosts = computed(() => lib.watches.reduce((n, w) => n + (w.post_count ?? 0), 0));
 
@@ -21,6 +34,37 @@ const sub = computed(() =>
     </div>
   </div>
   <div class="body">
+    <div v-if="review?.total" class="review">
+      <Icon name="scan" :size="13" class="rose" />
+      <span>
+        {{
+          $t('gallery.review.title', {
+            n: fm.number(review.total),
+            score: review.min_score.toFixed(2),
+            characters: $t(
+              'gallery.review.characters',
+              { n: review.characters.length },
+              review.characters.length,
+            ),
+          })
+        }}
+      </span>
+      <RouterLink
+        v-for="c in review.characters.slice(0, 3)"
+        :key="c.slug"
+        :to="{ path: `/gallery/${c.slug}`, query: { delete: 'smart' } }"
+        class="chip"
+      >
+        {{ $t('gallery.review.each', { label: c.label, n: fm.number(c.count) }) }}
+      </RouterLink>
+      <div class="spacer" />
+      <RouterLink
+        :to="{ path: `/gallery/${review.characters[0]!.slug}`, query: { delete: 'smart' } }"
+        class="btn sm gh"
+      >
+        {{ $t('gallery.review.review') }}
+      </RouterLink>
+    </div>
     <div v-if="lib.watches.length" class="cards">
       <RouterLink v-for="w in lib.watches" :key="w.slug" :to="`/gallery/${w.slug}`" class="card">
         <div class="cover">
@@ -49,6 +93,25 @@ const sub = computed(() =>
 </template>
 
 <style scoped>
+/* the quiet card: what Smart would flag, a link into each character with Smart preselected */
+.review {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-soft);
+  background: color-mix(in oklch, var(--surf) 60%, transparent);
+  font-size: 12px;
+  color: var(--mut);
+}
+.review .rose {
+  color: var(--rose);
+}
+.review .chip {
+  color: var(--tx);
+}
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

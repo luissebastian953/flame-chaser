@@ -13,20 +13,20 @@ The repository is called `flame-chaser`; the app is Curio. Inside, the Python
 engine is `coreflame`, the local daemon is `dawnmaker`, and the desktop shell is
 `deliverer`.
 
-_Screenshots: TODO — add `docs/screenshots/{gallery,crawl,pipeline}.png` after the first release._
+_Screenshots: TODO - add `docs/screenshots/{gallery,crawl,pipeline}.png` after the first release._
 
 ## Install
 
 Installers are attached to each GitHub Release. Links below carry
 `luissebastian953` until the first release is cut.
 
-- **macOS** — download the `.dmg` for your Mac (`aarch64` for Apple Silicon,
+- **macOS** - download the `.dmg` for your Mac (`aarch64` for Apple Silicon,
   `x86_64` for Intel) and drag Curio to Applications. Until the app is
   notarised, macOS will refuse the first launch: right-click the app → **Open**
   once, after which it opens normally.
-- **Windows** — run the NSIS `-setup.exe`. It installs for the current user;
+- **Windows** - run the NSIS `-setup.exe`. It installs for the current user;
   no administrator prompt.
-- **Linux** — either the one-liner, which drops the AppImage in
+- **Linux** - either the one-liner, which drops the AppImage in
   `~/.local/bin/curio` and adds a menu entry:
 
   ```sh
@@ -67,8 +67,8 @@ add **X search & match terms** (each term is searched on X, images only, and
 also filters the timelines of artists pixiv linked), tick which of **pixiv** /
 **X** this character is crawled from, then **Save & run now**.
 
-**Pipeline** shows one card per worker — one for pixiv, one for X, so each
-site sees a single stream of requests — with its stage, posts this run and
+**Pipeline** shows one card per worker - one for pixiv, one for X, so each
+site sees a single stream of requests - with its stage, posts this run and
 requests per minute; **Open** shows that worker's stages, counters and log.
 Below: the queue (drag to reorder, **Run now**) and today's finished jobs;
 beside: the rate budget, the session's totals and the activity feed. Pause
@@ -117,6 +117,10 @@ flowchart LR
 
 Every flow in detail, with diagrams: [docs/flows.md](docs/flows.md). Design
 rationale and the API contract: [docs/design/architecture.md](docs/design/architecture.md).
+The engineering summary (requirements, data model, concurrency, security,
+failure modes, trade-offs): [docs/design/system-design.md](docs/design/system-design.md);
+UML views (use case, state, class, object, activity, sequence, component,
+deployment and versioning): [docs/uml/](docs/uml/README.md).
 
 ## Where your data lives
 
@@ -138,7 +142,7 @@ rationale and the API contract: [docs/design/architecture.md](docs/design/archit
 The app checks for a new release once a day and whenever you press **Check
 now**. A new version shows as a banner in the rail; downloading is free and
 touches nothing. Installing restarts the crawler, so it **never installs over
-a running crawl** — with a job running the banner reads "installs when the
+a running crawl** - with a job running the banner reads "installs when the
 current crawl finishes" and waits. If, after an update, the app's version and
 the crawler's version disagree, Settings › Updates says so: reinstall from the
 release page.
@@ -162,8 +166,8 @@ pip install -e "reaver[daemon,dev]"
 cd deliverer && pnpm tauri dev                 # desktop app, daemon from the venv
 ```
 
-Everything else — browser mode with or without Docker, local installers, CI
-releases, checks, troubleshooting — is in [docs/build.md](docs/build.md).
+Everything else - browser mode with or without Docker, local installers, CI
+releases, checks, troubleshooting - is in [docs/build.md](docs/build.md).
 
 ## Repo layout
 
@@ -173,7 +177,7 @@ flame-chaser/
 ├── deliverer/         Tauri v2 shell (src-tauri/) + Vue 3 webview (src/); scripts/build-sidecar.sh
 ├── docker/            Dockerfile + entrypoint for the browser-mode stack
 ├── scripts/           bump-version.sh · check-version.sh · install-linux.sh
-├── docs/              build.md · flows.md · design/architecture.md
+├── docs/              build.md · flows.md · design/architecture.md · design/system-design.md · uml/
 ├── .claude/skills/    add-source-adapter · commit · conventions-python · cut-release · diagnose-network
 ├── .github/workflows/ release.yml
 └── CHANGELOG.md       user-facing; Settings › Updates renders it

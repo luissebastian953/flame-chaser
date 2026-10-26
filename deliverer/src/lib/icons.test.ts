@@ -20,8 +20,8 @@ function namesUsed(): Map<string, string> {
 }
 
 describe('the Curio icon set', () => {
-  it('loads all 86 icons, each with path data', () => {
-    expect(ICON_PATHS.size).toBe(86);
+  it('loads all 88 icons, each with path data', () => {
+    expect(ICON_PATHS.size).toBe(88);
     for (const [name, paths] of ICON_PATHS) expect(paths.length, name).toBeGreaterThan(0);
   });
 

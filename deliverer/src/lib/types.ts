@@ -76,8 +76,14 @@ export interface RateBudget {
   per_min: number;
 }
 
+/** why the queue is held: Pause queue, or the internet went away (it resumes on its own) */
+export type PauseReason = 'user' | 'offline';
+
 export interface PipelineState {
   paused: boolean;
+  pause_reason: PauseReason | null;
+  /** the daemon's own probe: false while the queue waits for the connection */
+  online: boolean;
   workers: WorkerSlot[];
   budgets: RateBudget[];
   req_per_min: number;
@@ -176,28 +182,47 @@ export interface PostDetail {
   bookmark_count: number;
   state: 'live' | 'gone';
   source_meta: string;
-  media: {
-    idx: number;
-    sha256: string | null;
-    state: string;
-    width: number;
-    height: number;
-    bytes: number | null;
-    /** null = not identified yet */
-    identity: { state: 'identified' | 'unidentified'; characters: CharacterHit[] } | null;
-  }[];
+  media: PostMedia[];
   tags: { tag_raw: string; tag_norm: string; translated: string | null }[];
-  linked: {
-    source: string;
-    external_id: string;
-    permalink: string;
-    posted_at: string | null;
-    reason: string;
-  }[];
+  /** the other source's post holding the same image (dedupe), with all of its images */
+  linked: LinkedPost[];
 }
 
-/** POST /api/pixiv/probe — the character form's live validation. */
-/** POST /api/names — coreflame/names.py */
+/** One image row of a post (dawnmaker `_media_rows`). */
+export interface PostMedia {
+  idx: number;
+  sha256: string | null;
+  /** stored | dupe (recorded, blob is `dupe_of`'s) | rejected | failed | pending */
+  state: string;
+  /** the stored image this one duplicates, when state is dupe */
+  dupe_of: string | null;
+  width: number;
+  height: number;
+  bytes: number | null;
+  ext: string;
+  /** absolute path of the blob on the daemon's disk, when stored (Reveal) */
+  path: string | null;
+  /** the size the source handed over: original · orig · 4096x4096 · '' unknown */
+  source_variant: string;
+  /** null = not identified yet; absent on a linked post's media */
+  identity?: { state: 'identified' | 'unidentified'; characters: CharacterHit[] } | null;
+}
+
+export interface LinkedPost {
+  source: string;
+  external_id: string;
+  artist_handle: string;
+  artist_name: string;
+  title: string;
+  permalink: string;
+  posted_at: string | null;
+  /** why dedupe linked them, e.g. "phash d=2" */
+  reason: string | null;
+  media: PostMedia[];
+}
+
+/** POST /api/pixiv/probe - the character form's live validation. */
+/** POST /api/names - coreflame/names.py */
 export interface NameSuggestion {
   text: string;
   kind: 'name' | 'form';
@@ -230,7 +255,7 @@ export interface ProbeResult {
   estimate: { artworks: number; seconds: number }; // upper bound: overlap + visited set unknown until crawl
 }
 
-/** GET /api/sources/status — secrets never appear here, only their state. */
+/** GET /api/sources/status - secrets never appear here, only their state. */
 export interface SourcesStatus {
   pixiv: {
     authed: boolean;
@@ -253,4 +278,203 @@ export interface Health {
   schema_version: number;
   idle: boolean;
   last_event_id: number;
+}
+
+// ---------------------------------------------------------------- deletion (coreflame/trash.py)
+/** how the images to delete are chosen */
+export type DeleteMode = 'image' | 'tag' | 'smart' | 'all';
+
+/** a chip By tag selects with: what it is and which images carry it */
+export type TermKind = 'tag' | 'kind' | 'ident' | 'character' | 'artist';
+
+/** GET /api/gallery/{slug}/artists */
+export interface GalleryArtist {
+  source: string;
+  artist_id: string;
+  name: string;
+  handle: string;
+  count: number;
+}
+
+/** why Smart flagged an image; `score` is the watched character's (score) or the other one's (other) */
+export type SmartReason =
+  | { kind: 'score'; score: number }
+  | { kind: 'other'; name: string; label: string; score: number }
+  | { kind: 'dupe'; distance: number; keep: string }
+  | { kind: 'unidentified' }
+  /** not an illustration: the kind classifier's label (photo / render / other) */
+  | { kind: 'kind'; label: 'photo' | 'render' | 'other' };
+
+export interface SmartMatch {
+  sha256: string;
+  reasons: SmartReason[];
+}
+
+/** POST /api/gallery/{slug}/smart */
+export interface SmartResult {
+  matches: SmartMatch[];
+  counts: Record<'score' | 'other' | 'dupe' | 'unidentified' | 'kind', number>;
+  /** the character as the identifier names it (the gallery's most-named character), or null */
+  primary: string | null;
+  primary_label: string | null;
+  /** the other characters found among the matches, most first */
+  characters: { name: string; label: string; count: number }[];
+  total: number;
+  /** the crawl's "sure" score: what the slider's default sits under */
+  cutoff: number;
+  rule: CleanupRule | null;
+  identifier: { enabled: boolean };
+}
+
+/** Settings › Duplicates: the Smart criteria applied at crawl time */
+export interface CleanupRule {
+  min_score: number | null;
+  other_character: boolean;
+}
+
+/** GET /api/gallery/review */
+export interface ReviewSummary {
+  min_score: number;
+  total: number;
+  characters: { slug: string; label: string; count: number }[];
+}
+
+/** POST /api/gallery/{slug}/delete/preview */
+export interface DeletePreview {
+  images: number;
+  bytes: number;
+  by_source: Record<string, number>;
+  posts: { touched: number; keep_other: number; forget: number };
+  /** images that are also in another character's gallery: the same file, gone there too */
+  shared: number;
+  /** the set is every image the character has */
+  whole: boolean;
+  /** too many or too large to delete permanently: trash is forced */
+  forced_trash: boolean;
+  trash: TrashSummary;
+}
+
+/** POST /api/gallery/{slug}/delete */
+export interface DeleteResult {
+  batch_id: string | null;
+  images: number;
+  bytes: number;
+  forgotten: number;
+  permanent: boolean;
+}
+
+/** GET /api/trash */
+export interface TrashSummary {
+  count: number;
+  bytes: number;
+  oldest: string | null;
+  days: number;
+}
+
+/** GET/POST /api/net/speed - the rail's signal card and its detail modal (dawnmaker/speed.py). */
+export interface NetworkSpeed {
+  measured_at: number | null; // unix seconds; null before the first probe
+  online: boolean;
+  testing: boolean; // a probe is running right now
+  latency_ms: number | null;
+  download_mbps: number | null;
+  upload_mbps: number | null; // the last long probe's figure; a short probe keeps it
+  /** ~1 s each, oldest first, at most 30 per direction */
+  samples: { download: number[]; upload: number[] };
+  server: { colo: string | null; location: string | null; ip_version: 'IPv4' | 'IPv6' | null };
+  connection: {
+    interface: 'wifi' | 'ethernet' | 'other' | null;
+    ssid: string | null;
+    isp: string | null;
+    asn: string | null;
+  };
+  error: string | null;
+}
+
+// ---------------------------------------------------------------- backup (coreflame/bundle.py)
+export type BundleFormat = 'curio' | 'zip';
+
+export type WatchPolicy = 'keep' | 'take' | 'merge';
+
+/** POST /api/bundle/export */
+export interface BundleExportBody {
+  /** where the save dialog pointed; omitted in browser mode (the daemon picks ~/.reaver/exports) */
+  path?: string;
+  format: BundleFormat;
+  images: boolean;
+  thumbs: boolean;
+  secrets: boolean;
+  /** the webview's localStorage, opaque to the daemon, handed back on import */
+  ui: Record<string, unknown>;
+}
+
+/** one character the bundle names that collides with ours */
+export interface BundleConflict {
+  slug: string;
+  label: string;
+  mine: Watch;
+  theirs: Watch;
+  /** same slug, or another slug whose pixiv tags overlap ours (`suggest` names ours) */
+  kind: 'same_slug' | 'same_tags';
+  suggest: string | null;
+}
+
+/** POST /api/bundle/inspect */
+export interface BundleInspect {
+  path: string;
+  format: BundleFormat;
+  app_version: string;
+  schema_version: number;
+  created_at: string;
+  counts: { characters: number; posts: number; images: number; thumbs: number };
+  has: { images: boolean; thumbs: boolean; secrets: boolean; ui: boolean };
+  characters: (Watch & { posts: number; new: boolean })[];
+  conflicts: BundleConflict[];
+}
+
+/** POST /api/bundle/import */
+export interface BundleImportBody {
+  path: string;
+  mode: 'merge' | 'restore';
+  settings: 'keep' | 'take';
+  secrets: boolean;
+  characters: Record<string, WatchPolicy>;
+  salvage: boolean;
+}
+
+export interface BundleImportResult {
+  mode: 'merge' | 'restore';
+  /** entry names that did not verify and were skipped (salvage) */
+  damaged: string[];
+  /** the bundle's webview state, when settings were taken */
+  ui: Record<string, unknown> | null;
+  characters: number;
+  posts: number;
+  placed: number;
+  dupes: number;
+  /** images whose bytes were missing or damaged: back to pending, the next crawl re-downloads */
+  refetch: number;
+}
+
+/** GET /api/storage - Settings › Storage (coreflame/library.py usage) */
+export interface StorageUsage {
+  library_root: string;
+  db_path: string;
+  /** the db file plus its WAL and shm */
+  db_bytes: number;
+  schema_version: number;
+  disk: {
+    total: number;
+    free: number;
+    used: number;
+    /** blobs + thumbs + trash */
+    library: number;
+    /** used minus the library */
+    other: number;
+    /** the mount point the library sits on */
+    mount: string;
+  };
+  blobs: { files: number; bytes: number };
+  thumbs: { files: number; bytes: number };
+  by_character: { characters: number };
 }

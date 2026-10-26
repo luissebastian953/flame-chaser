@@ -1,7 +1,28 @@
 {
-  "brand": { "name": "Curio", "tagline": "ローカルアーカイブ" },
-  "nav": { "crawl": "クロール", "pipeline": "パイプライン", "gallery": "ギャラリー", "settings": "設定" },
-  "shutdown": { "label": "アプリを終了", "armed": "クロール実行中 — もう一度クリックで終了" },
+  "brand": {
+    "name": "Curio",
+    "tagline": "ローカルアーカイブ"
+  },
+  "nav": {
+    "crawl": "クロール",
+    "pipeline": "パイプライン",
+    "gallery": "ギャラリー",
+    "settings": "設定"
+  },
+  "shutdown": {
+    "label": "アプリを終了",
+    "title": "Curio を終了しますか？",
+    "body": "クローラーのデーモンを停止し、アプリを閉じます。実行中のクロールはその場で止まり、次回起動時に「中断」と表示されます。待機中のジョブはキューに残ります。一時停止中のキューは、実行していたクロールを先頭に戻して一時停止のまま復元されます。",
+    "running": "{n} 件のジョブを実行中",
+    "runningNote": "次のレコードで停止",
+    "progress": "{done} / {total} 投稿",
+    "queued": "{n} 件が待機中",
+    "queuedNote": "キューに残ります",
+    "none": "実行中のジョブはありません",
+    "hint": "Esc · いいえ",
+    "no": "いいえ",
+    "yes": "はい、終了する"
+  },
   "status": {
     "daemon": "dawnmaker v{version}",
     "unreachable": "デーモンに接続できません",
@@ -15,5 +36,62 @@
     "expired": "期限切れ",
     "notLinked": "未連携"
   },
-  "connectingDaemon": "dawnmaker に接続中…"
+  "connectingDaemon": "dawnmaker に接続中…",
+  "network": {
+    "offline": "オフライン",
+    "mbps": "Mbps",
+    "ms": "ms",
+    "summary": "{quality} · {ms} ms",
+    "quality": {
+      "poor": "弱い",
+      "fair": "普通",
+      "good": "良好",
+      "excellent": "非常に良い"
+    },
+    "details": "ネットワークの詳細",
+    "title": "ネットワーク",
+    "measured": "計測 {time}",
+    "legend": {
+      "download": "ダウンロード",
+      "upload": "アップロード",
+      "window": "Mbps · 直近 {n} サンプル",
+      "none": "Mbps · サンプルなし"
+    },
+    "stat": {
+      "download": "↓ ダウンロード",
+      "upload": "↑ アップロード",
+      "latency": "遅延"
+    },
+    "server": "サーバー",
+    "iface": {
+      "wifi": "Wi‑Fi",
+      "ethernet": "有線 LAN",
+      "other": "ネットワーク"
+    },
+    "hint": "Esc · 閉じる",
+    "retest": "再計測",
+    "close": "閉じる",
+    "checking": "確認中…",
+    "measuring": "ダウンロードを計測中",
+    "disconnected": "未接続",
+    "noNetwork": "ネットワークなし · pixiv と X に到達できません",
+    "noInternet": "インターネットなし",
+    "retrying": "{name} 接続中 · {s} 秒後に再試行",
+    "unreachable": "到達不能",
+    "last": "前回 {location}",
+    "provider": "プロバイダー",
+    "unknown": "不明",
+    "noRoute": "経路なし",
+    "phase": {
+      "checking": "確認中",
+      "disconnected": "未接続",
+      "noInternet": "インターネットなし"
+    },
+    "measuringShort": "計測中…",
+    "lost": "切断 {time}",
+    "ago": "{s} 秒前",
+    "agoMin": "{m} 分前",
+    "offlineLine": "pixiv と X に到達できません · 次の計測まで {s} 秒",
+    "retryNow": "今すぐ再試行"
+  }
 }

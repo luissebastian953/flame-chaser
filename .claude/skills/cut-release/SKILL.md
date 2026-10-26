@@ -1,6 +1,6 @@
 ---
 name: cut-release
-description: Cut a Curio release — version bump, sidecar build, tag, CI, and verifying the update actually shipped new backend code. Use when releasing, tagging a version, publishing an update, or debugging the Tauri updater.
+description: Cut a Curio release - version bump, sidecar build, tag, CI, and verifying the update actually shipped new backend code. Use when releasing, tagging a version, publishing an update, or debugging the Tauri updater.
 ---
 
 # Cut a release
@@ -22,8 +22,8 @@ description: Cut a Curio release — version bump, sidecar build, tag, CI, and v
    `schema_version` step exists, it is forward-only and in one transaction, the
    daemon backs up the db file before running it, and `min_app_version` is
    recorded so an older shell refuses rather than half-reads.
-4. **Commit, tag, push.** `git commit -am "chore(release): vX.Y.Z"` — that
-   exact type/scope, commitlint enforces it — then
+4. **Commit, tag, push.** `git commit -am "chore(release): vX.Y.Z"` - that
+   exact type/scope, commitlint enforces it - then
    `git tag vX.Y.Z && git push origin master --tags`.
    `.github/workflows/release.yml` does the rest and leaves a **draft**
    release; publish it only after the verification list below.
@@ -61,7 +61,7 @@ Matrix: `macos-latest` (aarch64), `macos-13` (x86_64), `ubuntu-22.04`,
 and runs Tauri via `pnpm tauri`.
 Secrets: `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`,
 plus Apple signing vars. On macOS the leaf-signing loop in `build-sidecar.sh`
-runs before Tauri signs the app around it — notarization needs every `.so` and
+runs before Tauri signs the app around it - notarization needs every `.so` and
 `.dylib` signed with the hardened runtime, and `codesign --deep` is unreliable.
 
 ## The signing key
@@ -75,14 +75,14 @@ repo. Backed up where you back up passwords.
 
 Downloading is free and touches nothing. **Installing** kills the sidecar and
 relaunches, which can land between a blob write and its `media` row. So the
-install gate is an idle job queue: with a job running the UI says "Update ready
-— will install when the current crawl finishes". Then cancel cooperatively,
+install gate is an idle job queue: with a job running the UI says "Update ready -
+will install when the current crawl finishes". Then cancel cooperatively,
 wait for the SQLite lock to release, relaunch. Never auto-install silently.
 
-## Verification — the one that catches real breakage
+## Verification - the one that catches real breakage
 
 - Install the update on a machine running the previous version
-- Check the **backend** version, not just the shell's — `GET /health` on the
+- Check the **backend** version, not just the shell's - `GET /health` on the
   daemon. Matching shell + stale daemon is the failure this whole procedure
   exists to prevent.
 - Confirm `latest.json` is reachable at the endpoint (a draft release 404s)

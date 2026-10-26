@@ -105,21 +105,39 @@ def main(argv: list[str] | None = None) -> int:
     state.heartbeat.enabled = not args.no_heartbeat
     app = create_app(state, dev=args.dev)
 
+    # timeout_graceful_shutdown: the event stream (/api/events) never ends on
+    # its own, and without a bound uvicorn waits for it forever after
+    # should_exit -- a daemon that neither serves nor exits, which the shell
+    # and the lockfile both read as alive.
     server = uvicorn.Server(
-        uvicorn.Config(app, host=args.host, port=port, log_level="warning", access_log=False)
+        uvicorn.Config(
+            app,
+            host=args.host,
+            port=port,
+            log_level="warning",
+            access_log=False,
+            timeout_graceful_shutdown=3,
+        )
     )
+
+    def request_exit() -> None:
+        server.should_exit = True
+        hub.close()  # end the event streams, or uvicorn waits on them (see Config above)
 
     def watchdog() -> None:
         while not server.should_exit:
             time.sleep(2.0)
             if state.heartbeat.expired():
                 log.warning("no heartbeat for %.0fs; exiting", state.heartbeat.timeout)
-                server.should_exit = True
+                request_exit()
+        # whichever path set should_exit: uvicorn installs its own SIGTERM
+        # handler while serving, so a signal never reaches `stop` below
+        hub.close()
 
     threading.Thread(target=watchdog, name="heartbeat-watchdog", daemon=True).start()
 
     def stop(*_: object) -> None:
-        server.should_exit = True
+        request_exit()
 
     signal.signal(signal.SIGTERM, stop)
 
@@ -130,6 +148,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     if runner.interrupted:
         log.warning("marked %d job(s) interrupted from a previous run", runner.interrupted)
+    if runner.requeued:
+        log.warning("queue was paused; %d job(s) back at the front, still paused", runner.requeued)
     try:
         server.run(sockets=[sock])  # the socket the handshake announced, already listening
     finally:

@@ -5,8 +5,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
+from . import bundle
 from .blobs import BlobStore
 from .config import Config
 from .db import Store
@@ -28,6 +30,7 @@ from .pipeline import (
 )
 from .sources.pixiv import PixivAdapter
 from .sources.twitter import TwitterAdapter
+from .thumbs import ThumbStore
 
 TARGET_MAX = 1000  # posts per character per crawl; the UI offers up to this
 
@@ -118,6 +121,7 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
             labeler=a.labels_for(ctx),
             tagger=a.tags_for(ctx),
             identifier=a.identify_for(ctx),
+            cleanup=a.cfg.cleanup_rule,
             source=source,
         )
 
@@ -143,6 +147,7 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                     ctx=ctx,
                     tagger=a.tags_for(ctx),
                     identifier=a.identify_for(ctx),
+                    cleanup=a.cfg.cleanup_rule,
                 )
             )
         return st
@@ -275,6 +280,7 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                     labeler=a.labels_for(ctx),
                     tagger=a.tags_for(ctx),
                     identifier=a.identify_for(ctx),
+                    cleanup=a.cfg.cleanup_rule,
                     source=source if source in LANES else None,
                 )
             )
@@ -320,6 +326,34 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
         finally:
             a.close()
 
+    def export(ctx: JobContext) -> dict[str, Any]:
+        """The archive as one file (coreflame/bundle.py). Reads a consistent
+        db snapshot and immutable blobs, so it runs beside a crawl. Params:
+        path, format (curio | zip), images, thumbs, secrets, ui."""
+        a = make_adapters(ctx)
+        try:
+            p = ctx.job.params
+            opts = bundle.ExportOptions(
+                images=bool(p.get("images", True)),
+                thumbs=bool(p.get("thumbs", True)),
+                secrets=bool(p.get("secrets", False)),
+                fmt=str(p.get("format", "curio")),
+                ui=p.get("ui") if isinstance(p.get("ui"), dict) else None,
+            )
+            thumbs = ThumbStore(a.cfg.blob_root.parent / "thumbs")
+            return bundle.export(
+                ctx.store,
+                a.blobs,
+                thumbs,
+                a.cfg,
+                Path(str(p["path"])),
+                opts,
+                progress=_stage_progress(ctx),
+                check=ctx.check,
+            )
+        finally:
+            a.close()
+
     return {
         "poll": poll,
         "timelines": timelines,
@@ -327,7 +361,21 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
         "media": media,
         "tags": tags,
         "label": label,
+        "export": export,
     }
+
+
+def _stage_progress(ctx: JobContext) -> bundle.Progress:
+    """bundle's (stage, done, total) callback onto the job's stage + progress."""
+    last: dict[str, str | None] = {"stage": None}
+
+    def on(stage: str, done: int, total: int | None, **totals: int) -> None:
+        if stage != last["stage"]:
+            last["stage"] = stage
+            ctx.stage(stage)
+        ctx.progress(done, total, **totals)
+
+    return on
 
 
 def plan(store: Store, type_: str, params: dict[str, Any] | None = None) -> list[tuple[str, dict]]:

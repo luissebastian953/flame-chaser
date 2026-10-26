@@ -1,9 +1,9 @@
-# Curio — how the pieces move
+# Curio - how the pieces move
 
-Twelve flows (thirteen diagrams — sign-in has two), each drawn from the code
+Thirteen flows (fourteen diagrams - sign-in has two), each drawn from the code
 as it is in the repo (file names are given so you can check). Read [README.md](../README.md) for what Curio is and
 [docs/design/architecture.md](design/architecture.md) for why it is shaped
-this way; this page is the *how*.
+this way; this page is the _how_.
 
 Vocabulary: **deliverer** is the Tauri shell + Vue webview, **dawnmaker** is
 the FastAPI daemon, **coreflame** is the crawl engine the daemon and the CLI
@@ -17,8 +17,12 @@ Three processes on one machine. The shell owns the window and the daemon's
 lifetime; the webview owns every pixel and never touches the filesystem; the
 daemon owns the database, the library folder and every outbound request. pixiv
 is reached with `httpx` through `coreflame.http.SourceClient` (token buckets,
-retries, optional DoH resolver and proxy); X is reached only through the
-`gallery-dl` binary, which gets the same proxy. Images come back to the grid as
+retries, optional DoH resolver and proxy); X is reached only through
+`gallery-dl` as a subprocess, which gets the same proxy. It is the `gallery_dl`
+module the engine depends on, run by the engine's own interpreter: `python -m
+gallery_dl` in a venv or Docker, and in the packaged app the sidecar executable
+itself re-entered with `--gallery-dl` (`deliverer/scripts/sidecar_entry.py`),
+since PyInstaller ships modules, not console scripts, and a user's PATH has none. Images come back to the grid as
 `http://127.0.0.1:<port>/api/media/{sha}/thumb`, never as `file://`.
 
 ```mermaid
@@ -59,16 +63,20 @@ flowchart LR
 bundle under `resources/sidecar/`), reads exactly one line from its stdout and
 keeps the child handle. `dawnmaker/__main__.py` binds `127.0.0.1:0`, takes the
 lockfile, prints `DAWNMAKER_READY {"port","token","pid"}` and only then
-serves. The token rides the stdout pipe because it is private to the parent —
+serves. The token rides the stdout pipe because it is private to the parent -
 argv shows in `ps`, a file is readable by anything.
 
 Three layers end the daemon, because no single one covers every exit. Layer 1:
 the shell kills the child on `WindowEvent::Destroyed`, `RunEvent::ExitRequested`
 and `RunEvent::Exit` (Cmd-Q, the tray, the rail's **Shutdown app** command).
-Layer 2: `lib/api.ts` posts `/api/heartbeat` every 5 s and the daemon's
-watchdog exits after 30 s of silence — covering `kill -9` and Rust panics —
-with a sleep guard: a gap over 300 s is a laptop wake, so it grants one more
-timeout instead of dying. Layer 3: `~/.reaver/dawnmaker.lock` makes a second
+Layer 2: a thread in `sidecar.rs` posts `/api/heartbeat` every 5 s (a native
+thread, because WebKit and App Nap throttle a hidden window's timers past the
+timeout) and the daemon's watchdog exits after 30 s of silence - covering
+`kill -9` and Rust panics - graced once: the first silence, a sleep or a
+throttled shell as often as a death, gets one more half-timeout, and only a
+second silence exits. On exit the watchdog closes the event hub so every
+live `/api/events` stream ends at once (uvicorn would otherwise wait on them
+forever), with `timeout_graceful_shutdown=3` as the backstop. Layer 3: `~/.reaver/dawnmaker.lock` makes a second
 launch attach rather than race the first over the same SQLite file; a lock
 whose pid is dead or whose port does not answer is reclaimed.
 
@@ -80,20 +88,21 @@ sequenceDiagram
   S->>D: spawn (stdout piped)
   D->>D: bind 127.0.0.1:0, write dawnmaker.lock
   D-->>S: DAWNMAKER_READY port, token, pid
-  Note over D: jobs left running are marked interrupted
+  Note over D: jobs left running are marked interrupted (or requeued at the front if the queue was paused)
   W->>S: invoke daemon_endpoint
   S-->>W: port, token
   W->>D: GET /api/health (Bearer token)
   D-->>W: version, idle, schema_version
-  loop every 5 s
-    W->>D: POST /api/heartbeat
+  loop every 5 s, from a shell thread
+    S->>D: POST /api/heartbeat
   end
   alt Cmd-Q or Shutdown button or window closed
     S->>D: kill child, wait
   else shell died (kill -9, panic)
-    Note over D: no beat for 30 s → exit<br/>gap over 300 s = sleep → one grace timeout
+    Note over D: no beat for 30 s → one grace of 15 s<br/>still silent → exit, within 3 s
   else second launch
     D->>D: lock held by a live pid + port → print already_running, exit 3
+    S->>S: holder orphaned (its Curio crashed)? SIGTERM it, retry ≤ 20 s<br/>holder's Curio alive? fail this launch
   end
   D->>D: runner.stop(), remove lockfile
 ```
@@ -106,8 +115,8 @@ stages below on the pixiv worker, the X job searches and downloads on the X
 worker (`coreflame/handlers.py` → `pipeline.py`). The decisions that keep it cheap
 are all in the discover stage of `sources/pixiv.py`: the listing page already
 carries the id, so the watermark and the visited set (`seen.py`) are consulted
-*before* a detail request is spent. `seen_posts` has four states and they are
-four retry policies — `indexed` is never revisited, `skipped` only when the
+_before_ a detail request is spent. `seen_posts` has four states and they are
+four retry policies - `indexed` is never revisited, `skipped` only when the
 config that rejected it changes (the `threshold` is stored with it), `gone`
 (404/410) never, `failed` after `retry_after`. Watermarks are monotonic ids;
 the poller walks one full page past the floor and advances the watermark only
@@ -183,9 +192,12 @@ pool and never two workers on one source. A paused job (`pause_requested`)
 holds at its next `check()`, keeping its lane. Cancellation is cooperative: the
 `cancel_requested` column is read by `ctx.check()` between records and at every
 `ctx.stage()`, never inside a write, so a cancel can only land between
-complete records — and because it is a column, a cancel from another process
+complete records - and because it is a column, a cancel from another process
 (the CLI) is honoured too. A job still `running` when the daemon starts was
-killed mid-flight and is marked `interrupted`, not forgotten.
+killed mid-flight and is marked `interrupted`, not forgotten - unless the queue
+was paused at the time: the pause is persisted, the daemon comes back paused,
+and that job returns to the front of the queue as `queued`. Any finished job
+can be queued again (`retry`); the visited gate makes that a resume.
 
 ```mermaid
 stateDiagram-v2
@@ -196,10 +208,11 @@ stateDiagram-v2
   running --> failed : handler raised · error stored
   running --> cancelled : cancel_requested seen at ctx.check or ctx.stage
   running --> interrupted : process died · marked at next daemon boot
+  running --> queued : process died while the queue was paused · front of the queue
   succeeded --> [*]
-  failed --> [*]
-  cancelled --> [*]
-  interrupted --> [*]
+  failed --> queued : retry (a fresh copy)
+  cancelled --> queued : retry (a fresh copy)
+  interrupted --> queued : retry (a fresh copy)
 ```
 
 `GET /api/health` reports `idle` (no job queued or running); the updater and
@@ -209,14 +222,14 @@ the Shutdown button both read it.
 
 Curio never sees a password. On desktop `stores/sources.ts` invokes the Rust
 command `source_login` (`src-tauri/src/auth.rs`), which opens the site's own
-login page in a second window labelled `source-login` — deliberately absent
-from the capabilities file, so remote content in it has no IPC — and polls
+login page in a second window labelled `source-login` - deliberately absent
+from the capabilities file, so remote content in it has no IPC - and polls
 `cookies_for_url` every 500 ms for up to 300 s until the cookies the crawler
 needs exist (`PHPSESSID` for pixiv; `auth_token` and `ct0` for X). The window
 closes and the cookie goes straight to the daemon; it is never kept in the
 webview or localStorage. `dawnmaker/auth.py` checks the shape, then verifies a
 pixiv cookie with **one search request** (the request the crawl needs, so its
-verdict is the one that matters) *before* writing `~/.reaver/secrets.json`
+verdict is the one that matters) _before_ writing `~/.reaver/secrets.json`
 (0600). A rejected cookie leaves the previous one in place. X cookies cannot be
 verified without a timeline fetch, so they are written as
 `~/.reaver/twitter-cookies.txt` for gallery-dl and reported as "stored".
@@ -282,8 +295,8 @@ sequenceDiagram
 
 `components/WatchForm.vue` validates every pixiv tag as you type. Each edit
 waits 350 ms, then posts all tags (max 8) to `POST /api/pixiv/probe`.
-`dawnmaker/probe.py` spends **one listing page per tag** — never a detail
-fetch, nothing written to `seen_posts` or blobs — caches the verdict per
+`dawnmaker/probe.py` spends **one listing page per tag** - never a detail
+fetch, nothing written to `seen_posts` or blobs - caches the verdict per
 (tag, R-18 mode) for 10 min, and flags fullwidth `（）` locally without a
 request because pixiv's exact-tag search will not match them. The response
 carries per-tag counts, a 12-image preview (newest first across tags, deduped
@@ -293,7 +306,7 @@ estimate (`artworks / pixiv_rate`, an upper bound).
 
 Preview thumbnails are on `i.pximg.net`, which 403s without a `Referer`, and
 the webview's CSP only allows `127.0.0.1`, so `<img>` loads
-`/api/preview/{id}/thumb?token=` and the daemon proxies it — only for ids a
+`/api/preview/{id}/thumb?token=` and the daemon proxies it - only for ids a
 probe returned (anything else is 404 `not_probed`), cached 15 min, at most 256
 in memory. It is not a general image proxy.
 
@@ -333,14 +346,14 @@ anonymous 401s.
 check now if the last check is older than a day, then every 24 h; **Check
 now** in Settings › Updates calls `check()` directly. Downloading is free and
 touches nothing. `install()` first refreshes `/api/health`; if the queue is not
-idle the phase becomes `waiting` and a 5 s poll retries until it is —
+idle the phase becomes `waiting` and a 5 s poll retries until it is -
 installing kills the sidecar and relaunches, and that must never land between
 a blob write and its `media` row. "Install automatically" (`auto`) chains
 download and install, still behind the same gate. Outside Tauri the store is
 born `unsupported`. Settings › Updates renders `CHANGELOG.md` and the
 `daemonMismatch` getter compares the shell's `__APP_VERSION__` with
 `/api/health`'s `version`: a match failure means an update shipped without a
-new backend — the failure the whole release procedure exists to prevent.
+new backend - the failure the whole release procedure exists to prevent.
 
 ```mermaid
 stateDiagram-v2
@@ -364,7 +377,7 @@ stateDiagram-v2
 ## h. Release pipeline
 
 `scripts/bump-version.sh X.Y.Z` writes the version into `tauri.conf.json` (the
-source of truth — `__VERSION__` in CI comes from it), `deliverer/package.json`,
+source of truth - `__VERSION__` in CI comes from it), `deliverer/package.json`,
 `reaver/pyproject.toml`, `coreflame/__init__.py`, promotes `## Unreleased` in
 `CHANGELOG.md` and refreshes the lockfile. `.github/workflows/release.yml`
 runs on `v*` tags. Inside every build job the Python sidecar is built and
@@ -443,8 +456,8 @@ flowchart TD
 ## j. Design system
 
 `deliverer/src/styles.css` is the whole design system: Tailwind v4 is
-CSS-first, so the `@theme` block *is* the config and every token is both a CSS
-variable and a utility family. Colors are the sampled "cyber build" ladder —
+CSS-first, so the `@theme` block _is_ the config and every token is both a CSS
+variable and a utility family. Colors are the sampled "cyber build" ladder -
 cool hue-265 neutrals, magenta `ember` as the single accent, `cyan` reserved
 for the cross-source link, `moss` ok, `rose` error; the Tailwind default
 palette is removed on purpose. Spacing is a fixed px ladder (`p-15` = 15 px;
@@ -459,8 +472,8 @@ variables; Reka UI supplies behaviour (Dialog, Select, Slider, Switch,
 Tooltip) and is skinned with the `.rk-*` classes.
 
 At runtime `stores/theme.ts` re-hues the neutral ladder from one picked
-background with `color-mix(in oklch, …)` — plates ~4 % above the canvas,
-hairlines ~9 % — flips text for a light canvas, sets `--plate-opacity`,
+background with `color-mix(in oklch, …)` - plates ~4 % above the canvas,
+hairlines ~9 % - flips text for a light canvas, sets `--plate-opacity`,
 `--plate-blur`, `--grid-alpha`, and toggles the `no-scan` and `corners-cut`
 classes on `<html>`. It persists to localStorage only; the daemon never sees
 theme state. `useTheme().apply()` runs in `App.vue` setup before first paint.
@@ -521,7 +534,7 @@ Two roots, deliberately apart. The **library folder** (Settings › Storage;
 `Config.blob_root` is `<library>/blobs`) holds only derived-from-the-web bytes:
 `blobs/` is content-addressed (`aa/bb/<sha256>.<ext>`), `thumbs/` mirrors it
 with 400 px WebP made at ingest, and `by-character/<slug>/` is the
-human-browsable view — hardlinks, so a second name costs no bytes and survives
+human-browsable view - hardlinks, so a second name costs no bytes and survives
 a copy, unlike symlinks (`coreflame/library.py`; the view is derived and safe
 to delete). **`~/.reaver/`** (`REAVER_HOME` overrides it; `/data` in Docker)
 holds everything that must not live on a synced or network drive: the SQLite
@@ -538,7 +551,9 @@ flowchart TD
     blobs["blobs/aa/bb/sha256.ext<br/>content-addressed originals"]
     thumbs["thumbs/aa/bb/sha256.webp<br/>400 px, made at ingest"]
     byc["by-character/slug/artist_id_p0.png<br/>hardlinks to blobs"]
+    trash["trash/sha256.ext<br/>deleted images, 30 days, Undo"]
     blobs -. "same inode" .- byc
+    blobs -- "delete · rename" --> trash
   end
   subgraph home["~/.reaver · REAVER_HOME"]
     db["reaver.db + -wal/-shm<br/>posts · media · seen_posts · jobs · tag_stats · raw payloads"]
@@ -549,4 +564,107 @@ flowchart TD
   end
   db -- "sha256 → path" --> blobs
   db -- "sha256 → path" --> thumbs
+```
+
+---
+
+## m. Deleting images
+
+Four ways to choose, one batch. `deliverer/src/stores/deletion.ts` holds the
+selection; By tag and All ask the daemon for the shas behind each chip
+(filtered like the grid), Smart asks for the criteria's matches 150 ms after
+the last change. The confirm sheet previews the set, then one `POST
+/delete` makes a batch in `coreflame/trash.py`: by-character names removed,
+media rows snapshotted and deleted, blobs renamed into `<library>/trash/`,
+posts forgotten (`skipped/deleted` in the visited set) or reopened. The
+toast's Undo restores the batch; the thirty-day sweep runs on every
+deletion and on `GET /trash`.
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant D as deletion store
+  participant A as dawnmaker
+  participant T as coreflame/trash.py
+  participant FS as library folder
+  U->>D: Delete ▾ → By image / By tag / Smart / All
+  alt By tag · All
+    D->>A: GET /gallery/{slug}/images?tag=… (grid filters)
+    A-->>D: {shas}
+  else Smart
+    D->>A: POST /gallery/{slug}/smart {criteria}
+    A->>T: smart_matches(primary, score, other, dupes)
+    T-->>D: {matches, counts}
+  end
+  U->>D: Delete N
+  D->>A: POST /gallery/{slug}/delete/preview {shas}
+  A-->>D: {bytes, by_source, posts, shared, whole}
+  U->>D: Move N to trash (All: name typed)
+  D->>A: POST /gallery/{slug}/delete {shas, mode, trash, forget}
+  A->>T: remove()
+  T->>FS: unlink by-character names
+  T->>T: trash_items ← media rows (tx) · forget → snapshot + seen skipped/deleted
+  T->>FS: blobs/… → trash/…
+  T-->>D: {batch_id, images, bytes, forgotten}
+  D-->>U: toast · Undo (10 s)
+  opt Undo
+    D->>A: POST /trash/{batch}/restore
+    A->>T: restore(): rows, posts, visited state back · trash/… → blobs/…
+  end
+```
+
+## n. Background mode - mini window, tray, notifications
+
+`deliverer/src/lib/background.ts` runs once in `App.vue` (desktop only). It
+watches the main window's focus and the jobs store; 1.5 s after a blur with
+a worker running it asks the shell (`pip.rs`) for the `pip` window, then
+emits a `pipeline:tick` to it whenever the picture changes, at most twice a
+second. The window has no token: everything it shows is in the tick, every
+click comes back as a `pip:*` event. It is closed, never hidden. The tray
+(`tray.rs`) gets the same tick as a tooltip. In notifications mode the
+controller watches `job.finished` events instead and sends one OS
+notification per finished crawl.
+
+```mermaid
+sequenceDiagram
+  participant M as main webview (background.ts)
+  participant S as Tauri shell (pip.rs · tray.rs)
+  participant P as pip window (src/pip)
+  participant D as dawnmaker
+  D-->>M: SSE job.started / progress / finished
+  M->>S: tray_update tooltip "Curio · Ganyu · 184/300 · +38 new"
+  Note over M: main window blurs, a worker runs, mode = mini
+  M->>M: wait 1.5 s
+  M->>S: invoke pip_open {side, y}, height
+  S->>P: create pip.html (always on top, no decorations)
+  P->>M: emit pip:ready
+  M->>P: emit pipeline:tick {rows, focusedId, strings, …}
+  loop ≤ 2×/s while something changed
+    M->>P: pipeline:tick
+  end
+  P->>S: invoke pip_resize (rows changed)
+  alt drag released
+    P->>S: invoke pip_snap → slide to nearer edge
+    S-->>P: {side, y}
+    P->>M: emit pip:placed → persisted
+  else Pause all
+    P->>M: emit pip:pause-all
+    M->>D: POST /api/pipeline/pause
+  else row / ↗
+    P->>M: emit pip:open-lane / pip:focus-main
+    M->>S: invoke show_main
+    M->>M: router → /pipeline/<lane>
+  else ×
+    P->>M: emit pip:dismiss
+    M->>S: invoke pip_close (tray keeps the tooltip)
+  end
+  alt main focused again
+    M->>S: invoke pip_close
+  else last job finished
+    M->>P: pipeline:tick {finished: +N new}
+    M->>S: invoke pip_close after 2 s
+  end
+  opt tray menu
+    S->>M: emit tray:pause / tray:show-pip
+  end
 ```

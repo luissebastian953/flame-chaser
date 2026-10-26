@@ -26,7 +26,8 @@
       "share": "{n}%",
       "unit": "of images kept",
       "kept": "kept",
-      "dropped": "dropped"
+      "dropped": "dropped",
+      "ruleActive": "rule active"
     },
     "sources": {
       "title": "Sources",
@@ -61,7 +62,7 @@
     "r18": "R-18",
     "posts": "Posts",
     "r18On": "on",
-    "r18Off": "—",
+    "r18Off": "-",
     "perRun": "Per run",
     "more": "+{n} more"
   },
@@ -74,7 +75,12 @@
     "queued": "queued | queued | queued ×{n}",
     "running": "{stage} · {posts} new",
     "done": "done · +{n}",
-    "failed": "failed"
+    "failed": "failed · retry",
+    "interrupted": "interrupted · resume",
+    "cancelled": "cancelled · run again",
+    "retryTitle": "Queue this job again. It skips the posts it already indexed.",
+    "paused": "paused · resume",
+    "resumeTitle": "Continue this crawl from where it stopped"
   },
   "toast": {
     "queued": "{label} queued on {source}",
@@ -83,7 +89,8 @@
     "behind": "starting next | behind 1 job | behind {n} jobs",
     "position": "queued on {source} · position {n}",
     "chipQueued": "queued · {n}",
-    "paused": "Queue is paused — {label} will wait",
+    "paused": "Queue is paused - {label} will wait",
+    "offline": "No internet - {label} waits and starts when the connection is back",
     "noMatch": "Couldn't start: no character matches",
     "noMatchSub": "{label} · {sources}",
     "terms": "0 match terms | 1 match term | {n} match terms",

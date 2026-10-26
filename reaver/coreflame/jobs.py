@@ -10,8 +10,9 @@ it; `any` (tags, labels: no remote request) goes to whichever is free.
 
 The queue is ordered by `position` (reorder, run now), then created_at. A job is
 claimed with a conditional UPDATE, so two workers never take the same `any` job.
-Pausing the queue stops workers taking new jobs; pausing a job holds it at its
-next check() -- the same record boundary a cancel uses -- still holding its lane.
+Pausing the queue stops workers taking new jobs AND holds what they are running;
+pausing one job holds it at its next check() -- the same record boundary a cancel
+uses -- still holding its lane.
 
 Cancellation is cooperative. `JobContext.check()` is called between records,
 never inside a write, so a cancel lands at a record boundary and the db is
@@ -20,6 +21,11 @@ from another process works too.
 
 A job left `running` when the process starts was killed mid-flight -- it is
 marked `interrupted`, not forgotten. That row is how you learn a crawl died.
+The exception is a queue that was paused when the process died: the pause is
+persisted (`queue_state`), the daemon comes back paused, and that job goes back
+to the front of the queue as `queued` -- what the user paused is what they see.
+A crawl re-runs safely (the visited gate skips what it already indexed), so
+`retry()` turns any finished job into a fresh queued copy.
 
 Progress denominators are honest or absent. `total=None` means "no honest
 number exists"; the UI shows indeterminate rather than a lying percentage.
@@ -39,8 +45,12 @@ from typing import Any
 
 from .db import Store
 from .http import METER
+from .online import WATCH, NetWatch, Offline
 
 log = logging.getLogger(__name__)
+
+#: why the queue is held: the user asked, or the internet went away
+HOLD_USER, HOLD_OFFLINE = "user", "offline"
 
 QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED = (
     "queued",
@@ -147,7 +157,13 @@ class JobContext:
         self.store = store
         self.job = job
         self._subs = subscribers
-        self._seq = 0
+        # a job that runs again (back from the front of the queue after a
+        # lost connection or a paused restart) keeps its log: continue the
+        # sequence rather than collide with the first run's rows
+        r = store.conn.execute(
+            "SELECT COALESCE(max(seq),0) FROM job_log WHERE job_id=?", (job.id,)
+        ).fetchone()
+        self._seq = int(r[0]) if r else 0
         self._check_every = check_every
         self._since_check = check_every  # first check() consults the db, not the 5th
         self._cancel = threading.Event()
@@ -293,20 +309,34 @@ class JobRunner:
         store_factory: Callable[[], Store],
         handlers: dict[str, Handler],
         lanes: tuple[str, ...] = LANES,
+        watch: NetWatch | None = None,
     ) -> None:
         self._factory = store_factory
         self.handlers = handlers
         self.lanes = lanes
+        self.watch = watch or WATCH
         self.subscribers: list[Callable[[Event], None]] = []
+        #: told (paused, reason) whenever the queue's hold changes, from any thread
+        self.on_hold: list[Callable[[bool, str | None], None]] = []
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._held = threading.Event()  # the queue is paused: take nothing new
+        self._reason: str | None = None  # HOLD_USER | HOLD_OFFLINE while held
         self._threads: dict[str, threading.Thread] = {}
         self._current: dict[str, JobContext] = {}
         self._lock = threading.Lock()
         store = self._factory()
         try:
-            self.interrupted = self.mark_interrupted(store)
+            self.interrupted = self.requeued = 0
+            if self.read_hold(store):
+                # paused when the process died: come back paused, with what was
+                # running back at the front -- the queue the user left (or the
+                # one the lost connection left: the watch lifts that hold)
+                self._held.set()
+                self._reason = self.read_hold_reason(store)
+                self.requeued = self.requeue_running(store)
+            else:
+                self.interrupted = self.mark_interrupted(store)
         finally:
             store.close()
 
@@ -319,6 +349,52 @@ class JobRunner:
             (_now(),),
         )
         return cur.rowcount
+
+    @staticmethod
+    def requeue_running(store: Store) -> int:
+        """Every `running` row back to the front of the queue, as if never
+        claimed. Safe because a crawl is idempotent: the visited gate skips
+        what the first attempt already indexed."""
+        cur = store.conn.execute(
+            "UPDATE jobs SET state='queued', started_at=NULL, worker=NULL, stage=NULL, "
+            "done=0, total=NULL, error=NULL, pause_requested=0, cancel_requested=0, "
+            "position=(SELECT COALESCE(min(position),0)-1 FROM jobs WHERE state='queued') "
+            "WHERE state='running'"
+        )
+        return cur.rowcount
+
+    @staticmethod
+    def requeue_one(store: Store, jid: str) -> bool:
+        """One running job back to the front of the queue, as if never claimed
+        (what the connection interrupted is what runs first when it is back)."""
+        cur = store.conn.execute(
+            "UPDATE jobs SET state='queued', started_at=NULL, worker=NULL, stage=NULL, "
+            "done=0, total=NULL, error=NULL, pause_requested=0, cancel_requested=0, "
+            "position=(SELECT COALESCE(min(position),0)-1 FROM jobs WHERE state='queued') "
+            "WHERE id=? AND state='running'",
+            (jid,),
+        )
+        return cur.rowcount == 1
+
+    @staticmethod
+    def read_hold(store: Store) -> bool:
+        r = store.conn.execute("SELECT value FROM queue_state WHERE key='held'").fetchone()
+        return bool(r and r["value"] == "1")
+
+    @staticmethod
+    def read_hold_reason(store: Store) -> str | None:
+        r = store.conn.execute("SELECT value FROM queue_state WHERE key='held_reason'").fetchone()
+        return str(r["value"]) if r and r["value"] in (HOLD_USER, HOLD_OFFLINE) else HOLD_USER
+
+    @staticmethod
+    def write_hold(store: Store, on: bool, reason: str | None = None) -> None:
+        with store.tx():
+            for key, value in (("held", "1" if on else "0"), ("held_reason", reason or "")):
+                store.conn.execute(
+                    "INSERT INTO queue_state(key,value) VALUES(?,?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (key, value),
+                )
 
     # -- submit / query / cancel (any thread) ---------------------------------
     @staticmethod
@@ -415,6 +491,18 @@ class JobRunner:
         return order
 
     @staticmethod
+    def retry(store: Store, jid: str) -> str | None:
+        """A finished job (failed, cancelled, interrupted -- or succeeded) again:
+        a fresh queued copy with the same type, params and lane. None if the job
+        is unknown or not finished. Re-running is safe: the visited gate skips
+        what the first attempt already indexed, so this is how an interrupted
+        crawl resumes."""
+        j = JobRunner.get(store, jid)
+        if j is None or j.state not in TERMINAL:
+            return None
+        return JobRunner.submit(store, j.type, j.params, lane=j.lane)
+
+    @staticmethod
     def run_now(store: Store, jid: str) -> bool:
         """To the front of the queue. It starts when its lane's worker is free --
         a running job is never pre-empted."""
@@ -437,14 +525,57 @@ class JobRunner:
     def held(self) -> bool:
         return self._held.is_set()
 
-    def hold(self, on: bool) -> None:
-        """Pause / resume the queue: workers finish what they run, take nothing new.
-        In memory -- a restarted daemon starts with the queue running."""
+    @property
+    def held_reason(self) -> str | None:
+        """`user` or `offline` while the queue is held, else None."""
+        return self._reason if self._held.is_set() else None
+
+    def hold(self, on: bool, reason: str = HOLD_USER) -> None:
+        """Pause / resume the queue: workers take nothing new, and what they are
+        running holds at its next record boundary (keeping its lane) until the
+        queue resumes -- "pause" means everything stops. Persisted with its
+        reason, so a restarted daemon comes back the way it was left. A user's
+        pause outranks the connection's: pausing by hand while held for being
+        offline makes it the user's, and only the user lifts it."""
+        with self._lock:
+            if on and self._held.is_set() and self._reason == HOLD_USER:
+                reason = HOLD_USER
+            self._reason = reason if on else None
+        store = self._factory()
+        try:
+            self.write_hold(store, on, self._reason)
+            running = store.conn.execute("SELECT id FROM jobs WHERE state='running'").fetchall()
+            for r in running:
+                self.pause(store, r["id"], on)
+        finally:
+            store.close()
         if on:
             self._held.set()
         else:
             self._held.clear()
             self._wake.set()
+        for fn in list(self.on_hold):
+            try:
+                fn(on, self._reason)
+            except Exception:
+                log.exception("hold listener failed")
+
+    def _on_connectivity(self, online: bool) -> None:
+        """The watch's verdict changed. Gone: hold everything (a request in
+        flight ends in Offline and its job goes back to the front). Back: lift
+        the hold, unless the user made it theirs in the meantime."""
+        if not online:
+            if not self._held.is_set():
+                self.hold(True, HOLD_OFFLINE)
+        elif self._held.is_set() and self._reason == HOLD_OFFLINE:
+            self.hold(False)
+
+    def _watch_active(self) -> bool:
+        """When the watch should probe unprompted: a worker is busy, or the
+        queue is waiting for the connection to come back."""
+        with self._lock:
+            busy = bool(self._current)
+        return busy or (self._held.is_set() and self._reason == HOLD_OFFLINE)
 
     def workers(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -456,6 +587,9 @@ class JobRunner:
     # -- workers -------------------------------------------------------------
     def start(self) -> None:
         self._stop.clear()
+        if self._on_connectivity not in self.watch.listeners:
+            self.watch.listeners.append(self._on_connectivity)
+        self.watch.start(self._watch_active)
         for lane in self.lanes:
             t = self._threads.get(lane)
             if t and t.is_alive():
@@ -469,6 +603,9 @@ class JobRunner:
     def stop(self, timeout: float = 30.0) -> None:
         self._stop.set()
         self._wake.set()
+        self.watch.stop()
+        if self._on_connectivity in self.watch.listeners:
+            self.watch.listeners.remove(self._on_connectivity)
         for t in self._threads.values():
             t.join(timeout)
 
@@ -479,7 +616,7 @@ class JobRunner:
         """Synchronous: run every queued job, any lane, in THIS thread, in queue
         order. For the CLI and for tests; the daemon uses start()."""
         n = 0
-        while (job := self._take(store, None)) is not None:
+        while not self._held.is_set() and (job := self._take(store, None)) is not None:
             self._run_one(store, job)
             n += 1
         return n
@@ -590,6 +727,7 @@ class JobRunner:
             engine_uptime_s=round(age),
         )
         state, error, counters = SUCCEEDED, None, {}
+        offline: str | None = None
         t0 = time.monotonic()
         try:
             if handler is None:
@@ -597,6 +735,8 @@ class JobRunner:
             counters = handler(ctx) or {}
         except Cancelled:
             state = CANCELLED
+        except Offline as e:
+            offline = str(e)[:500]
         except Exception as e:
             state, error = FAILED, f"{type(e).__name__}: {e}"[:2000]
             log.exception("job %s failed", job.id)
@@ -604,6 +744,17 @@ class JobRunner:
             METER.bind(None)
             with self._lock:
                 self._current.pop(lane, None)
+        if offline is not None:
+            # not a failure: the internet went away under the job. It goes back
+            # to the front of the queue and the queue holds until the watch
+            # sees the connection again (a re-run is safe: the visited gate).
+            if not self._held.is_set():
+                self.hold(True, HOLD_OFFLINE)
+            self.requeue_one(store, job.id)
+            job.state = QUEUED
+            ctx.emit("stage", "offline", level="warning", error=offline, lane=lane)
+            log.warning("job %s: internet unreachable; back at the front of the queue", job.id)
+            return
         counters = {**ctx.live, **counters}
         store.conn.execute(
             "UPDATE jobs SET state=?, error=?, counters=?, finished_at=?, pause_requested=0 "

@@ -96,8 +96,56 @@ function respond(path: string) {
       identifier: { enabled: true, available: true, models: true },
     };
   if (path.startsWith('/api/posts/')) return detail;
+  if (path.startsWith('/api/gallery/ganyu/images?')) {
+    // By tag: the daemon's list for one term, filtered like the grid
+    return path.includes('tag=')
+      ? { shas: ['sha1'], sources: { sha1: 'pixiv' } }
+      : { shas: ['sha1', 'sha2'], sources: { sha1: 'pixiv', sha2: 'twitter' } };
+  }
+  if (path === '/api/gallery/ganyu/artists')
+    return [{ source: 'pixiv', artist_id: 'a', name: 'Alpha', handle: '', count: 2 }];
+  if (path === '/api/trash') return { count: 0, bytes: 0, oldest: null, days: 30 };
 
   return [];
+}
+
+const preview = {
+  images: 1,
+  bytes: 2 * 1024 * 1024,
+  by_source: { pixiv: 1 },
+  posts: { touched: 1, keep_other: 0, forget: 1 },
+  shared: 0,
+  whole: false,
+  forced_trash: false,
+  trash: { count: 0, bytes: 0, oldest: null, days: 30 },
+};
+
+function respondPost(path: string, body: unknown) {
+  if (path.endsWith('/smart'))
+    return {
+      matches: [{ sha256: 'sha2', reasons: [{ kind: 'score', score: 0.31 }] }],
+      counts: { score: 1, other: 0, dupe: 0, unidentified: 0 },
+      primary: 'ganyu',
+      primary_label: 'Ganyu',
+      characters: [],
+      total: 2,
+      cutoff: 0.5,
+      rule: null,
+      identifier: { enabled: true },
+    };
+  if (path.endsWith('/delete/preview')) {
+    const shas = (body as { shas: string[] }).shas;
+    return { ...preview, images: shas.length, whole: shas.length >= 2 };
+  }
+  if (path.endsWith('/delete'))
+    return {
+      batch_id: 'b1',
+      images: (body as { shas: string[] }).shas.length,
+      bytes: 1,
+      forgotten: 1,
+      permanent: false,
+    };
+  return {};
 }
 
 async function mountPage() {
@@ -108,7 +156,7 @@ async function mountPage() {
 
   await router.push('/gallery/ganyu');
   vi.mocked(api.get).mockImplementation(async (path: string) => respond(path));
-  vi.mocked(api.post).mockResolvedValue({});
+  vi.mocked(api.post).mockImplementation(async (path: string, body?: unknown) => respondPost(path, body));
   vi.mocked(api.del).mockResolvedValue(undefined);
 
   const w = mountWithPlugins(CharacterDetail, {
@@ -147,9 +195,10 @@ describe('CharacterDetail header', () => {
     expect(vi.mocked(api.get).mock.lastCall?.[0]).not.toContain('source=');
   });
 
-  it('Delete asks twice, then deletes the character and goes back to the gallery', async () => {
+  it('Delete character (in the more menu) asks twice, then deletes it and goes back to the gallery', async () => {
     const { w, router } = await mountPage();
 
+    await w.find('[aria-label="More"]').trigger('click');
     await button(w, 'Delete character').trigger('click');
     expect(api.del).not.toHaveBeenCalled();
 
@@ -187,7 +236,7 @@ describe('CharacterDetail observed tags', () => {
 describe('CharacterDetail image aside', () => {
   it('a clicked tile is marked current and opens the aside; the backdrop closes it', async () => {
     const { w } = await mountPage();
-    const tiles = () => w.findAll('.masonry > button');
+    const tiles = () => w.findAll('.masonry button.tile');
 
     await tiles()[1]!.trigger('click');
     await flushPromises();
@@ -203,12 +252,178 @@ describe('CharacterDetail image aside', () => {
   it('Esc closes the aside', async () => {
     const { w } = await mountPage();
 
-    await w.findAll('.masonry > button')[0]!.trigger('click');
+    await w.findAll('.masonry button.tile')[0]!.trigger('click');
     await flushPromises();
     expect(w.text()).toContain('Image detail');
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await flushPromises();
     expect(w.text()).not.toContain('Image detail');
+  });
+});
+
+describe('CharacterDetail deleting images', () => {
+  const tiles = (w: Page) => w.findAll('.masonry button.tile');
+
+  async function pickMode(w: Page, title: string) {
+    await button(w, 'Delete').trigger('click');
+    expect(w.text()).toContain('pick how to choose them');
+
+    await w
+      .findAll('.picker button.row')
+      .find((b) => b.text().includes(title))!
+      .trigger('click');
+
+    await flushPromises();
+  }
+
+  it('By image: the bar replaces the header, tiles mark on click, Delete opens the sheet, confirm posts the set and toasts Undo', async () => {
+    const { w } = await mountPage();
+    await pickMode(w, 'By image');
+
+    // the header is gone, the bar and its hint are here
+    expect(w.find('.selbar').exists()).toBe(true);
+    expect(w.text()).toContain('0 selected');
+    expect(w.text()).toContain('marks all visible');
+
+    await tiles(w)[0]!.trigger('click');
+    expect(api.get).not.toHaveBeenCalledWith('/api/posts/pixiv/1'); // no aside in select mode
+    expect(tiles(w)[0]!.attributes('aria-pressed')).toBe('true');
+    expect(w.text()).toContain('1 selected');
+    expect(w.text()).not.toContain('marks all visible'); // the hint collapsed
+
+    await button(w, 'Delete 1').trigger('click');
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith('/api/gallery/ganyu/delete/preview', { shas: ['sha1'] });
+    expect(w.text()).toContain('Delete 1 image');
+    expect(w.text()).toContain('Ganyu · picked by hand · 2 MiB');
+    expect(w.text()).toContain('Forget the post');
+
+    await button(w, 'Move 1 to trash').trigger('click');
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledWith('/api/gallery/ganyu/delete', {
+      shas: ['sha1'],
+      mode: 'image',
+      trash: true,
+      forget: true,
+      confirm: undefined,
+    });
+
+    // back to the header; the toast offers Undo
+    expect(w.find('.selbar').exists()).toBe(false);
+    const toasts = useToasts();
+    expect(toasts.items.map((t) => t.kind)).toEqual(['delete']);
+    const toast = toasts.items[0] as { batchId: string; undo: () => Promise<void> };
+    expect(toast.batchId).toBe('b1');
+    await toast.undo();
+    expect(api.post).toHaveBeenCalledWith('/api/trash/b1/restore');
+  });
+
+  it('Esc leaves silently with nothing marked and asks for a second Esc with a selection', async () => {
+    const { w } = await mountPage();
+    await pickMode(w, 'By image');
+    await tiles(w)[1]!.trigger('click');
+    expect(w.text()).toContain('1 selected');
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await flushPromises();
+    expect(w.text()).toContain('Esc again');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await flushPromises();
+    expect(w.find('.selbar').exists()).toBe(false);
+
+    await pickMode(w, 'By image');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await flushPromises();
+    expect(w.find('.selbar').exists()).toBe(false);
+  });
+
+  it('By tag: a chip marks every image carrying it through the daemon, the strip shows the arithmetic, a tile click drops one', async () => {
+    const { w } = await mountPage();
+    await pickMode(w, 'By tag');
+    expect(api.get).toHaveBeenCalledWith('/api/gallery/ganyu/artists');
+    expect(w.text()).toContain('Artists');
+
+    await w
+      .findAll('.tags button.chip')
+      .find((b) => b.text().includes('原神'))!
+      .trigger('click');
+
+    await flushPromises();
+
+    expect(vi.mocked(api.get).mock.lastCall?.[0]).toMatch(
+      /^\/api\/gallery\/ganyu\/images\?kinds=.*&tag=%E5%8E%9F%E7%A5%9E$/,
+    );
+
+    expect(w.text()).toContain('1 selected');
+    expect(w.text()).toContain('by 1 tag · pixiv 1 · X 0');
+    expect(w.text()).toContain('原神 1 = 1 images · 0 overlap · −0 excluded');
+    expect(tiles(w)[0]!.attributes('aria-pressed')).toBe('true');
+    expect(tiles(w)[1]!.classes()).toContain('ex'); // not a candidate
+    expect(w.findAll('.tags button.chip')[0]!.text()).toContain('原神'); // the picked chip leads its row
+
+    await tiles(w)[0]!.trigger('click'); // kept back out
+    expect(w.text()).toContain('0 selected');
+    expect(w.text()).toContain('−1 excluded');
+
+    // the Show / Who / Characters rows select too, instead of filtering
+    const screencaps = w.findAll('button.chip').find((b) => b.text().includes('Anime screencaps'))!;
+    await screencaps.trigger('click');
+    await flushPromises();
+    expect(vi.mocked(api.get).mock.lastCall?.[0]).toMatch(/\/images\?.*sel_kind=screencap$/);
+    expect(screencaps.classes()).toContain('sel');
+    expect(w.text()).toContain('2 − 1 = 1'); // two chips' images, one kept back out
+  });
+
+  it('All: everything is marked, the sheet needs the name typed, and forgetting posts is off by default', async () => {
+    const { w } = await mountPage();
+    await pickMode(w, 'All');
+    expect(w.text()).toContain('2 selected');
+    expect(w.text()).toContain('everything · pixiv 1 · X 1');
+
+    await button(w, 'Delete 2').trigger('click');
+    await flushPromises();
+    expect(w.text()).toContain('Delete all 2 images');
+    expect(w.text()).toContain('Ganyu stays watched');
+    const go = button(w, 'Move 2 to trash');
+    expect(go.attributes('disabled')).toBeDefined();
+
+    await w.find('.sheet input').setValue('Ganyu');
+    expect(button(w, 'Move 2 to trash').attributes('disabled')).toBeUndefined();
+    await button(w, 'Move 2 to trash').trigger('click');
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledWith('/api/gallery/ganyu/delete', {
+      shas: ['sha1', 'sha2'],
+      mode: 'all',
+      trash: true,
+      forget: false,
+      confirm: 'Ganyu',
+    });
+  });
+
+  it('?delete=smart opens Smart with the criteria panel; matches are pre-checked with their score', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/:any(.*)*', component: { template: '<div />' } }],
+    });
+
+    await router.push('/gallery/ganyu?delete=smart');
+    vi.mocked(api.get).mockImplementation(async (path: string) => respond(path));
+    vi.mocked(api.post).mockImplementation(async (path: string, body?: unknown) => respondPost(path, body));
+
+    const w = mountWithPlugins(CharacterDetail, {
+      props: { slug: 'ganyu' },
+      global: { plugins: [router] },
+      pinia: { initialState: { library: { watches: [ganyu] } } },
+    });
+
+    await flushPromises();
+    expect(w.text()).toContain('Criteria');
+    expect(w.text()).toContain('Not Ganyu');
+    expect(w.text()).toContain('Matches · 1');
+    expect(w.text()).toContain('1 selected');
+    expect(w.find('.masonry.four .tile.pick .badge').text()).toBe('0.31');
   });
 });

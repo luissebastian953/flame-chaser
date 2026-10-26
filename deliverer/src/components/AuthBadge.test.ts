@@ -25,7 +25,7 @@ describe('AuthBadge', () => {
     const btn = w.get('button');
 
     expect(btn.text()).toContain('Session expired');
-    expect(btn.attributes('title')).toBe('Session expired — reconnect');
+    expect(btn.attributes('title')).toBe('Session expired - reconnect');
     await btn.trigger('click');
     expect(w.emitted('connect')).toHaveLength(1);
   });

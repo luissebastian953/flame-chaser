@@ -47,11 +47,11 @@ class TagProbe:
 def _http_error(status: int) -> str:
     """Short, actionable; the form has ~30 characters, not a URL's worth."""
     if status in (401, 403):
-        return f"pixiv {status} — search needs a signed-in session (PIXIV_PHPSESSID)"
+        return f"pixiv {status} - search needs a signed-in session (PIXIV_PHPSESSID)"
     if status == 404:
-        return "pixiv 404 — endpoint moved?"
+        return "pixiv 404 - endpoint moved?"
     if status == 429:
-        return "pixiv 429 — rate limited, wait a minute"
+        return "pixiv 429 - rate limited, wait a minute"
     return f"pixiv HTTP {status}"
 
 

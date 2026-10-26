@@ -23,10 +23,6 @@
       "newest": "Newest",
       "oldest": "Oldest"
     },
-    "delete": {
-      "label": "Delete character",
-      "armed": "Click again to delete"
-    },
     "observedTags": "Observed tags",
     "tagsHint": "what these {posts} are actually tagged with · share of posts",
     "seeAll": "see all {n}",
@@ -42,17 +38,15 @@
   },
   "aside": {
     "title": "Image detail",
-    "pages": "0 pages | 1 page | {n} pages",
     "close": "Close",
     "untitled": "(untitled)",
     "source": {
       "pixiv": "pixiv",
       "twitter": "X"
     },
-    "gone": "removed at source — kept here, never re-fetched",
+    "gone": "removed at source - kept here, never re-fetched",
     "dimensions": "dimensions",
     "file": "file",
-    "fileSize": "{n} MB",
     "bookmarks": "bookmarks",
     "hash": "sha256",
     "characters": "characters",
@@ -60,7 +54,38 @@
     "notIdentified": "not identified yet",
     "score": "{n}%",
     "sameImageOn": "Same image on {source}",
-    "openOn": "Open on {source}"
+    "openOn": "Open on {source}",
+    "fullscreen": "Fullscreen (F)",
+    "counter": "{n} / {total}",
+    "related": {
+      "title": "Related images",
+      "samePost": "same post · {id} · {n} pages",
+      "more": "+ {n} from {'@'}{handle} on {source}",
+      "caption": "Pages of the same {source} post, then images from the same {other} post ({id}). Click to switch; ← → steps through them.",
+      "captionPages": "Pages of the same {source} post. Click to switch; ← → steps through them.",
+      "page": "p{n}"
+    },
+    "fileInfo": "{n} MB · {ext}",
+    "stored": "stored",
+    "notStored": "not stored",
+    "keptNote": "Kept the {kept} original; the {other} copy is recorded, not stored.",
+    "reveal": "Reveal",
+    "revealHint": "Show the file in Finder / Explorer",
+    "revealNone": "not stored locally",
+    "revealDesktop": "Reveal needs the desktop app",
+    "viewer": {
+      "close": "Close (Esc)",
+      "prev": "Previous (←)",
+      "next": "Next (→)",
+      "fit": "fit",
+      "one": "1:1",
+      "two": "200%",
+      "zoom": "Zoom",
+      "pageOf": "p{n} of {total}",
+      "related": "{n} / {total} related",
+      "recorded": "recorded only · not stored",
+      "meta": "{w} × {h} · {mb} MB · {ext}"
+    }
   },
   "kinds": {
     "show": "Show",
@@ -75,7 +100,7 @@
     "labelNow": "Label 0 images | Label 1 image | Label {n} images",
     "removeNow": "Remove 0 images | Remove 1 image | Remove {n} images",
     "checkPeople": "Check 0 images for the gender filter | Check 1 image for the gender filter | Check {n} images for the gender filter",
-    "policy": "only illustrations and anime screencaps are kept — photos, cosplay, 3D, figures and screenshots are thrown away",
+    "policy": "only illustrations and anime screencaps are kept - photos, cosplay, 3D, figures and screenshots are thrown away",
     "labeling": "Labeling… {done} / {total}",
     "labelingStarting": "Labeling…",
     "firstUse": "the first run downloads the classifier (~34 MB)",
@@ -95,10 +120,200 @@
     "identifyNow": "Identify 0 images | Identify 1 image | Identify {n} images",
     "identifying": "Identifying… {done} / {total}",
     "identifyingStarting": "Identifying…",
-    "policy": "names only label images — nothing is removed",
+    "policy": "names only label images - nothing is removed",
     "firstUse": "the first run downloads two character taggers (up to ~1.3 GB)",
-    "off": "Character names are off — switch them on in Settings › Characters",
+    "off": "Character names are off - switch them on in Settings › Characters",
     "unavailable": "Character names are off: the optional classifier is not installed ({cmd})",
     "failed": "Identifying failed: {error}"
+  },
+  "delete": {
+    "menu": {
+      "button": "Delete",
+      "title": "Delete images",
+      "sub": "pick how to choose them",
+      "image": {
+        "title": "By image",
+        "desc": "Pick tiles in the grid. Click, shift-click for a range, or drag a box."
+      },
+      "tag": {
+        "title": "By tag",
+        "desc": "Click a tag, character or artist chip to mark everything carrying it."
+      },
+      "smart": {
+        "title": "Smart · AI identifier",
+        "desc": "Low recognition score, other characters, near-duplicates, photos. Pre-checked, you review before deleting.",
+        "suggested": "{n} suggested"
+      },
+      "all": {
+        "title": "All {n} images",
+        "desc": "Empties the archive for {label}. The character and its crawl config stay. Typed confirmation."
+      },
+      "foot": "Everything goes to trash first · {days} days",
+      "character": "Delete character → more menu"
+    },
+    "more": {
+      "label": "More",
+      "deleteCharacter": "Delete character",
+      "armed": "Click again to delete"
+    },
+    "bar": {
+      "close": "Leave selection",
+      "selected": "0 selected | 1 selected | {n} selected",
+      "of": "of {total} · pixiv {pixiv} · X {x}",
+      "ofTags": "by {tags} · pixiv {pixiv} · X {x}",
+      "tagCount": "0 tags | 1 tag | {n} tags",
+      "ofAll": "everything · pixiv {pixiv} · X {x} · {size}",
+      "minus": "{n} − {kept} = {left}",
+      "mode": {
+        "image": "By image",
+        "tag": "By tag",
+        "smart": "Smart",
+        "all": "All images"
+      },
+      "switchMode": "Switch mode",
+      "any": "any tag",
+      "all": "all tags",
+      "matchLabel": "Combine tags",
+      "reviewOnly": "Review only",
+      "clear": "Clear",
+      "delete": "Delete {n}",
+      "leaveConfirm": "Drop the selection and leave? Esc again"
+    },
+    "hint": {
+      "image": "Click a tile to mark it. {shift} marks a range, drag on empty space to box-select, {a} marks all visible, {esc} leaves.",
+      "shift": "⇧click",
+      "a": "A",
+      "esc": "Esc",
+      "tag": "Click a tag, character or artist chip to mark every image carrying it. Click a tile to drop one from the set.",
+      "smart": "Matches are pre-checked. Adjust the criteria on the left, then uncheck anything you want to keep before deleting.",
+      "all": "Every image is marked. Click a tile to keep it. The character and its crawl config stay.",
+      "hides": "hides after your first pick"
+    },
+    "tile": {
+      "mark": "Mark {title}",
+      "keep": "Keep {title}"
+    },
+    "tag": {
+      "artists": "Artists",
+      "union": " ∪ ",
+      "intersection": " ∩ ",
+      "term": "{label} {n}",
+      "formula": "{terms} = {n} images · {overlap} overlap · −{dropped} excluded",
+      "none": "Click a chip above to mark every image carrying it.",
+      "everything": "This is everything. Use All instead?",
+      "useAll": "Use All",
+      "keepTerm": "Keep as is"
+    },
+    "smart": {
+      "title": "Criteria",
+      "score": "Low recognition score",
+      "scoreValue": "below {n}",
+      "scoreAria": "score threshold",
+      "scoreNote": "crawl cutoff is {n} - these got in before the cutoff was raised",
+      "other": "Not {label}",
+      "otherNote": "identified as another character only",
+      "otherUnknown": "No character named in this gallery yet - identify its images first",
+      "dupes": "Near-duplicates",
+      "dupesValue": "distance ≤ {n}",
+      "dupesAria": "phash distance",
+      "dupesNote": "keeps the larger file, selects the rest of each group",
+      "kinds": "Photos, 3D & screenshots",
+      "kindsNote": "what the recognition filter rejects at crawl time - cosplay, people, figures, renders, UI - that got in while it was off",
+      "unidentified": "Unidentified",
+      "unidentifiedNote": "no character found - many false positives",
+      "matched": "matched {n}",
+      "unchecked": "you unchecked {n}",
+      "applyAtCrawl": "also apply at crawl time",
+      "applyNote": "writes the criteria to Settings › Duplicates",
+      "applied": "rule active",
+      "matches": "Matches · {n}",
+      "sorted": "sorted by confidence · lowest score first",
+      "sortLabel": "Sort matches",
+      "sort": {
+        "score": "score",
+        "reason": "reason",
+        "newest": "newest"
+      },
+      "rest": "Not flagged · {n}",
+      "loading": "counting…",
+      "off": "Character names are off - switch them on in Settings › Characters",
+      "badge": {
+        "other": "{label} · {score}",
+        "score": "{score}",
+        "dupe": "dupe · d{n}",
+        "unidentified": "unidentified",
+        "kept": "{text} · kept"
+      }
+    },
+    "sheet": {
+      "title": "Delete 0 images | Delete 1 image | Delete {n} images",
+      "titleAll": "Delete all {n} images",
+      "sub": "{label} · {mode} · {size}",
+      "subAll": "{label} stays watched · {size} · {posts}",
+      "modeName": {
+        "image": "picked by hand",
+        "tag": "by tag",
+        "smart": "smart selection",
+        "all": "everything"
+      },
+      "close": "Close",
+      "more": "+{n}",
+      "review": "Review {n} images",
+      "bySource": "by source",
+      "byReason": "by reason",
+      "posts": "posts touched",
+      "keepOther": "{n} keep other images",
+      "reason": {
+        "score": "score {n}",
+        "other": "other {n}",
+        "dupe": "dupe {n}",
+        "unidentified": "unidentified {n}",
+        "kind": "not a drawing {n}",
+        "hand": "by hand {n}",
+        "tag": "{label} {n}"
+      },
+      "trash": "Move to trash",
+      "trashNote": "restorable for {days} days · Settings › Storage · trash is {size} now",
+      "trashForced": "forced above 500 images or 1 GB",
+      "forget": "Forget the 0 posts | Forget the post | Forget the {n} posts",
+      "forgetNote": "marks them visited so the next {target}-post run won't bring them back",
+      "forgetNoteAll": "leave off to let the next run rebuild with the current rules",
+      "warnShared": "{n} of these are also in another character's gallery. Deleting removes them there too.",
+      "warnMany": "More than 500 images or 1 GB: they go to trash, never straight to permanent.",
+      "warnWhole": "This is every image {label} has.",
+      "allStrip": "This empties the whole character. To also stop crawling {label}, use Delete character in the header's more menu instead.",
+      "typeName": "Type {label} to confirm",
+      "keys": "Esc to cancel · ⌘⏎ to confirm",
+      "cancel": "Cancel",
+      "confirm": "Move {n} to trash",
+      "confirmPermanent": "Delete {n} permanently",
+      "hold": "hold to confirm",
+      "lightbox": {
+        "close": "Close",
+        "prev": "Previous",
+        "next": "Next",
+        "counter": "{i} / {n}"
+      }
+    },
+    "toast": {
+      "trashed": "0 images moved to trash | 1 image moved to trash | {n} images moved to trash",
+      "deleted": "0 images deleted | 1 image deleted | {n} images deleted",
+      "sub": "{label} · {size}",
+      "forgotten": "0 posts forgotten | 1 post forgotten | {n} posts forgotten",
+      "undo": "Undo",
+      "close": "Close",
+      "failed": "Could not delete: {error}"
+    },
+    "empty": {
+      "title": "No images",
+      "sub": "the character and its crawl settings stay - run it from Crawl to fill it again",
+      "crawl": "Open Crawl"
+    }
+  },
+  "review": {
+    "title": "{n} below {score} across {characters}",
+    "characters": "0 characters | 1 character | {n} characters",
+    "review": "Review",
+    "each": "{label} · {n}"
   }
 }

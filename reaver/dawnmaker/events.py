@@ -26,6 +26,7 @@ class EventHub:
         self._next = 1
         self._subs: set[queue.Queue] = set()
         self._lock = threading.Lock()
+        self._closed = False
 
     # -- producer side (job runner thread) ----------------------------------
     def publish(self, type_: str, data: dict[str, Any]) -> int:
@@ -40,6 +41,18 @@ class EventHub:
             with contextlib.suppress(queue.Full):
                 q.put_nowait((eid, type_, payload))
         return eid
+
+    def close(self) -> None:
+        """End every live stream now. A stream otherwise never ends on its own,
+        and uvicorn's shutdown waits for open responses: without this the
+        daemon that decided to exit kept running, serving nothing, for as long
+        as the window held its EventSource. Called with `server.should_exit`."""
+        with self._lock:
+            self._closed = True
+            subs = list(self._subs)
+        for q in subs:
+            with contextlib.suppress(queue.Full):
+                q.put_nowait(None)
 
     def from_job_event(self, ev: dict[str, Any]) -> None:
         """Adapter for JobRunner.subscribers: maps job_log rows onto the
@@ -85,13 +98,15 @@ class EventHub:
                 yield _frame(eid, typ, payload)
             if not live:
                 return
-            while True:
+            while not self._closed:
                 try:
-                    eid, typ, payload = q.get(timeout=keepalive)
+                    item = q.get(timeout=keepalive)
                 except queue.Empty:
                     yield ": keepalive\n\n"  # comment frame keeps proxies awake
                     continue
-                yield _frame(eid, typ, payload)
+                if item is None:  # close(): the daemon is exiting
+                    return
+                yield _frame(*item)
         finally:
             with self._lock:
                 self._subs.discard(q)

@@ -1,4 +1,6 @@
 import type { Job, Lane, PipelineState } from '@/lib/types';
+import { runsOf } from '@/lib/pipeline';
+import type { CompletedRun } from '@/lib/pipeline';
 
 /** a worker and the job on it (null = idle) */
 export interface WorkerJob {
@@ -34,11 +36,17 @@ export const useJobs = defineStore('jobs', {
         .filter((j) => j.state === 'queued')
         .sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at)),
     recent: (s) => s.jobs.filter((j) => !['queued', 'running'].includes(j.state)).slice(0, 10),
-    /** finished since midnight, newest first */
+    /** finished since midnight, newest first (`runsToday` folds these into character rows) */
     completedToday: (s) =>
       s.jobs
         .filter((j) => !['queued', 'running'].includes(j.state) && isToday(j.finished_at))
         .sort((a, b) => (b.finished_at ?? '').localeCompare(a.finished_at ?? '')),
+    /** today's character runs, one row each (the per-source jobs folded), newest first */
+    runsToday(): CompletedRun[] {
+      return runsOf(this.completedToday);
+    },
+    /** the queue holds itself: the internet is unreachable; it resumes when the connection is back */
+    offline: (s) => s.pipeline?.pause_reason === 'offline',
     /** the daemon's worker lanes, in order; the two sources until it answers */
     lanes: (s): Lane[] => s.pipeline?.workers.map((w) => w.lane) ?? ['pixiv', 'twitter'],
     /**
@@ -131,6 +139,12 @@ export const useJobs = defineStore('jobs', {
       await api.post('/api/pipeline/pause', { paused });
       await this.loadPipeline();
     },
+    /** a finished job again, as a fresh queued copy: how an interrupted or cancelled crawl resumes */
+    async retry(id: string) {
+      const r = await api.post<{ job_id: string }>(`/api/jobs/${id}/retry`);
+      await this.load();
+      return r.job_id;
+    },
     async runNow(id: string) {
       await api.post(`/api/jobs/${id}/run-now`);
       await this.load();
@@ -148,11 +162,20 @@ export const useJobs = defineStore('jobs', {
         // job list is the source of truth; refresh it on lifecycle edges
         if (ev.type === 'job.started' || ev.type === 'job.finished' || ev.type === 'job.stage') {
           this.load().catch(() => {});
+        } else if (ev.type === 'pipeline.paused') {
+          // the hold changed hands (Pause queue, or the connection went away / came back)
+          this.loadPipeline().catch(() => {});
         } else if (ev.type === 'job.progress') {
           const j = this.jobs.find((x) => x.id === ev.data.job_id);
           if (j) {
             j.done = Number(ev.data.done ?? j.done);
             j.total = (ev.data.total as number | null) ?? null;
+            // numeric extras (an export's planned totals) are live counters too
+            for (const [k, v] of Object.entries(ev.data)) {
+              if (typeof v === 'number' && !['done', 'total', 'seq'].includes(k)) {
+                j.counters = { ...j.counters, [k]: v };
+              }
+            }
           }
         } else if (ev.type === 'job.item' && typeof ev.data.action === 'string') {
           // the daemon tallies item actions into counters too; mirror it live

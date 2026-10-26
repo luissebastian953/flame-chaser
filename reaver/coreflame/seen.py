@@ -33,6 +33,8 @@ class SkipReason(str, Enum):
     R18_EXCLUDED = "r18_excluded"
     UGOIRA = "ugoira"
     NO_MATCH = "no_match"  # X: followed artist's post named no watch
+    DELETED = "deleted"  # the user deleted every image and chose to forget the post;
+    # no config change reopens it (coreflame/trash.py)
 
 
 SCHEMA = """

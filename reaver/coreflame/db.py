@@ -302,11 +302,18 @@ class Store:
         ext: str = "",
         dupe_of: str | None = None,
         error: str | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        variant: str | None = None,
     ) -> None:
+        """`width`/`height` are what the decoded file says (the source's
+        metadata is kept when they are None); `variant` names the size the
+        source handed over (original / orig / 4096x4096)."""
         self.conn.execute(
             """UPDATE media SET state=?, sha256=COALESCE(?,sha256), phash=COALESCE(?,phash),
                  bytes=COALESCE(?,bytes), ext=CASE WHEN ?<>'' THEN ? ELSE ext END,
-                 dupe_of=?, error=?
+                 dupe_of=?, error=?, width=COALESCE(?,width), height=COALESCE(?,height),
+                 source_variant=COALESCE(?,source_variant)
                WHERE source=? AND external_id=? AND idx=?""",
             (
                 state,
@@ -317,6 +324,9 @@ class Store:
                 ext,
                 dupe_of,
                 error,
+                width,
+                height,
+                variant,
                 source,
                 external_id,
                 idx,

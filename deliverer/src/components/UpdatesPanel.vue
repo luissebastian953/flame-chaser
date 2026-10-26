@@ -35,7 +35,7 @@ const history = computed<Entry[]>(() => {
   const out: Entry[] = [];
   let cur: Entry | null = null;
   for (const raw of changelog.split('\n')) {
-    const h = /^## (\S+)(?:\s+—\s+(\S+))?/.exec(raw);
+    const h = /^## (\S+)(?:\s+-\s+(\S+))?/.exec(raw);
     if (h) {
       cur = { version: h[1]!, date: h[2] ?? '', items: [] };
       out.push(cur);
@@ -151,12 +151,12 @@ const statusKey: Record<Status, string> = {
           </div>
           <div>
             <label>{{ $t('updates.panel.crawler') }}</label>
-            <span class="data">{{ ep.health?.version ?? '—' }}</span>
+            <span class="data">{{ ep.health?.version ?? '-' }}</span>
           </div>
           <div>
             <label>{{ $t('updates.panel.database') }}</label>
             <span class="data">
-              {{ $t('updates.panel.schema', { n: ep.health?.schema_version ?? '—' }) }}
+              {{ $t('updates.panel.schema', { n: ep.health?.schema_version ?? '-' }) }}
             </span>
           </div>
         </div>

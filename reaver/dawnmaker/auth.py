@@ -146,12 +146,12 @@ class Auth:
         self.cfg.save()
 
     def twitter_status(self) -> dict:
-        import shutil
+        from coreflame.sources.twitter import gallery_dl_command
 
         f = self.cfg.twitter_cookies_file
         return {
             "authed": bool(f and Path(f).exists()) or bool(self.cfg.twitter_cookies_from_browser),
-            "gallery_dl": shutil.which("gallery-dl") is not None,
+            "gallery_dl": gallery_dl_command() is not None,
             "cookies_file": bool(f),
             "from_browser": self.cfg.twitter_cookies_from_browser,
         }

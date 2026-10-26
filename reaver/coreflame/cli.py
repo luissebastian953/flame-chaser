@@ -191,6 +191,52 @@ def _print_event(ev: dict) -> None:
         print(f"  {lvl} {msg}")
 
 
+def cmd_bundle(args, cfg: Config) -> int:
+    from pathlib import Path
+
+    from . import bundle
+    from .thumbs import ThumbStore
+
+    path = Path(args.path).expanduser()
+    store = Store(cfg.db_path)
+    blobs, thumbs = BlobStore(cfg.blob_root), ThumbStore(cfg.blob_root.parent / "thumbs")
+
+    def show(stage: str, done: int, total: int | None) -> None:
+        print(f"\r{stage:<9} {done}/{total if total is not None else '?'}   ", end="", flush=True)
+
+    try:
+        if args.action == "export":
+            fmt = args.format or ("zip" if path.suffix == ".zip" else "curio")
+            opts = bundle.ExportOptions(
+                images=not args.no_images, thumbs=not args.no_thumbs, secrets=args.secrets, fmt=fmt
+            )
+            out = bundle.export(store, blobs, thumbs, cfg, path, opts, progress=show)
+            print()
+            print(json.dumps(out, indent=2))
+        elif args.action == "inspect":
+            print(json.dumps(bundle.inspect(path, store), indent=2, ensure_ascii=False))
+        elif args.action == "verify":
+            rep = bundle.verify(path)
+            print(json.dumps(rep, indent=2))
+            return 0 if rep["ok"] else 1
+        else:
+            iopts = bundle.ImportOptions(
+                mode="restore" if args.restore else "merge",
+                settings=args.settings,
+                secrets=args.secrets,
+                default_policy=args.policy,
+                salvage=args.salvage,
+            )
+            out = bundle.import_(store, blobs, thumbs, cfg, path, iopts, progress=show)
+            print()
+            out.pop("ui", None)
+            print(json.dumps(out, indent=2))
+    except bundle.BundleError as e:
+        print(f"\n{e.code}: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_jobs(args, cfg: Config) -> int:
     from .handlers import default_runner
     from .jobs import JobRunner
@@ -331,6 +377,27 @@ def build_parser() -> argparse.ArgumentParser:
     jc = js.add_parser("cancel")
     jc.add_argument("job_id")
     j.set_defaults(func=cmd_jobs)
+
+    bu = sub.add_parser("bundle", help="export the archive as one file, inspect or import one")
+    bs = bu.add_subparsers(dest="action", required=True)
+    be = bs.add_parser("export", help="write a .curio (or .zip) bundle")
+    be.add_argument("path")
+    be.add_argument("--format", choices=["curio", "zip"], default=None, help="from the extension")
+    be.add_argument("--no-images", action="store_true")
+    be.add_argument("--no-thumbs", action="store_true")
+    be.add_argument("--secrets", action="store_true", help="include the pixiv session cookie")
+    bi = bs.add_parser("inspect", help="what a bundle holds and where it collides")
+    bi.add_argument("path")
+    bv = bs.add_parser("verify", help="re-hash every entry; name the damaged ones")
+    bv.add_argument("path")
+    bm = bs.add_parser("import", help="merge (default) or restore from a bundle")
+    bm.add_argument("path")
+    bm.add_argument("--restore", action="store_true", help="replace the archive with the bundle")
+    bm.add_argument("--settings", choices=["keep", "take"], default="keep")
+    bm.add_argument("--secrets", action="store_true", help="take the bundle's session cookie")
+    bm.add_argument("--policy", choices=["merge", "keep", "take"], default="merge")
+    bm.add_argument("--salvage", action="store_true", help="go on past damaged entries")
+    bu.set_defaults(func=cmd_bundle)
 
     h = sub.add_parser("net", help="diagnose which network layer blocks a host")
     h.add_argument("hosts", nargs="*", default=["www.pixiv.net", "i.pximg.net", "x.com"])

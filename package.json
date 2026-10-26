@@ -6,7 +6,7 @@
   "scripts": {
     "commit": "cz",
     "prepare": "husky || echo 'no .git yet: run `pnpm prepare` after git init'",
-    "check": "pnpm --filter deliverer run check && cd reaver && ./check.sh && cd .. && scripts/check-version.sh",
+    "check": "pnpm --filter deliverer run check && cd reaver && ./check.sh && cd .. && scripts/check-version.sh && scripts/check-dash.sh",
     "dev": "pnpm --filter deliverer run dev",
     "tauri": "pnpm --filter deliverer exec tauri"
   },

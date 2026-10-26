@@ -11,16 +11,18 @@ from .blobs import BlobStore
 from .config import Config
 from .db import Store
 from .dedupe import classify
-from .identify import Identifies
+from .identify import Identifies, Identity
 from .jobs import JobContext
 from .kinds import KEEP, Label, LabelError, Labels, ModelError, kept, make_labeler
 from .library import LibraryView, safe_name
 from .models import DiscoverStats, IllustRecord, Watch
+from .online import Offline
 from .people import People, Tags, accepts
 from .seen import SeenState, SkipReason
 from .sources.pixiv import PixivAdapter
 from .sources.twitter import GalleryDLError, TwitterAdapter
-from .thumbs import ThumbStore
+from .thumbs import ThumbStore, dims
+from .trash import crawl_verdict
 
 log = logging.getLogger(__name__)
 
@@ -198,6 +200,8 @@ def resolve_artist_links(
         c.progress(i, len(rows))
         try:
             handle = pixiv.twitter_handle(row["artist_id"])
+        except Offline:
+            raise  # the connection, not this artist
         except Exception as e:
             log.warning("link lookup failed for %s: %s", row["artist_id"], e)
             continue
@@ -462,6 +466,7 @@ def _drain_downloads(
     ctx: JobContext | None,
     tagger: Tags | None = None,
     identifier: Identifies | None = None,
+    cleanup: dict[str, Any] | None = None,
 ) -> tuple[Labels | None, Tags | None, Identifies | None]:
     """Download (and judge) everything pending now. Returns the labeler,
     tagger and identifier, each None once it has proved unusable, so the
@@ -479,6 +484,7 @@ def _drain_downloads(
             tagger=tagger,
             identifier=identifier,
             source="twitter",  # the X worker never touches pixiv's hosts
+            cleanup=cleanup,
         )
         st.merge(got)
         if LABELS_OFF in got.notes:
@@ -517,6 +523,7 @@ def search_to_target(
     page_posts: int = PAGE_POSTS,
     tagger: Tags | None = None,
     identifier: Identifies | None = None,
+    cleanup: dict[str, Any] | None = None,
 ) -> RunStats:
     """Search X for one character until exactly `target` NEW posts are kept --
     posts left holding at least one stored image after the visited gate, the
@@ -565,7 +572,17 @@ def search_to_target(
                 )
                 if watch.slug in hits:
                     labeler, tagger, identifier = _drain_downloads(
-                        store, blobs, pixiv, tw, labeler, threshold, st, ctx, tagger, identifier
+                        store,
+                        blobs,
+                        pixiv,
+                        tw,
+                        labeler,
+                        threshold,
+                        st,
+                        ctx,
+                        tagger,
+                        identifier,
+                        cleanup,
                     )
                     if _kept(store, rec.external_id):
                         kept += 1
@@ -607,13 +624,17 @@ def download_pending(
     tagger: Tags | None = None,
     identifier: Identifies | None = None,
     source: str | None = None,
+    cleanup: dict[str, Any] | None = None,
 ) -> RunStats:
     """`announce=False` when a caller interleaves downloads with its own stage
     (search_to_target): no stage change, and its progress bar is left alone.
     `identifier` names the character in every image that is stored; it never
-    rejects one. `source` downloads only that source's media -- a worker stays
-    on its own hosts (coreflame/jobs.py lanes)."""
+    rejects one -- unless `cleanup` (Settings › Duplicates' crawl-time rule,
+    coreflame/trash.py) says the name is wrong or too unsure. `source`
+    downloads only that source's media -- a worker stays on its own hosts
+    (coreflame/jobs.py lanes)."""
     st = RunStats()
+    primaries: dict[str, str | None] = {}  # each character's name, read once per run
     c = _ctx(ctx)
     thumbs = thumbs or ThumbStore(blobs.root.parent / "thumbs")
     # by-character/<slug>/ is a derived view over blobs/: hardlinks where the
@@ -638,6 +659,8 @@ def download_pending(
                 data = pixiv.fetch_media(url, post["permalink"] if post else None)
             else:
                 data = tw.fetch_media(url)
+        except Offline:
+            raise  # the connection, not this file: it stays pending for the resume
         except Exception as e:
             store.mark_media(source, eid, idx, state="failed", error=str(e)[:300])
             st.failed += 1
@@ -646,6 +669,11 @@ def download_pending(
         import hashlib
 
         sha = hashlib.sha256(data).hexdigest()
+        # the size the source handed over, and what the file really measures:
+        # the fullscreen viewer shows it at 1:1, so the row says the truth
+        variant = str(getattr(pixiv if source == "pixiv" else tw, "last_variant", ""))
+        size = dims(data)
+        w, h = size if size else (None, None)
         verdict = classify(store, data, sha, artist_key, threshold)
         if verdict.is_dupe:
             store.mark_media(
@@ -658,6 +686,9 @@ def download_pending(
                 nbytes=len(data),
                 dupe_of=verdict.dupe_of,
                 error=verdict.reason,
+                width=w,
+                height=h,
+                variant=variant,
             )
             st.dupes += 1
             c.item(
@@ -751,11 +782,43 @@ def download_pending(
             phash=verdict.phash,
             nbytes=len(data),
             ext=ext,
+            width=w,
+            height=h,
+            variant=variant,
         )
         st.downloaded += 1
         who = ""
         if identifier is not None:
-            identifier, who = _identify_one(store, identifier, sha, data, people, c, st)
+            identifier, who, ident = _identify_one(store, identifier, sha, data, people, c, st)
+            verdict_reason = (
+                crawl_verdict(
+                    store,
+                    _slugs_of(store, source, eid),
+                    ident.hits,
+                    ident.state == "identified",
+                    cleanup,
+                    primaries,
+                    model=ident.model,
+                )
+                if ident is not None
+                else None
+            )
+            if verdict_reason:
+                # the Smart rule at crawl time: stored a moment ago, thrown away
+                # exactly like a kind the archive does not keep
+                fresh = {
+                    "source": source,
+                    "external_id": eid,
+                    "idx": idx,
+                    "sha256": sha,
+                    "ext": ext,
+                    "artist_id": post["artist_id"] if post else "",
+                    "artist_handle": post["artist_handle"] if post else "",
+                }
+                _discard_row(store, blobs, thumbs, view, fresh, verdict_reason, c)
+                st.downloaded -= 1
+                st.rejected += 1
+                continue
         c.item(
             f"{source} {eid}#{idx} stored {len(data) // 1024} KB{who}",
             source=source,
@@ -776,24 +839,24 @@ def _identify_one(
     people: People | None,
     c: JobContext,
     st: RunStats,
-) -> tuple[Identifies | None, str]:
+) -> tuple[Identifies | None, str, Identity | None]:
     """Name the character in one freshly stored image. Returns the identifier
-    (None once it proved unusable: the rest stay pending for the label job)
-    and a suffix for the log line."""
+    (None once it proved unusable: the rest stay pending for the label job),
+    a suffix for the log line, and the identity (None when it could not be judged)."""
     try:
         ident = identifier.identify(data, people)
     except LabelError as e:
         c.log(f"identify {sha[:12]}: {e}", level="warning")  # stays pending
-        return identifier, ""
+        return identifier, "", None
     except ModelError as e:
         c.log(f"character names off for this run: {e}", level="warning")
         st.notes.append(IDENT_OFF)
-        return None, ""
+        return None, "", None
     if ident.people is not None:  # the WD read it made: the gender filter needs no re-tag
         store.set_people(sha, ident.people)
     store.set_identity(sha, ident)
     st.identified += 1
-    return identifier, " · " + (", ".join(h.name for h in ident.hits) or "unidentified")
+    return identifier, " · " + (", ".join(h.name for h in ident.hits) or "unidentified"), ident
 
 
 def _slugs_of(store: Store, source: str, external_id: str) -> list[str]:

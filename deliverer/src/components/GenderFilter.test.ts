@@ -15,7 +15,7 @@ describe('GenderFilter', () => {
 
     expect(w.findAll('button').map((b) => b.text())).toEqual(['Both', 'Female', 'Male']);
     expect(chip(w, 'Both').attributes('aria-pressed')).toBe('true');
-    expect(w.text()).toContain('off — keep every character, any gender');
+    expect(w.text()).toContain('off - keep every character, any gender');
     expect(w.text()).not.toContain('467 MB');
   });
 

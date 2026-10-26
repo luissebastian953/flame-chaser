@@ -123,6 +123,30 @@ describe('Config row job state', () => {
     expect(chip.attributes('href')).toBe('/pipeline/twitter');
   });
 
+  it('a paused crawl says so, and the chip resumes it', async () => {
+    const held: Job = {
+      ...poll('r1', '', { posts: 100 }),
+      state: 'running',
+      stage: 'discover',
+      worker: 'twitter',
+      paused: true,
+      finished_at: null,
+      params: { watches: ['raiden-mei'], source: 'twitter' },
+    };
+
+    const w = await mountPage([mei], [held]);
+    const chip = w.find('.actions button.chip');
+
+    expect(chip.text()).toContain('paused · resume');
+    expect(w.find('.actions .chip.live').exists()).toBe(false);
+
+    vi.mocked(api.post).mockResolvedValueOnce({ paused: false });
+    await chip.trigger('click');
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledWith('/api/jobs/r1/pause', { paused: false });
+  });
+
   it('a crawl that just finished leaves a done chip beside Run', async () => {
     const done: Job = {
       ...poll('d1', new Date().toISOString(), { posts: 12 }),
@@ -133,6 +157,27 @@ describe('Config row job state', () => {
 
     expect(w.find('.actions').text()).toContain('done · +12');
     expect(button(w, 'Run').exists()).toBe(true);
+  });
+
+  it('an interrupted crawl says so (not "failed") and a click on the chip resumes it', async () => {
+    const cut: Job = {
+      ...poll('i1', new Date().toISOString(), { posts: 3 }),
+      state: 'interrupted',
+      error: 'process exited while running',
+      params: { watches: ['raiden-mei'] },
+    };
+
+    const w = await mountPage([mei], [cut]);
+    const chip = w.find('.actions button.chip');
+
+    expect(chip.text()).toContain('interrupted');
+    expect(chip.classes()).not.toContain('err');
+
+    vi.mocked(api.post).mockResolvedValueOnce({ job_id: 'i2' });
+    await chip.trigger('click');
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledWith('/api/jobs/i1/retry');
   });
 
   it('Run on one character stays on Crawl; Run all opens the pipeline', async () => {
@@ -195,13 +240,14 @@ describe('Config row job state', () => {
 });
 
 describe('Config new characters', () => {
-  it('start from the Settings default gender filter', async () => {
-    useCharacterDefaults().set('male', 'partial');
+  it('start from the Settings defaults: gender filter and recognition filter', async () => {
+    useCharacterDefaults().set({ gender: 'male', gender_mode: 'partial', kind_filter: false });
     const w = await mountPage();
 
     await button(w, 'Add character').trigger('click');
     const pressed = w.findAll('.gender button[aria-pressed="true"]').map((b) => b.text());
     expect(pressed).toEqual(['Male', 'Partial']);
+    expect(w.find('#kind-filter').attributes('aria-checked')).toBe('false');
   });
 });
 
@@ -260,7 +306,7 @@ describe('Config crawl status cards', () => {
 
   it('Recognition is the kept share of the last crawl, with the counts under it', async () => {
     const w = await mountPage();
-    expect(card(w, 2).find('.big b').text()).toBe('—');
+    expect(card(w, 2).find('.big b').text()).toBe('-');
     expect(card(w, 2).find('.big span').text()).toBe('of images kept');
 
     useJobs().jobs = [poll('j', '2026-10-01T00:00:00Z', { downloaded: 38, rejected: 17 })];
@@ -329,6 +375,29 @@ describe('Config watched characters table', () => {
     // Firefly: one tag, four terms
     expect(f!.findAll('.chips').map((c) => c.classes('more'))).toEqual([false, true]);
     expect(f!.text()).toContain('+2 more');
+  });
+
+  it('a save the daemon refuses, or no daemon, keeps the form open and says why in its footer', async () => {
+    const w = await mountPage();
+    await button(w, 'Edit').trigger('click');
+    const form = w.findComponent({ name: 'WatchForm' });
+    const saveOnly = () => form.findAll('button').find((b) => b.text().includes('Save only'))!;
+
+    vi.mocked(api.patch).mockRejectedValueOnce(new TypeError('Load failed'));
+    await saveOnly().trigger('click');
+    await flushPromises();
+    expect(w.findComponent({ name: 'WatchForm' }).exists()).toBe(true);
+    expect(form.find('.foot').text()).toContain('did not answer');
+
+    vi.mocked(api.patch).mockRejectedValueOnce(new ApiError(400, 'bad_slug', 'slug is taken'));
+    await saveOnly().trigger('click');
+    await flushPromises();
+    expect(form.find('.foot').text()).toContain('save failed: slug is taken');
+
+    vi.mocked(api.patch).mockResolvedValueOnce({ ...mei, reopened: 0 });
+    await saveOnly().trigger('click');
+    await flushPromises();
+    expect(w.findComponent({ name: 'WatchForm' }).exists()).toBe(false);
   });
 
   it('"+N more" opens that character for editing', async () => {

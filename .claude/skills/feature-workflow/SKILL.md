@@ -3,7 +3,7 @@ name: feature-workflow
 description: Adding or changing a feature in Curio: the ordered checklist of everything that must move together (design, engine, daemon, types, UI, i18n, tests, docs, changelog). Read first for any feature.
 ---
 
-# Feature workflow — what moves together
+# Feature workflow - what moves together
 
 Read this before any "add / change / remove <feature>" request. A feature in
 Curio crosses four layers (`coreflame` → `dawnmaker` → `lib/api.ts` +
@@ -32,18 +32,18 @@ Do the steps in this order; each one makes the next mechanical.
 `docs/design/architecture.md` is the reference. Add or amend the section
 the feature belongs to (§4 jobs, §4b visited set, §5 pages, §6 API contract,
 §8 failure modes). If a runtime flow changed (job stages, auth, update
-install), draw it as a mermaid block; `docs/flows.md` does not exist yet —
+install), draw it as a mermaid block; `docs/flows.md` does not exist yet -
 create it on first need and link it from architecture.md. One paragraph of
 "why" beats a page of "what".
 
-## 2. Engine — `reaver/coreflame/` with tests
+## 2. Engine - `reaver/coreflame/` with tests
 
 Function(s) that take a `Store`; pydantic models `extra="forbid"`, ids `str`,
 UTC datetimes; `ctx.check()` in loops; honest `total`. Test offline in the
 matching `reaver/tests/test_*.py` (fake adapters from `test_smoke.py`).
 Conventions: `conventions-python`.
 
-## 3. Daemon route — `reaver/dawnmaker/app.py` with test
+## 3. Daemon route - `reaver/dawnmaker/app.py` with test
 
 `XIn` model → route with `Depends(store)` → `HTTPException(code, {code,
 message})` → test in `tests/test_dawnmaker.py` via `TestClient`. Update §6 of
@@ -55,7 +55,7 @@ Mirror the new/changed response and body shapes. This is the only contract
 the webview has; a field renamed in Python and not here is a runtime
 `undefined`, not a type error.
 
-## 5. Store — `deliverer/src/stores/<name>.ts`
+## 5. Store - `deliverer/src/stores/<name>.ts`
 
 Option syntax; call `api.*` from actions; keep desktop/browser branching in
 state creation. Test: `<name>.test.ts` mocking `@/lib/api`.
@@ -106,7 +106,7 @@ exists); `apply()` backs up the db file first and runs each step in its own
 transaction, stamping the row with the current app version as
 `min_app_version` so an older daemon refuses the db instead of half-reading
 it. Existing raw payloads are re-parsed via `store.raws_for()`
-if the spec changed — never re-fetched. Mention the migration in the
+if the spec changed - never re-fetched. Mention the migration in the
 CHANGELOG line and in `cut-release` step 2 when the release is cut.
 
 ## Done means

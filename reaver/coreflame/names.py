@@ -39,6 +39,19 @@ QUERIES_N = 8
 LANG_ORDER = ("en", "ja", "zh-hans", "zh-hant", "ko")
 WIKIDATA_LANGS = ("en", "ja", "ko", "zh", "zh-hans", "zh-hant")
 
+
+def _wd_lang(code: str) -> str:
+    """Wikidata's language codes folded to the ones the UI names: plain `zh`
+    (and the mainland / Singapore variants) are Simplified, Taiwan / Hong Kong /
+    Macau are Traditional, regional English is English. Labels and aliases
+    alike -- an unfolded alias code reaches the form as an unknown language."""
+    if code in ("zh", "zh-cn", "zh-sg", "zh-my", "zh-hans"):
+        return "zh-hans"
+    if code in ("zh-tw", "zh-hk", "zh-mo", "zh-hant", "yue"):
+        return "zh-hant"
+    return code.split("-", maxsplit=1)[0] if code.startswith(("en-", "ja-", "ko-")) else code
+
+
 Fetch = Callable[[str], Any]
 
 
@@ -227,9 +240,9 @@ def wikidata_names(
     src = ["wikidata"]
     out: list[NameSuggestion] = []
     for lang, v in (e.get("labels") or {}).items():
-        out.append(NameSuggestion(v["value"], "name", "zh-hans" if lang == "zh" else lang, src))
+        out.append(NameSuggestion(v["value"], "name", _wd_lang(lang), src))
     for lang, vs in (e.get("aliases") or {}).items():
-        out += [NameSuggestion(a["value"], "name", lang, src) for a in vs]
+        out += [NameSuggestion(a["value"], "name", _wd_lang(lang), src) for a in vs]
     if known_n and not any(norm(s.text) in known_n for s in out):
         return None, []  # a different entity with the same name
     return qid, out

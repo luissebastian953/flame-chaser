@@ -1,0 +1,327 @@
+/*
+ * The mini window's own stylesheet: the same tokens as styles.css, inlined
+ * because this page must not pull the Tailwind runtime or the app bundle.
+ * The window is transparent; the panel paints itself at 0.92 and cuts its
+ * corners with a clip-path, so no OS rounding or shadow is needed.
+ */
+:root {
+  --bg: #080b16;
+  --surf: #11151f;
+  --surf2: #171b26;
+  --line: #2b303c;
+  --line-soft: #1f232e;
+  --tx: #e5ebfb;
+  --mut: #9aa3b5;
+  --dim: #5f6572;
+  --ember: #e279de;
+  --ember-ink: #1a0c1a;
+  --cyan: oklch(0.74 0.198 196);
+  --moss: oklch(0.74 0.198 158);
+  --rose: oklch(0.74 0.19 12);
+  --amber: oklch(0.8 0.15 75);
+  --font: 'Chakra Petch', 'Hiragino Sans', 'Yu Gothic', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html,
+body {
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+body {
+  font: 500 12px/1.3 var(--font);
+  color: var(--tx);
+}
+#pip {
+  width: 280px;
+}
+.panel {
+  position: relative;
+  background: color-mix(in oklch, var(--bg) 92%, transparent);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--ember);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  opacity: 0.9;
+  transition: opacity 160ms ease;
+}
+.panel:hover {
+  opacity: 1;
+}
+.panel.paused {
+  border-left-color: var(--amber);
+}
+.panel.done {
+  border-left-color: var(--moss);
+}
+
+/* header: drag region */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.head .dot {
+  width: 7px;
+  height: 7px;
+  background: var(--moss);
+  box-shadow: 0 0 8px var(--moss);
+}
+.paused .head .dot {
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber);
+}
+.head .title {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.spacer {
+  flex: 1;
+}
+.ib {
+  width: 24px;
+  height: 22px;
+  border: 1px solid var(--line);
+  background: var(--surf);
+  color: var(--mut);
+  font: 600 13px/1 var(--font);
+  cursor: pointer;
+}
+.ib:hover {
+  color: var(--tx);
+  border-color: var(--mut);
+}
+
+/* rows */
+.rows {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px 2px;
+}
+.rows.scroll {
+  max-height: 180px;
+  overflow-y: auto;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
+}
+.row {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  height: 36px;
+  padding: 0 2px;
+  cursor: pointer;
+  outline: none;
+}
+.row:hover,
+.row:focus-visible {
+  background: color-mix(in oklch, var(--surf2) 70%, transparent);
+}
+.ring {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--wc, var(--dim));
+  background: linear-gradient(135deg, color-mix(in oklch, var(--wc) 55%, var(--bg)), var(--bg));
+  box-shadow: 0 0 10px color-mix(in oklch, var(--wc) 40%, transparent);
+}
+.queued .ring {
+  box-shadow: none;
+  opacity: 0.6;
+}
+/* a character's run folded into one line; its parts indented beneath */
+.chev {
+  display: inline-block;
+  width: 8px;
+  color: var(--dim);
+  font: 600 12px var(--mono);
+  transition: transform 150ms;
+}
+.row.grp.open .chev {
+  transform: rotate(90deg);
+}
+.still .chev {
+  transition: none;
+}
+.row.part {
+  height: 30px;
+  padding-left: 14px;
+}
+.row.part .ring {
+  width: 18px;
+  height: 18px;
+  margin-left: 10px;
+  box-shadow: none;
+}
+.row.part .nm b {
+  font-weight: 500;
+}
+.who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.nm {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.nm b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nm .src {
+  font: 400 10px var(--mono);
+  color: var(--dim);
+}
+.bar {
+  height: 3px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.bar i {
+  display: block;
+  height: 100%;
+  background: var(--wc, var(--ember));
+  transition: width 400ms ease;
+}
+.bar.indet i {
+  animation: slide 1.4s ease-in-out infinite;
+}
+.right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.stage {
+  font: 600 10px var(--font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--wc, var(--mut));
+}
+.queued .stage {
+  color: var(--dim);
+}
+.nums {
+  font: 400 11px var(--mono);
+  display: flex;
+  gap: 6px;
+}
+.nums .dim {
+  color: var(--dim);
+}
+.nums b {
+  font-weight: 500;
+  color: var(--tx);
+}
+
+/* expand toggle */
+.more {
+  display: block;
+  width: calc(100% - 20px);
+  margin: 2px 10px 6px;
+  height: 22px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--mut);
+  font: 500 11px var(--mono);
+  cursor: pointer;
+}
+.more:hover {
+  color: var(--tx);
+  border-color: var(--mut);
+}
+
+/* footer */
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.meta {
+  font: 400 11px var(--mono);
+  color: var(--mut);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pause {
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  background: var(--ember);
+  color: var(--ember-ink);
+  font: 600 11px var(--font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  cursor: pointer;
+}
+.paused .pause {
+  background: var(--surf2);
+  color: var(--tx);
+}
+.pause:hover {
+  filter: brightness(1.1);
+}
+
+/* the 2 px bar under the panel mirrors the focused job */
+.mirror {
+  height: 2px;
+  background: var(--line-soft);
+}
+.mirror i {
+  display: block;
+  height: 100%;
+  background: var(--amber);
+  transition: width 400ms ease;
+}
+.mirror.indet i {
+  animation: slide 1.4s ease-in-out infinite;
+}
+.crawling .mirror i {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(340%);
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+/* reduced motion, or the window is not visible: nothing moves */
+.still *,
+.still *::before,
+.still *::after {
+  animation: none !important;
+  transition: none !important;
+}

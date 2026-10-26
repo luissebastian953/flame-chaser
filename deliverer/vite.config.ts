@@ -51,6 +51,14 @@ export default defineConfig(({ mode }) => ({
   server: { port: 5173, strictPort: true, host: '127.0.0.1', fs: { allow: ['..'] } },
   build: {
     target: 'es2022',
+    // two pages: the app, and the pipeline mini window (src/pip/, no Vue) --
+    // a second WebView that must stay a few kilobytes
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        pip: fileURLToPath(new URL('./pip.html', import.meta.url)),
+      },
+    },
     // 'hidden': maps are written for local debugging but not referenced from
     // the bundle, so a release never ships the TypeScript. Minification stays on.
     sourcemap: mode === 'production' ? 'hidden' : true,

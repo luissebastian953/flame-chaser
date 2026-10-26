@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import type { CleanupRule } from '@/lib/types';
+
 /**
- * Settings. Theme lives in the webview only (localStorage) — it is the one
+ * Settings. Theme lives in the webview only (localStorage) - it is the one
  * piece of state the daemon has no business knowing. Storage / network /
  * duplicates come from /api/config (secrets already redacted server-side).
  */
@@ -14,6 +16,7 @@ const src = useSources();
 type Tab =
   | 'accounts'
   | 'language'
+  | 'notifications'
   | 'updates'
   | 'theme'
   | 'storage'
@@ -27,6 +30,7 @@ const tab = ref<Tab>('accounts');
 const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: 'accounts', label: 'settings.tabs.accounts', icon: 'user' },
   { id: 'language', label: 'settings.tabs.language', icon: 'language' },
+  { id: 'notifications', label: 'settings.tabs.notifications', icon: 'bell' },
   { id: 'updates', label: 'settings.tabs.updates', icon: 'update' },
   { id: 'theme', label: 'settings.tabs.theme', icon: 'palette' },
   { id: 'storage', label: 'settings.tabs.storage', icon: 'drive' },
@@ -46,6 +50,7 @@ interface Config {
   twitter_timeline_limit: number;
   twitter_search_limit: number;
   identify_characters: boolean;
+  cleanup_rule: CleanupRule | null;
   pixiv_session: boolean;
   twitter_cookies: boolean;
 }
@@ -58,6 +63,10 @@ const draft = reactive({
   dupe_threshold: 6,
   pixiv_rate: 1,
   twitter_search_limit: 50,
+  // Smart cleanup at crawl time (coreflame/trash.py crawl_verdict)
+  rule_on: false,
+  rule_score: 0.42 as number | null,
+  rule_other: true,
 });
 
 const status = ref('');
@@ -70,6 +79,10 @@ onMounted(async () => {
     draft.dupe_threshold = cfg.value.dupe_threshold;
     draft.pixiv_rate = cfg.value.pixiv_rate;
     draft.twitter_search_limit = cfg.value.twitter_search_limit ?? 50;
+    const rule = cfg.value.cleanup_rule;
+    draft.rule_on = !!rule;
+    draft.rule_score = rule ? rule.min_score : 0.42;
+    draft.rule_other = rule ? rule.other_character : true;
   } catch (e) {
     status.value = e instanceof Error ? e.message : String(e);
   }
@@ -110,7 +123,11 @@ async function saveIdentify(on: boolean) {
 async function saveDedupe() {
   status.value = t('settings.status.saving');
   try {
-    cfg.value = await api.put<Config>('/api/config', { dupe_threshold: draft.dupe_threshold });
+    cfg.value = await api.put<Config>('/api/config', {
+      dupe_threshold: draft.dupe_threshold,
+      cleanup_rule: { active: draft.rule_on, min_score: draft.rule_score, other_character: draft.rule_other },
+    });
+
     status.value = t('settings.status.saved');
   } catch (e) {
     status.value = e instanceof Error ? e.message : String(e);
@@ -184,53 +201,19 @@ const link = (u: string) =>
     <!-- LANGUAGE -->
     <LanguagePanel v-else-if="tab === 'language'" />
 
+    <!-- NOTIFICATIONS: what Curio shows while it crawls in the background -->
+    <NotificationsPanel v-else-if="tab === 'notifications'" />
+
     <!-- UPDATES -->
     <UpdatesPanel v-else-if="tab === 'updates'" />
 
     <!-- THEME -->
     <ThemePanel v-else-if="tab === 'theme'" />
 
-    <!-- STORAGE -->
-    <div v-else-if="tab === 'storage'" class="panel flex-1">
-      <div class="phead">
-        <span class="ptitle">{{ $t('settings.storage.title') }}</span>
-      </div>
-      <table v-if="cfg">
-        <tbody>
-          <tr>
-            <td class="kv">
-              <Icon name="folder" :size="13" class="mr-5" />
-              {{ $t('settings.storage.library') }}
-            </td>
-            <td class="data text-small">{{ cfg.library_root }}</td>
-          </tr>
-          <tr>
-            <td class="kv">
-              <Icon name="database" :size="13" class="mr-5" />
-              {{ $t('settings.storage.database') }}
-            </td>
-            <td class="data text-small">{{ ep.health?.db_path }}</td>
-          </tr>
-          <tr>
-            <td class="kv">
-              <Icon name="list" :size="13" class="mr-5" />
-              {{ $t('settings.storage.schema') }}
-            </td>
-            <td class="data text-small">
-              {{ $t('settings.storage.schemaValue', { n: ep.health?.schema_version }) }}
-            </td>
-          </tr>
-          <tr>
-            <td class="kv">
-              <Icon name="archive" :size="13" class="mr-5" />
-              {{ $t('settings.storage.layout') }}
-            </td>
-            <td class="data text-small">{{ $t('settings.storage.layoutValue') }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else class="empty">{{ status || $t('settings.status.loading') }}</div>
-      <div class="p-15 hint">{{ $t('settings.storage.hint') }}</div>
+    <!-- STORAGE: the library, the db and the disk; then the archive as one file -->
+    <div v-else-if="tab === 'storage'" class="flex-1 flex flex-col gap-20 min-w-0">
+      <StoragePanel />
+      <BackupPanel @updates="tab = 'updates'" />
     </div>
 
     <!-- NETWORK -->
@@ -336,9 +319,23 @@ const link = (u: string) =>
           <GenderFilter
             :gender="defaults.gender"
             :mode="defaults.gender_mode"
-            @update:gender="(g) => defaults.set(g, defaults.gender_mode)"
-            @update:mode="(m) => defaults.set(defaults.gender, m)"
+            @update:gender="(g) => defaults.set({ gender: g })"
+            @update:mode="(m) => defaults.set({ gender_mode: m })"
           />
+        </div>
+        <div class="field">
+          <div class="flex items-center gap-10">
+            <SwitchRoot
+              id="kind-filter-default"
+              :model-value="defaults.kind_filter"
+              class="rk-switch"
+              @update:model-value="(v) => defaults.set({ kind_filter: v })"
+            >
+              <SwitchThumb class="rk-switch-thumb" />
+            </SwitchRoot>
+            <label for="kind-filter-default" class="text-small">{{ $t('settings.characters.kinds') }}</label>
+          </div>
+          <div class="hint">{{ $t('settings.characters.kindsHint') }}</div>
         </div>
         <div v-if="cfg" class="field">
           <div class="flex items-center gap-10">
@@ -382,6 +379,57 @@ const link = (u: string) =>
             <SliderThumb class="rk-slider-thumb" :aria-label="$t('settings.duplicates.distanceAria')" />
           </SliderRoot>
           <div class="hint">{{ $t('settings.duplicates.hint') }}</div>
+        </div>
+        <div class="field">
+          <label class="flex items-center gap-10">
+            <SwitchRoot v-model="draft.rule_on" class="rk-switch">
+              <SwitchThumb class="rk-switch-thumb" />
+            </SwitchRoot>
+            {{ $t('settings.duplicates.rule') }}
+            <span v-if="cfg?.cleanup_rule" class="chip on">
+              {{ $t('crawl.cards.recognition.ruleActive') }}
+            </span>
+          </label>
+          <div class="flex flex-col gap-15 pl-20 mt-10 mb-5" :class="{ 'opacity-50': !draft.rule_on }">
+            <label class="flex items-center gap-10">
+              <CheckboxRoot
+                :model-value="draft.rule_score !== null"
+                :disabled="!draft.rule_on"
+                class="rk-checkbox"
+                @update:model-value="(v) => (draft.rule_score = v === true ? 0.42 : null)"
+              />
+              {{ $t('settings.duplicates.ruleScore') }}
+              <span class="data text-tx">
+                {{
+                  draft.rule_score === null
+                    ? $t('settings.duplicates.ruleScoreOff')
+                    : draft.rule_score.toFixed(2)
+                }}
+              </span>
+            </label>
+            <SliderRoot
+              :model-value="[draft.rule_score ?? 0.42]"
+              :min="0"
+              :max="1"
+              :step="0.01"
+              :disabled="!draft.rule_on || draft.rule_score === null"
+              class="rk-slider"
+              @update:model-value="(v) => (draft.rule_score = v?.[0] ?? 0.42)"
+            >
+              <SliderTrack class="rk-slider-track"><SliderRange class="rk-slider-range" /></SliderTrack>
+              <SliderThumb class="rk-slider-thumb" :aria-label="$t('settings.duplicates.ruleScoreAria')" />
+            </SliderRoot>
+            <label class="flex items-center gap-10">
+              <CheckboxRoot
+                :model-value="draft.rule_other"
+                :disabled="!draft.rule_on"
+                class="rk-checkbox"
+                @update:model-value="(v) => (draft.rule_other = v === true)"
+              />
+              {{ $t('settings.duplicates.ruleOther') }}
+            </label>
+          </div>
+          <div class="hint">{{ $t('settings.duplicates.ruleHint') }}</div>
         </div>
       </div>
     </div>

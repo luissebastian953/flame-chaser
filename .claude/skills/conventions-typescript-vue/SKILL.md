@@ -1,9 +1,9 @@
 ---
 name: conventions-typescript-vue
-description: Conventions for deliverer/ (Vue 3 + TS + Pinia + Tailwind v4 + vue-i18n + Vitest) — auto-imports, styling tokens, i18n, lint/format, tests, and the checklist for adding a page or component.
+description: Conventions for deliverer/ (Vue 3 + TS + Pinia + Tailwind v4 + vue-i18n + Vitest) - auto-imports, styling tokens, i18n, lint/format, tests, and the checklist for adding a page or component.
 ---
 
-# TypeScript / Vue conventions — `deliverer/`
+# TypeScript / Vue conventions - `deliverer/`
 
 Vue 3 + Vite, not Nuxt. `<script setup lang="ts">` in every SFC. TS `strict`
 plus `noUncheckedIndexedAccess` (`tsconfig.json`): `arr[0]` is `T | undefined`,
@@ -13,37 +13,38 @@ so destructure with `!` only when the regex/shape guarantees it, else guard.
 
 ```
 pnpm check     # vue-tsc --noEmit && eslint . && prettier --check . && i18n-check && vitest run
-pnpm build     # vue-tsc + vite build — run it too; check does not bundle
+pnpm build     # vue-tsc + vite build - run it too; check does not bundle
 pnpm format && pnpm lint:fix     # the fixers, in this order
 ```
 
 Run from `deliverer/` or with `pnpm --filter deliverer <script>` at the root.
 `pnpm install` only ever runs at the repo root (workspace).
 
-## Auto-imports — do not write the everyday imports
+## Auto-imports - do not write the everyday imports
 
 `unplugin-auto-import` provides `vue`, `vue-router`, `pinia`, `vue-i18n` and
 every export of `src/stores/` and `src/lib/` (`useJobs`, `api`, `mediaUrl`,
 `subscribe`, …). `unplugin-vue-components` registers `src/components/*.vue`
 and Reka UI (`DialogRoot`, `SliderRoot`, …). So: never `import { ref } from
 'vue'`; never import a store or a sibling component. DO write
-`import type { Job } from '@/lib/types'` — types are not auto-imported — and
+`import type { Job } from '@/lib/types'` - types are not auto-imported - and
 imports from packages outside that list (`@tauri-apps/plugin-*`,
 `@vue/test-utils`). The generated `src/auto-imports.d.ts`,
 `src/components.d.ts`, `.eslintrc-auto-import.json` are committed; a new
 export shows up there after the next `dev`/`build`/`vitest` run.
 
-## Stores — Pinia option syntax
+## Stores - Pinia option syntax
 
-`defineStore('name', { state: () => ({...}), getters: {...}, actions: {...} })`
-— see `stores/sources.ts`. Stores decide desktop vs browser at creation
+`defineStore('name', { state: () => ({...}), getters: {...}, actions: {...} })` -
+see `stores/sources.ts`. Stores decide desktop vs browser at creation
 (`'__TAURI_INTERNALS__' in window`). The daemon is reached only through
-`lib/api.ts` (`api.get/post/put/patch/delete`, `mediaUrl`, `subscribe`,
-`startHeartbeat`); it is the only file that knows the daemon URL or token.
+`lib/api.ts` (`api.get/post/put/patch/delete`, `mediaUrl`, `subscribe`); it
+is the only file that knows the daemon URL or token. The heartbeat is not the
+page's job: `sidecar.rs` sends it from a thread (webview timers get throttled).
 `?token=` rides on `<img src>` and `EventSource` URLs only (`mediaUrl`,
 `authedUrl`, `subscribe`). Theme state is localStorage only.
 
-## Styling — Tailwind v4, CSS-first (`src/styles.css`)
+## Styling - Tailwind v4, CSS-first (`src/styles.css`)
 
 - No `tailwind.config.js`; the `@theme` block is the config. No default
   palette: `text-gray-500`, `text-sm`, `p-4`, `gap-2`, `rounded-lg` do not exist.
@@ -63,14 +64,14 @@ export shows up there after the next `dev`/`build`/`vitest` run.
   (`assets/icons/icons.json`, verbatim from the designer's zip; `lib/icons.ts`
   looks names up). Stroked with `currentColor`, so colour comes from the text.
   No emoji or text glyphs (✕ ▶ ‹ ✓ ⚠ +) as icons, and none inside i18n
-  strings — the icon goes in the template beside `$t()`. Decorative by
+  strings - the icon goes in the template beside `$t()`. Decorative by
   default; pass `label` when the icon alone names a control (or put
   `aria-label` on the button). `lib/icons.test.ts` fails on an unknown name.
   To update the set, replace the JSON (it is in `.prettierignore`).
 - Reka UI for behaviour only (focus, keyboard, aria); skin with `.rk-*`.
   Never install shadcn-vue. `.jp` switches to Noto Sans JP for Japanese text.
 
-## i18n — every string is a key
+## i18n - every string is a key
 
 `src/locales/en/<ns>.json`, namespaces = `app auth character crawl gallery
 pipeline settings updates`; key = `ns.section.name`. `$t('…')` in templates,
@@ -92,7 +93,7 @@ Prettier: 110 cols, single quotes in TS, double quotes in HTML attributes,
 trailing commas, `htmlWhitespaceSensitivity: ignore` (so line breaks inside
 inline elements are safe, including around CJK).
 
-## Tests — Vitest + @vue/test-utils + happy-dom
+## Tests - Vitest + @vue/test-utils + happy-dom
 
 `src/**/*.test.ts` next to the file under test; `globals: true`
 (`describe/it/expect/vi` need no import). `src/test/setup.ts` gives a fresh
@@ -103,16 +104,16 @@ assert on the English text the user sees. `setTauri(true)` BEFORE the first
 `useX()`. Never contact the daemon: `vi.mock('@/lib/api', async (orig) => ({
 ...(await orig()), api: { get: vi.fn(), post: vi.fn() } }))` then
 `vi.mocked(api.get).mockResolvedValueOnce(...)`; assert on paths and bodies.
-Tauri plugins are `vi.mock`ed by package name. Test behaviour — getter
-answers, request paths/bodies, rendered text and buttons, emitted events —
+Tauri plugins are `vi.mock`ed by package name. Test behaviour - getter
+answers, request paths/bodies, rendered text and buttons, emitted events -
 not markup: no snapshots, no CSS assertions. A literal `t('ns.key')` in a test
 counts as a key reference for `i18n-check`; probe a missing key via a variable.
 
-## Adding a page or component — checklist
+## Adding a page or component - checklist
 
 1. `src/pages/Name.vue` + a route in `src/router.ts` (hash history, lazy
    `() => import('@/pages/Name.vue')`), or `src/components/Name.vue`
-   (auto-registered — no import at the use site).
+   (auto-registered - no import at the use site).
 2. `src/locales/en/<ns>.json`: a new namespace for a new page, or keys in the
    owning component's namespace. Every visible string, including attributes.
 3. Store in `src/stores/<name>.ts` (option syntax) if it holds state shared

@@ -8,27 +8,27 @@
   "name": {
     "label": "Display name",
     "hint": "shown in the gallery",
-    "placeholder": "Shenhe"
+    "placeholder": "Marin Kitagawa"
   },
   "slug": {
     "label": "Slug",
     "hintNew": "from the name",
-    "hintFrozen": "frozen — folders key off it",
+    "hintFrozen": "frozen - folders key off it",
     "placeholder": "auto from name"
   },
   "tags": {
-    "heading": "Discovery — pixiv tags",
+    "heading": "Discovery - pixiv tags",
     "hint": "Every artwork carrying one of these tags is pulled. Matching is exact: 申鶴 and 申鶴(原神) are different tags, and fullwidth（）will not match.",
     "checking": "checking…",
     "artworks": "{n} artwork | {n} artworks",
     "error": "{error}",
-    "warning": "0 — {warning}",
+    "warning": "0 - {warning}",
     "remove": "remove tag",
     "placeholder": "Paste a tag from pixiv…"
   },
   "terms": {
     "heading": "X search & match terms",
-    "hint": "Each term is searched on X (images only) and also filters the timelines of artists found on pixiv. Searching is the traffic X polices hardest — a few precise terms beat many loose ones, and use a throwaway account.",
+    "hint": "Each term is searched on X (images only) and also filters the timelines of artists found on pixiv. Searching is the traffic X polices hardest - a few precise terms beat many loose ones, and use a throwaway account.",
     "remove": "remove term",
     "placeholder": "+ term"
   },
@@ -39,7 +39,7 @@
     "pixivOff": "pixiv is off for this character, so this has no effect.",
     "helpLabel": "What does minimum bookmarks do?",
     "help": {
-      "what": "On pixiv, “bookmarks” is how many people saved an artwork — a rough measure of how popular it is.",
+      "what": "On pixiv, “bookmarks” is how many people saved an artwork - a rough measure of how popular it is.",
       "rule": "Artworks with fewer bookmarks than this number are not downloaded. 0 downloads everything.",
       "raise": "Raising it only affects artworks found from now on. Nothing you already have is removed.",
       "lower": "Lowering it gives the skipped artworks another chance: the next crawl checks them again.",
@@ -48,8 +48,8 @@
   },
   "r18": {
     "label": "Include R-18",
-    "on": "On — search runs as mode=all",
-    "off": "Off — search runs as mode=safe"
+    "on": "On - search runs as mode=all",
+    "off": "Off - search runs as mode=safe"
   },
   "preview": {
     "heading": "Preview",
@@ -57,23 +57,20 @@
   },
   "suggestions": {
     "heading": "Suggested tags",
-    "lead": "Names and forms from Danbooru and Wikidata, in the languages they know — plus tags that co-occur on pixiv once it's signed in.",
+    "lead": "Names and forms from Danbooru and Wikidata, in the languages they know.",
     "names": "Names",
     "forms": "Forms & costumes",
-    "pixiv": "Co-occurring on pixiv",
-    "add": "add",
-    "addPixiv": "pixiv",
-    "addX": "X",
+    "addPixiv": "+ pixiv",
+    "addX": "+ X",
     "addPixivLabel": "Add {text} as a pixiv tag",
     "addXLabel": "Add {text} as an X search term",
-    "risky": "short — loose as an X term",
+    "risky": "short - loose as an X term",
     "posts": "0 posts | 1 post | {n} posts",
     "looking": "looking up names…",
-    "checking": "checking pixiv…",
-    "none": "no co-occurring tags on page 1",
+    "none": "the name lookup did not answer - try the refresh button",
     "empty": "type a name to see suggestions",
     "nothing": "no names found for this character",
-    "sourceDown": "{source} didn't answer — showing the rest",
+    "sourceDown": "{source} didn't answer - showing the rest",
     "more": "+ {n} more",
     "less": "show less",
     "lang": {
@@ -84,7 +81,8 @@
       "zh-hant": "ZH-TW",
       "cjk": "CJK"
     },
-    "refresh": "Suggestions refresh after every crawl from the tags observed on this character's posts."
+    "refresh": "Suggestions refresh after every crawl from the tags observed on this character's posts.",
+    "refreshLabel": "Refresh suggestions and load more"
   },
   "estimate": {
     "underMinute": "under a minute",
@@ -100,14 +98,16 @@
     "name": "a display name is what the gallery shows",
     "slug": "slug: lowercase letters, digits, dashes",
     "noTags": "at least one pixiv tag: without it there is no discovery source (or untick pixiv)",
-    "allFullwidth": "every tag uses fullwidth（）— none will match",
-    "noSource": "tick at least one source — pixiv, X, or both",
-    "noTerms": "X needs at least one term when pixiv is off — the terms are what X searches for"
+    "allFullwidth": "every tag uses fullwidth（） - none will match",
+    "noSource": "tick at least one source - pixiv, X, or both",
+    "noTerms": "X needs at least one term when pixiv is off - the terms are what X searches for",
+    "save": "save failed: {error}",
+    "unreachable": "Curio's crawler did not answer - shut Curio down from the rail and open it again"
   },
   "sources": {
     "pixiv": "crawl pixiv",
     "x": "crawl X",
-    "off": "off — this source is skipped for this character"
+    "off": "off - this source is skipped for this character"
   },
   "crawl": {
     "heading": "Crawl target",
@@ -117,8 +117,8 @@
   },
   "recognition": {
     "label": "Recognition filter",
-    "on": "skip photos, cosplay, 3D and screenshots — keep illustrations and anime screencaps",
-    "off": "off — keep every image"
+    "on": "skip photos, cosplay, 3D and screenshots - keep illustrations and anime screencaps",
+    "off": "off - keep every image"
   },
   "cycle": {
     "heading": "Run cycle",
@@ -132,7 +132,7 @@
     "onSave": "on save",
     "skipsOne": "skips run {n}",
     "skipsRange": "skips {from}–{to}",
-    "note": "Images per run vary — one post can hold several pages."
+    "note": "Images per run vary - one post can hold several pages."
   },
   "run": {
     "line": "This run: next {n} new posts of {total} matching · {time}",
@@ -146,11 +146,11 @@
     "full": "Full",
     "partial": "Partial",
     "hint": {
-      "any": "off — keep every character, any gender",
-      "femaleFull": "only girls in the picture — boys, mixed art and images with nobody are thrown away",
-      "femalePartial": "girls, with fewer boys allowed — 2 girls + 1 boy stays, 1 girl + 1 boy does not",
-      "maleFull": "only boys in the picture — girls, mixed art and images with nobody are thrown away",
-      "malePartial": "boys, with fewer girls allowed — 2 boys + 1 girl stays, 1 boy + 1 girl does not"
+      "any": "off - keep every character, any gender",
+      "femaleFull": "only girls in the picture - boys, mixed art and images with nobody are thrown away",
+      "femalePartial": "girls, with fewer boys allowed - 2 girls + 1 boy stays, 1 girl + 1 boy does not",
+      "maleFull": "only boys in the picture - girls, mixed art and images with nobody are thrown away",
+      "malePartial": "boys, with fewer girls allowed - 2 boys + 1 girl stays, 1 boy + 1 girl does not"
     },
     "cost": "tags every image of this character (~0.6 s each; a 467 MB model downloads on first use)"
   }

@@ -1,5 +1,7 @@
 mod auth;
+mod pip;
 mod sidecar;
+mod tray;
 
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 
@@ -19,18 +21,35 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(sidecar::Sidecar::default())
+        .manage(tray::TrayState::default())
         .invoke_handler(tauri::generate_handler![
             sidecar::daemon_endpoint,
             auth::source_login,
-            shutdown_app
+            shutdown_app,
+            pip::pip_supported,
+            pip::pip_open,
+            pip::pip_close,
+            pip::pip_resize,
+            pip::pip_snap,
+            tray::tray_update,
+            tray::show_main
         ])
         .setup(|app| {
             sidecar::spawn(app.handle())?;
+            tray::setup(app.handle())?;
             Ok(())
         })
         .on_window_event(|window, event| {
-            if matches!(event, WindowEvent::Destroyed) {
+            // Only the main window's death ends the daemon. This handler fires
+            // for every window, and the `source-login` window (auth.rs) is
+            // destroyed as soon as the cookies are in hand -- shutting the
+            // daemon down there killed it right before the cookies were posted.
+            // The mini window (pip.rs) has no life of its own either: it goes
+            // with the main window.
+            if window.label() == "main" && matches!(event, WindowEvent::Destroyed) {
+                pip::close(window.app_handle());
                 sidecar::shutdown(window.app_handle());
             }
         })

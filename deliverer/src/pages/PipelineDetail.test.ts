@@ -45,6 +45,8 @@ function job(over: Partial<Job> = {}): Job {
 
 const pipeline: PipelineState = {
   paused: false,
+  pause_reason: null,
+  online: true,
   workers: [
     { lane: 'pixiv', job_id: 'r1' },
     { lane: 'twitter', job_id: null },
@@ -108,7 +110,7 @@ describe('PipelineDetail', () => {
     expect(text).toContain('tag 甘雨');
     expect(text).toContain('started');
     expect(text).toContain('1m 4'); // elapsed, ticking
-    expect(text).toContain('157 skipped — already visited, no request spent');
+    expect(text).toContain('157 skipped - already visited, no request spent');
     expect(text).toContain('27 new');
     expect(text).toContain('discover · 19 / 27');
     expect(text).toContain('kept 14');

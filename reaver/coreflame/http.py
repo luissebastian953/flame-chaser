@@ -16,6 +16,8 @@ from typing import Any
 
 import httpx
 
+from .online import WATCH, Offline
+
 if False:  # typing only; net imports httpx, not this module
     from .net import DohResolver
 
@@ -179,6 +181,10 @@ class SourceClient:
             try:
                 r = self._client.get(url, **kw)
             except httpx.TransportError as e:  # DNS, TLS, timeouts
+                # the site, or the connection? Offline is not retried here:
+                # the runner holds the queue until the internet is back
+                if WATCH.failed():
+                    raise Offline(f"{url}: {e}") from e
                 last = e
             else:
                 # 4xx other than 429 is a bug in our request, not weather.

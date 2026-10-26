@@ -35,18 +35,22 @@ Use a throwaway account. This is against X's ToS; you are choosing that risk.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import logging
 import shutil
 import subprocess
+import sys
 from collections.abc import Iterator
 from typing import Any
 from urllib.parse import quote_plus
 
+import httpx
 from pydantic import ValidationError
 
 from ..http import METER, SourceClient
 from ..models import IllustRecord, Watch
+from ..online import WATCH, Offline
 from .specs import TWITTER_ENTRY, extract
 
 log = logging.getLogger(__name__)
@@ -54,6 +58,27 @@ log = logging.getLogger(__name__)
 
 # gallery-dl paces itself; the panel shows its invocations, not a rate
 METER.declare("gallery-dl", "gallery-dl", None)
+
+#: argv[1] that makes the frozen sidecar run gallery-dl instead of the daemon
+#: (deliverer/scripts/sidecar_entry.py dispatches on it before anything loads).
+GALLERY_DL_FLAG = "--gallery-dl"
+
+
+def gallery_dl_command() -> list[str] | None:
+    """How this process runs gallery-dl. The module we depend on, through this
+    interpreter, comes first: in the frozen sidecar that interpreter is the
+    dawnmaker executable itself (there is no `gallery-dl` on a user's PATH and
+    PyInstaller ships modules, not console scripts); in a venv or Docker it is
+    `python -m gallery_dl`. A `gallery-dl` binary on PATH is the fallback.
+    None means X is off: no module, no binary."""
+    if getattr(sys, "frozen", False):
+        return [sys.executable, GALLERY_DL_FLAG]
+    if importlib.util.find_spec("gallery_dl") is not None:
+        return [sys.executable, "-m", "gallery_dl"]
+    found = shutil.which("gallery-dl")
+    return [found] if found else None
+
+
 METER.declare("twitter", "pbs.twimg.com", 2.0)
 
 
@@ -69,14 +94,20 @@ class TwitterAdapter:
         self,
         cookies_file: str | None = None,
         cookies_from_browser: str | None = None,
-        binary: str = "gallery-dl",
+        binary: str | list[str] | None = None,
         rate: float = 0.5,
         extra_args: list[str] | None = None,
         proxy: str | None = None,
         sink=None,
     ) -> None:
-        self.binary = binary
+        # `binary`: a name or argv prefix to run instead of gallery_dl_command()
+        # (tests pass something uninstalled and fake the answers).
+        if binary is None:
+            self.command = gallery_dl_command()
+        else:
+            self.command = [binary] if isinstance(binary, str) else list(binary)
         self.proxy = proxy
+        self.last_variant = "orig"  # which size the last fetch_media got
         self.sink = sink
         self.extracted: list[dict] = []
         self.cookies_file = cookies_file
@@ -92,8 +123,13 @@ class TwitterAdapter:
             meter=("twitter", "pbs.twimg.com"),
         )
 
+    @property
+    def binary(self) -> str:
+        """What to name in a "not found" message."""
+        return self.command[0] if self.command else "gallery-dl"
+
     def available(self) -> bool:
-        return shutil.which(self.binary) is not None
+        return self.command is not None and shutil.which(self.command[0]) is not None
 
     # -- metadata ---------------------------------------------------------
     def _run(self, url: str, limit: int, by_post: bool = False) -> list[dict]:
@@ -102,7 +138,7 @@ class TwitterAdapter:
         if not self.available():
             raise GalleryDLError(f"{self.binary} not found on PATH (pip install gallery-dl)")
         cmd = [
-            self.binary,
+            *(self.command or []),
             "--dump-json",
             "--no-download",
             "-q",
@@ -130,6 +166,10 @@ class TwitterAdapter:
         METER.hit("gallery-dl")
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
         if proc.returncode != 0 and not proc.stdout.strip():
+            # gallery-dl's stderr is prose; the probe decides whether this was
+            # X or the connection, same as a transport error in SourceClient
+            if WATCH.failed():
+                raise Offline(f"gallery-dl could not reach X: {proc.stderr.strip()[:200]}")
             raise GalleryDLError(
                 f"gallery-dl failed ({proc.returncode}): {proc.stderr.strip()[:400]}"
             )
@@ -285,9 +325,22 @@ class TwitterAdapter:
         return any(t in hay for t in terms)
 
     def fetch_media(self, url: str, referer: str | None = None) -> bytes:
+        """The largest file X serves: `name=orig`. A few media (old uploads,
+        some PNG re-encodes) 404 at orig and exist only at `4096x4096`; that
+        is the one fallback, and `last_variant` says which one was fetched."""
         if "pbs.twimg.com" in url and "name=" not in url:
             url = url + ("&" if "?" in url else "?") + "name=orig"
-        return self.client.get(url).content
+        self.last_variant = "orig"
+        try:
+            return self.client.get(url).content
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code != 404 or "name=orig" not in url:
+                raise
+            alt = url.replace("name=orig", "name=4096x4096")
+            log.info("orig 404 for %s; trying 4096x4096", url)
+            data = self.client.get(alt).content
+            self.last_variant = "4096x4096"
+            return data
 
     def close(self) -> None:
         self.client.close()

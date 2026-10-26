@@ -3,11 +3,14 @@ claim is about threads."""
 
 from __future__ import annotations
 
+import socket
 import sqlite3
 import sys
 import threading
 import time
 from pathlib import Path
+
+import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -19,8 +22,18 @@ from coreflame.config import Config
 from coreflame.db import Store
 from coreflame.handlers import Adapters, build_handlers
 from coreflame.http import METER, SourceClient
-from coreflame.jobs import ANY, CANCELLED, INTERRUPTED, RUNNING, SUCCEEDED, JobRunner, lane_of
+from coreflame.jobs import (
+    ANY,
+    CANCELLED,
+    INTERRUPTED,
+    QUEUED,
+    RUNNING,
+    SUCCEEDED,
+    JobRunner,
+    lane_of,
+)
 from coreflame.models import IllustRecord, Watch
+from coreflame.online import NetWatch, Offline, reachable
 from coreflame.sources.twitter import TwitterAdapter
 
 
@@ -207,6 +220,45 @@ def test_interrupted_at_boot(tmp: Path) -> None:
     j = JobRunner.get(Store(cfg.db_path), jid)
     assert j.state == INTERRUPTED and "exited" in (j.error or "")
     print("  interrupted at boot:  ok (running row -> interrupted with reason)")
+
+
+def test_paused_queue_survives_a_restart(tmp: Path) -> None:
+    """Pause the queue, die mid-crawl, boot again: still paused, and the crawl
+    that was running is back at the FRONT of the queue -- not interrupted."""
+    runner, cfg = make_runner(tmp / "held")
+    store = Store(cfg.db_path)
+    a = JobRunner.submit(store, "poll", {"n": "a"}, lane="pixiv")
+    b = JobRunner.submit(store, "poll", {"n": "b"}, lane="pixiv")
+    runner.hold(True)
+    store.conn.execute(
+        "UPDATE jobs SET state='running', started_at='x', worker='pixiv', done=7 WHERE id=?", (a,)
+    )
+    store.close()
+    again, _ = make_runner(tmp / "held")  # same home -> same db
+    assert again.held and again.requeued == 1 and again.interrupted == 0
+    store = Store(cfg.db_path)
+    ja, jb = JobRunner.get(store, a), JobRunner.get(store, b)
+    assert ja.state == QUEUED and ja.worker is None and ja.done == 0 and ja.error is None
+    assert ja.position < jb.position  # resumes first
+    again.hold(False)
+    assert not JobRunner.read_hold(store)
+    third, _ = make_runner(tmp / "held")
+    assert not third.held
+    print("  paused queue restart: ok (held persists; running row -> front of the queue)")
+
+
+def test_retry_a_finished_job(tmp: Path) -> None:
+    runner, store = _bare_runner(tmp / "retry", {"note": lambda ctx: {}})
+    jid = JobRunner.submit(store, "note", {"n": "a"}, lane="twitter")
+    assert JobRunner.retry(store, jid) is None  # queued: nothing to retry
+    assert runner.cancel(store, jid)
+    new = JobRunner.retry(store, jid)
+    assert new and new != jid
+    j = JobRunner.get(store, new)
+    assert j.state == QUEUED and j.params == {"n": "a"} and j.lane == "twitter"
+    assert runner.run_pending(store) == 1 and JobRunner.get(store, new).state == SUCCEEDED
+    assert JobRunner.retry(store, "nope") is None
+    print("  retry finished job:   ok (cancelled -> fresh queued copy; queued/unknown -> None)")
 
 
 def test_honest_denominators(tmp: Path) -> None:
@@ -463,6 +515,39 @@ def test_pause_holds_a_job_at_a_boundary(tmp: Path) -> None:
     print("  pause / resume:        ok (held at check(), kept its lane, cancel still lands)")
 
 
+def test_queue_hold_holds_what_runs(tmp: Path) -> None:
+    """Pause queue = everything stops: the running job holds at its next record
+    boundary and resumes with the queue."""
+    ticks = [0]
+    stop = threading.Event()
+
+    def loop(ctx) -> dict:
+        while not stop.is_set():
+            ctx.check()
+            ticks[0] += 1
+            time.sleep(0.01)
+        return {}
+
+    runner, store = _bare_runner(tmp / "holdrun", {"loop": loop})
+    jid = JobRunner.submit(store, "loop", lane="pixiv")
+    runner.start()
+    try:
+        assert _wait(lambda: ticks[0] > 3)
+        runner.hold(True)
+        time.sleep(0.15)
+        held = ticks[0]
+        time.sleep(0.3)
+        assert ticks[0] == held, "the queue is paused but its running job kept going"
+        assert JobRunner.get(store, jid).paused and runner.held
+        runner.hold(False)
+        assert _wait(lambda: ticks[0] > held)
+        assert not JobRunner.get(store, jid).paused and not runner.held
+    finally:
+        stop.set()
+        runner.stop()
+    print("  queue hold holds runs: ok (pause queue held the running job; resume released it)")
+
+
 def test_queue_hold_and_order(tmp: Path) -> None:
     order: list[str] = []
 
@@ -572,6 +657,121 @@ def test_meter_counts_per_budget_and_job(tmp: Path) -> None:
     print("  meter:                 ok (per budget and per job, last minute)")
 
 
+def _offline_runner(tmp: Path, watch: NetWatch) -> tuple[JobRunner, Store, list[str]]:
+    """A runner whose one job type asks the watch on every run and raises
+    Offline when the internet is gone -- what SourceClient and gallery-dl do."""
+    runs: list[str] = []
+
+    def flaky(ctx) -> dict:
+        runs.append(ctx.job.params["n"])
+        if watch.failed():
+            raise Offline("no route to host")
+        return {}
+
+    cfg = Config(home=tmp)
+    runner = JobRunner(lambda: Store(cfg.db_path), {"flaky": flaky}, watch=watch)
+    return runner, Store(cfg.db_path), runs
+
+
+def test_offline_holds_the_queue(tmp: Path) -> None:
+    """The internet goes away under a job: not a failure. The job goes back to
+    the front of the queue, the queue holds itself (reason offline, persisted,
+    announced), nothing else is taken, and when the watch sees the connection
+    again the hold lifts on its own and that job runs first."""
+    net = {"up": False}
+    watch = NetWatch(probe=lambda: net["up"], every=0.05, retry=0.05, fresh=0)
+    runner, store, runs = _offline_runner(tmp / "offline", watch)
+    holds: list[tuple[bool, str | None]] = []
+    runner.on_hold.append(lambda on, reason: holds.append((on, reason)))
+    a = JobRunner.submit(store, "flaky", {"n": "a"}, lane="pixiv")
+    b = JobRunner.submit(store, "flaky", {"n": "b"}, lane="pixiv")
+    runner.start()
+    try:
+        assert _wait(lambda: runner.held and JobRunner.get(store, a).state == QUEUED)
+        assert runner.held_reason == "offline" and holds[-1] == (True, "offline")
+        ja = JobRunner.get(store, a)
+        assert ja.worker is None and ja.started_at is None and ja.error is None
+        assert ja.position < JobRunner.get(store, b).position  # front of the queue
+        time.sleep(0.2)
+        assert runs == ["a"], runs  # held: b was never taken, a not retried blind
+        assert JobRunner.read_hold(store) and JobRunner.read_hold_reason(store) == "offline"
+        # a daemon restarted while offline comes back held the same way
+        again = JobRunner(lambda: Store(store.path), {}, watch=NetWatch(probe=lambda: True))
+        assert again.held and again.held_reason == "offline"
+        # the connection is back: the hold lifts, a runs first, then b
+        net["up"] = True
+        assert _wait(lambda: JobRunner.get(store, b).state == SUCCEEDED)
+        assert not runner.held and runner.held_reason is None
+        assert runs == ["a", "a", "b"] and holds[-1] == (False, None)
+        assert JobRunner.get(store, a).state == SUCCEEDED
+    finally:
+        runner.stop()
+    print("  offline holds queue:   ok (job back at the front, held 'offline', resumed on its own)")
+
+
+def test_user_pause_outranks_offline(tmp: Path) -> None:
+    """Pause queue by hand while it is held for being offline: it is the user's
+    pause now, and the connection coming back does not lift it."""
+    net = {"up": False}
+    watch = NetWatch(probe=lambda: net["up"], every=0.05, retry=0.05, fresh=0)
+    runner, store, runs = _offline_runner(tmp / "outrank", watch)
+    a = JobRunner.submit(store, "flaky", {"n": "a"}, lane="pixiv")
+    runner.start()
+    try:
+        assert _wait(lambda: runner.held_reason == "offline")
+        runner.hold(True)
+        assert runner.held_reason == "user" and JobRunner.read_hold_reason(store) == "user"
+        net["up"] = True
+        time.sleep(0.3)
+        assert runner.held and runner.held_reason == "user"
+        assert JobRunner.get(store, a).state == QUEUED and runs == ["a"]
+        runner.hold(False)
+        assert _wait(lambda: JobRunner.get(store, a).state == SUCCEEDED)
+    finally:
+        runner.stop()
+    print("  user pause outranks:   ok (a pause by hand survives the connection returning)")
+
+
+def test_transport_failure_asks_the_watch(tmp: Path) -> None:
+    """SourceClient: a transport error while the internet is unreachable is
+    Offline at once -- no backoff spent, no retry; the probe itself is a TCP
+    connect that needs no DNS and no request a source sees."""
+    import coreflame.http as http_mod
+
+    def dead(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("Network is unreachable")
+
+    saved = http_mod.WATCH
+    http_mod.WATCH = NetWatch(probe=lambda: False, fresh=0)
+    try:
+        c = SourceClient({}, rate=100, burst=100, max_retries=4)
+        c._client = httpx.Client(transport=httpx.MockTransport(dead))
+        t0 = time.monotonic()
+        try:
+            c.get("https://www.pixiv.net/ajax/x")
+        except Offline as e:
+            assert "ajax/x" in str(e)
+        else:
+            raise AssertionError("expected Offline")
+        assert time.monotonic() - t0 < 0.5  # no backoff sleep before giving up
+        c.close()
+    finally:
+        http_mod.WATCH = saved
+    # the probe: a listening local port is reachable, a closed one is not
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+    assert reachable((("127.0.0.1", port),), timeout=1.0)
+    srv.close()
+    gone = socket.socket()
+    gone.bind(("127.0.0.1", 0))
+    closed_port = gone.getsockname()[1]
+    gone.close()
+    assert not reachable((("127.0.0.1", closed_port),), timeout=1.0)
+    print("  transport asks watch:  ok (Offline raised at once; TCP probe up/down)")
+
+
 if __name__ == "__main__":
     import tempfile
 
@@ -583,6 +783,8 @@ if __name__ == "__main__":
         test_cancel_queued(tmp)
         test_cancel_from_other_process(tmp)
         test_interrupted_at_boot(tmp)
+        test_paused_queue_survives_a_restart(tmp)
+        test_retry_a_finished_job(tmp)
         test_honest_denominators(tmp)
         test_watch_sources_gate_each_stage(tmp)
         test_failure_is_data(tmp)
@@ -590,8 +792,12 @@ if __name__ == "__main__":
         test_one_worker_per_source(tmp)
         test_any_job_runs_once(tmp)
         test_pause_holds_a_job_at_a_boundary(tmp)
+        test_queue_hold_holds_what_runs(tmp)
         test_queue_hold_and_order(tmp)
         test_plan_splits_a_crawl(tmp)
         test_each_worker_stays_on_its_hosts(tmp)
         test_meter_counts_per_budget_and_job(tmp)
+        test_offline_holds_the_queue(tmp)
+        test_user_pause_outranks_offline(tmp)
+        test_transport_failure_asks_the_watch(tmp)
     print("\nall passed")

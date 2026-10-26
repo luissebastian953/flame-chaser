@@ -17,6 +17,17 @@ THUMB_PX = 400
 QUALITY = 82
 
 
+def dims(data: bytes) -> tuple[int, int] | None:
+    """Pixel size of the decoded file -- what the viewer shows at 1:1. Reads
+    the header only; None when Pillow cannot open it."""
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            upright = ImageOps.exif_transpose(img) or img
+            return upright.width, upright.height
+    except Exception:
+        return None
+
+
 class ThumbStore:
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root).expanduser()

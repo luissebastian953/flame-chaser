@@ -44,12 +44,14 @@ class NameFinder:
                 self._fetchers = make_fetchers(self.cfg, USER_AGENT)
             return self._fetchers
 
-    def find(self, queries: list[str]) -> dict:
+    def find(self, queries: list[str], refresh: bool = False) -> dict:
+        """`refresh` skips the cached answer (the form's refresh button) -- the
+        fresh one replaces it."""
         key = tuple(dict.fromkeys(norm(q) for q in queries if q and q.strip()))
         now = time.monotonic()
         with self._lock:
             hit = self._cache.get(key)
-            if hit and now - hit[0] < NAMES_TTL:
+            if hit and not refresh and now - hit[0] < NAMES_TTL:
                 return hit[1]
         danbooru, wikidata = self._clients()
         result = asdict(lookup(queries, danbooru, wikidata))

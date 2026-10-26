@@ -60,7 +60,7 @@ const targets = computed(() => lib.watches.map((w) => w.target ?? 100));
 const targetHi = computed(() => (targets.value.length ? Math.max(...targets.value) : 0));
 
 const perRun = computed(() => {
-  if (!targets.value.length) return '—';
+  if (!targets.value.length) return '-';
   const lo = Math.min(...targets.value);
 
   return lo === targetHi.value ? fm.number(lo) : `${fm.number(lo)}–${fm.number(targetHi.value)}`;
@@ -68,7 +68,19 @@ const perRun = computed(() => {
 
 const lit = computed(() => Math.round((targetHi.value / TARGET_MAX) * TICKS));
 
-// recognition: what the last crawl kept against what its image filter threw away
+// recognition: what the last crawl kept against what its image filter threw away;
+// the Smart cleanup rule (Settings › Duplicates) shows as "rule active"
+const ruleActive = ref(false);
+
+onMounted(async () => {
+  try {
+    const c = await api.get<{ cleanup_rule: unknown }>('/api/config');
+    ruleActive.value = !!c.cleanup_rule;
+  } catch {
+    ruleActive.value = false;
+  }
+});
+
 const kept = computed(() => count(last.value, 'downloaded'));
 const dropped = computed(() => count(last.value, 'rejected'));
 
@@ -100,7 +112,7 @@ function add() {
     include_r18: false,
     sources: ['pixiv', 'twitter'],
     target: 100,
-    kind_filter: true,
+    kind_filter: defaults.kind_filter,
     gender: defaults.gender,
     gender_mode: defaults.gender_mode,
   };
@@ -119,8 +131,23 @@ function edit(w: Watch) {
   isNew.value = false;
 }
 
+const saveError = ref<string | null>(null);
+
+/** A save the daemon refuses, or no daemon at all, keeps the form open with
+ *  the reason in its footer: a silent failure looks like a dead button. */
 async function saved(w: Watch, runNow: boolean) {
-  const r = await lib.saveWatch(w, isNew.value);
+  saveError.value = null;
+  let r: Watch;
+  try {
+    r = await lib.saveWatch(w, isNew.value);
+  } catch (e) {
+    saveError.value =
+      e instanceof ApiError
+        ? t('character.errors.save', { error: e.message })
+        : t('character.errors.unreachable');
+
+    return;
+  }
   status.msg = r.reopened ? t('crawl.status.reopened', { n: r.reopened }) : t('crawl.status.saved');
   editing.value = null;
   if (runNow) await run(w.slug);
@@ -197,6 +224,29 @@ function rowState(
   return { kind: recent.state === 'succeeded' ? 'done' : 'failed', job: recent, n: 1 };
 }
 
+/** The chip for a job that ended badly: what happened, and the click runs it again. */
+function endedKey(j: Job): string {
+  if (j.state === 'interrupted') return 'crawl.row.interrupted';
+  if (j.state === 'cancelled') return 'crawl.row.cancelled';
+  return 'crawl.row.failed';
+}
+
+async function resume(j: Job) {
+  try {
+    await jobs.pauseJob(j.id, false);
+  } catch {
+    // the pipeline page says why
+  }
+}
+
+async function retry(j: Job) {
+  try {
+    await jobs.retry(j.id);
+  } catch {
+    // the row shows nothing new; the pipeline page says why
+  }
+}
+
 function rowColor(j: Job): string {
   return workerColor(workerIndex(j.worker ?? (j.lane === 'any' ? null : j.lane), lanes.value));
 }
@@ -237,7 +287,7 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
         </div>
         <div class="row">
           <div class="big">
-            <b class="ember">{{ last ? $t('crawl.cards.lastRun.plus', { n: fm.number(kept) }) : '—' }}</b>
+            <b class="ember">{{ last ? $t('crawl.cards.lastRun.plus', { n: fm.number(kept) }) : '-' }}</b>
             <span>{{ $t('crawl.cards.lastRun.unit') }}</span>
           </div>
           <div class="bars" aria-hidden="true">
@@ -282,11 +332,12 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
       <StatCard decorated-border>
         <div class="chead">
           <span class="ptitle">{{ $t('crawl.cards.recognition.title') }}</span>
+          <span v-if="ruleActive" class="chip on rule">{{ $t('crawl.cards.recognition.ruleActive') }}</span>
           <span class="meta">{{ $t('crawl.cards.recognition.meta') }}</span>
         </div>
         <div class="big">
           <b class="cyan">
-            {{ keptShare === null ? '—' : $t('crawl.cards.recognition.share', { n: keptShare }) }}
+            {{ keptShare === null ? '-' : $t('crawl.cards.recognition.share', { n: keptShare }) }}
           </b>
           <span>{{ $t('crawl.cards.recognition.unit') }}</span>
         </div>
@@ -325,7 +376,7 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
               {{
                 ep.health
                   ? $t('crawl.cards.sources.free', { n: fm.bytes(ep.health.library_free_bytes) })
-                  : '—'
+                  : '-'
               }}
             </span>
           </div>
@@ -371,7 +422,9 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
             </td>
             <td>
               <div class="chips" :class="{ more: w.pixiv_tags.length > SHOWN_CHIPS }">
-                <span v-for="tag in w.pixiv_tags" :key="tag" class="chip jp">{{ tag }}</span>
+                <div class="clip">
+                  <span v-for="tag in w.pixiv_tags" :key="tag" class="chip jp">{{ tag }}</span>
+                </div>
                 <button v-if="w.pixiv_tags.length > SHOWN_CHIPS" class="morelbl" @click="edit(w)">
                   {{ $t('crawl.table.more', { n: w.pixiv_tags.length - SHOWN_CHIPS }) }}
                 </button>
@@ -379,7 +432,9 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
             </td>
             <td>
               <div class="chips" :class="{ more: w.match_terms.length > SHOWN_CHIPS }">
-                <span v-for="term in w.match_terms" :key="term" class="chip mono">{{ term }}</span>
+                <div class="clip">
+                  <span v-for="term in w.match_terms" :key="term" class="chip mono">{{ term }}</span>
+                </div>
                 <button v-if="w.match_terms.length > SHOWN_CHIPS" class="morelbl" @click="edit(w)">
                   {{ $t('crawl.table.more', { n: w.match_terms.length - SHOWN_CHIPS }) }}
                 </button>
@@ -395,8 +450,17 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
                   <Icon name="edit" :size="12" />
                   {{ $t('crawl.edit') }}
                 </button>
+                <button
+                  v-if="rowState(w.slug)?.kind === 'running' && rowState(w.slug)!.job.paused"
+                  class="chip off"
+                  :title="$t('crawl.row.resumeTitle')"
+                  @click="resume(rowState(w.slug)!.job)"
+                >
+                  <Icon name="pause" :size="11" />
+                  {{ $t('crawl.row.paused') }}
+                </button>
                 <RouterLink
-                  v-if="rowState(w.slug)?.kind === 'running'"
+                  v-else-if="rowState(w.slug)?.kind === 'running'"
                   :to="`/pipeline/${rowState(w.slug)!.job.worker ?? 'pixiv'}`"
                   class="chip live"
                   :class="{ pulse: pulsing === w.slug }"
@@ -424,10 +488,16 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
                     <Icon name="check" :size="11" />
                     {{ $t('crawl.row.done', { n: postsOf(rowState(w.slug)!.job) }) }}
                   </span>
-                  <span v-else-if="rowState(w.slug)?.kind === 'failed'" class="chip err">
-                    <Icon name="error" :size="11" />
-                    {{ $t('crawl.row.failed') }}
-                  </span>
+                  <button
+                    v-else-if="rowState(w.slug)?.kind === 'failed'"
+                    class="chip"
+                    :class="rowState(w.slug)!.job.state === 'failed' ? 'err' : 'off'"
+                    :title="$t('crawl.row.retryTitle')"
+                    @click="retry(rowState(w.slug)!.job)"
+                  >
+                    <Icon :name="rowState(w.slug)!.job.state === 'failed' ? 'error' : 'refresh'" :size="11" />
+                    {{ $t(endedKey(rowState(w.slug)!.job)) }}
+                  </button>
                   <button class="btn gh sm" @click="run(w.slug)">
                     <Icon name="play" :size="12" />
                     {{ $t('crawl.run') }}
@@ -441,7 +511,14 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
       <div v-else class="empty">{{ $t('crawl.empty') }}</div>
     </div>
   </div>
-  <WatchForm v-if="editing" :watch="editing" :is-new="isNew" @save="saved" @close="editing = null" />
+  <WatchForm
+    v-if="editing"
+    :watch="editing"
+    :is-new="isNew"
+    :error="saveError"
+    @save="saved"
+    @close="editing = null"
+  />
 </template>
 
 <style scoped>
@@ -605,36 +682,42 @@ const lanes = computed<Lane[]>(() => jobs.pipeline?.workers.map((w) => w.lane) ?
 /* ---- watched characters ---- */
 .chips {
   display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.chips .clip {
+  display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
-/* more than two: one clipped line fading into the panel, with the count on top */
+/* more than two: one clipped line of chips in its own box, fading out at its edge, and
+   the count BESIDE it -- never over a chip, so no theme opacity can make them overlap */
 .chips.more {
-  position: relative;
-  flex-wrap: nowrap;
-  overflow: hidden;
   width: 200px;
   max-width: 100%;
+}
+.chips.more .clip {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 .chips.more .chip {
   flex: none;
 }
-.chips.more::after {
+.chips.more .clip::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 30%, var(--color-surf) 78%);
+  background: linear-gradient(90deg, transparent 55%, var(--plate));
   pointer-events: none;
 }
 .morelbl {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 1;
-  padding: 0 0 0 4px;
+  flex: none;
+  padding: 0;
   border: 0;
-  background: var(--color-surf); /* the fade's end colour: keeps the count legible over a long chip */
+  background: none;
   font: 600 10.5px var(--font-mono);
   letter-spacing: 0.04em;
   color: var(--color-ember);

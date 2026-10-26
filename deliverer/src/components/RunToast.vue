@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Job, Lane } from '@/lib/types';
-import type { Toast } from '@/stores/toasts';
+import type { ErrorToast, RunToast } from '@/stores/toasts';
 
 /**
  * One "run started" toast. Everything it says is read live off the jobs
@@ -9,7 +9,7 @@ import type { Toast } from '@/stores/toasts';
  * or the error that stopped it (rose, sticky). Open pipeline goes to the
  * worker when one source ran, to the list when two did.
  */
-const props = defineProps<{ toast: Toast }>();
+const props = defineProps<{ toast: RunToast | ErrorToast }>();
 const toasts = useToasts();
 const jobs = useJobs();
 const router = useRouter();
@@ -143,6 +143,9 @@ async function retry() {
           }}
         </div>
       </template>
+      <div v-else-if="paused && jobs.offline" class="ttl">
+        {{ $t('crawl.toast.offline', { label: toast.label }) }}
+      </div>
       <div v-else-if="paused" class="ttl">{{ $t('crawl.toast.paused', { label: toast.label }) }}</div>
       <i18n-t v-else v-bind="{ keypath: title }" tag="div" class="ttl">
         <template #label>{{ toast.label }}</template>

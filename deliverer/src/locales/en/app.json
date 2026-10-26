@@ -1,7 +1,28 @@
 {
-  "brand": { "name": "Curio", "tagline": "local archive" },
-  "nav": { "crawl": "Crawl", "pipeline": "Pipeline", "gallery": "Gallery", "settings": "Settings" },
-  "shutdown": { "label": "Shutdown app", "armed": "Crawl running — click again" },
+  "brand": {
+    "name": "Curio",
+    "tagline": "local archive"
+  },
+  "nav": {
+    "crawl": "Crawl",
+    "pipeline": "Pipeline",
+    "gallery": "Gallery",
+    "settings": "Settings"
+  },
+  "shutdown": {
+    "label": "Shutdown app",
+    "title": "Shut down Curio?",
+    "body": "This stops the crawler daemon and closes the app. A crawl that is running stops where it is and shows as interrupted on the next launch; queued jobs stay in the queue. A paused queue comes back paused, with the crawl it was running back at its front.",
+    "running": "{n} job running | {n} jobs running",
+    "runningNote": "stops at its next record",
+    "progress": "{done} / {total} posts",
+    "queued": "{n} queued job | {n} queued jobs",
+    "queuedNote": "stay in the queue",
+    "none": "No jobs running",
+    "hint": "Esc · No",
+    "no": "No",
+    "yes": "Yes, shut down"
+  },
   "status": {
     "daemon": "dawnmaker v{version}",
     "unreachable": "daemon unreachable",
@@ -15,5 +36,62 @@
     "expired": "expired",
     "notLinked": "not linked"
   },
-  "connectingDaemon": "connecting to dawnmaker…"
+  "connectingDaemon": "connecting to dawnmaker…",
+  "network": {
+    "offline": "offline",
+    "mbps": "Mbps",
+    "ms": "ms",
+    "summary": "{quality} · {ms} ms",
+    "quality": {
+      "poor": "poor",
+      "fair": "fair",
+      "good": "good",
+      "excellent": "excellent"
+    },
+    "details": "Network details",
+    "title": "Network",
+    "measured": "measured {time}",
+    "legend": {
+      "download": "download",
+      "upload": "upload",
+      "window": "Mbps · last {n} samples",
+      "none": "Mbps · no samples"
+    },
+    "stat": {
+      "download": "↓ Download",
+      "upload": "↑ Upload",
+      "latency": "Latency"
+    },
+    "server": "Server",
+    "iface": {
+      "wifi": "Wi‑Fi",
+      "ethernet": "Ethernet",
+      "other": "Network"
+    },
+    "hint": "Esc · Close",
+    "retest": "Retest",
+    "close": "Close",
+    "checking": "Checking…",
+    "measuring": "measuring download",
+    "disconnected": "Disconnected",
+    "noNetwork": "no network · pixiv & X unreachable",
+    "noInternet": "No internet",
+    "retrying": "{name} connected · retrying {s} s",
+    "unreachable": "unreachable",
+    "last": "last {location}",
+    "provider": "provider",
+    "unknown": "unknown",
+    "noRoute": "no route",
+    "phase": {
+      "checking": "Checking",
+      "disconnected": "Disconnected",
+      "noInternet": "No internet"
+    },
+    "measuringShort": "measuring…",
+    "lost": "lost {time}",
+    "ago": "{s} s ago",
+    "agoMin": "{m} min ago",
+    "offlineLine": "pixiv & X unreachable · next probe in {s} s",
+    "retryNow": "Retry now"
+  }
 }

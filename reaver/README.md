@@ -20,7 +20,7 @@ python3 -m coreflame status
 **pixiv is the discovery index. X is a follow feed. They are not symmetric.**
 
 On pixiv a character is a first-class tag the artist applies, and
-`s_mode=s_tag_full` matches it exactly — "every artwork tagged 甘雨, newest
+`s_mode=s_tag_full` matches it exactly - "every artwork tagged 甘雨, newest
 first" is one cheap paged request. X has no equivalent: no character metadata,
 inconsistent hashtags, and as of February 2026 no free API tier at all
 (pay-per-use credits with a 7-day recent-search window; Basic/Pro are legacy
@@ -46,24 +46,24 @@ character on X".
 ## Watermarks
 
 Both sources hand out monotonically increasing ids (pixiv illust ids, X
-snowflake ids), so the watermark is an integer comparison — no timezone
+snowflake ids), so the watermark is an integer comparison - no timezone
 parsing, no clock skew. The pixiv poller walks one full page *past* the
 watermark before stopping, because an artwork can become public with an id
 lower than one already seen.
 
 ## Dedupe
 
-Two levels, because the same picture on both sources is not the same file — X
+Two levels, because the same picture on both sources is not the same file - X
 re-encodes and rescales, so sha256 never matches.
 
-1. `sha256` — re-downloads and repeats. Free.
+1. `sha256` - re-downloads and repeats. Free.
 2. `dHash` (64-bit) with Hamming distance ≤ 6, **scoped to one artist**. This
    is what links the pixiv 4096px PNG to the X 2048px JPEG. Scoping keeps it
    O(hundreds) per image instead of O(entire archive), and a cross-post is by
    definition by the same artist.
 
 dHash survives re-encode and rescale. It does *not* survive crops, mirroring or
-heavy recolouring — accepted false negatives, because the alternative (CNN
+heavy recolouring - accepted false negatives, because the alternative (CNN
 embeddings) is three orders of magnitude more machinery than a personal
 archive needs.
 
@@ -71,7 +71,7 @@ archive needs.
 
 X's GraphQL endpoints (`SearchTimeline`, `UserMedia`) need a logged-in
 `auth_token` + `ct0` and change without notice. `gallery-dl` tracks them as a
-maintained project. This code owns the *policy* — who to follow, what to keep,
+maintained project. This code owns the *policy* - who to follow, what to keep,
 how to dedupe; the fragile protocol layer stays something you fix with
 `pip install -U gallery-dl`.
 
@@ -90,7 +90,7 @@ how to dedupe; the fragile protocol layer stays something you fix with
 
 pixiv's web ajax endpoints are not a public API, and automated access to X is
 against its terms. This is a private archive of publicly posted work for
-personal viewing — don't redistribute, don't strip artist attribution
+personal viewing - don't redistribute, don't strip artist attribution
 (`permalink` is stored on every post for a reason), don't monetise, and keep
 the request rates where they are. Deleted or privated works should be removed
 from your archive too.

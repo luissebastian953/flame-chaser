@@ -31,7 +31,9 @@ const idle = computed(() => slots.value.filter((s) => !s.job));
 const focused = computed(() => jobs.focus ?? busy.value[0]?.lane ?? null);
 const anyRunning = computed(() => busy.value.length > 0);
 
-const pill = computed(() => (jobs.pipeline?.paused ? 'paused' : anyRunning.value ? 'running' : 'idle'));
+const pill = computed(() =>
+  jobs.offline ? 'offline' : jobs.pipeline?.paused ? 'paused' : anyRunning.value ? 'running' : 'idle',
+);
 
 function open(lane: Lane) {
   jobs.focus = lane;
@@ -83,7 +85,34 @@ function cancelAll() {
 }
 
 const showAll = ref(false);
-const completed = computed(() => (showAll.value ? jobs.completedToday : jobs.completedToday.slice(0, 5)));
+const completed = computed(() => (showAll.value ? jobs.runsToday : jobs.runsToday.slice(0, 5)));
+/** runs unfolded into their parts */
+const unfolded = ref(new Set<string>());
+
+function unfold(id: string) {
+  const next = new Set(unfolded.value);
+  if (!next.delete(id)) next.add(id);
+  unfolded.value = next;
+}
+
+/** a part's name: the source half of the crawl, or the sweep */
+function partKey(p: Job): string {
+  if (p.type === 'timelines') return 'pipeline.job.timelines';
+  return sourceOf(p) === 'twitter' ? 'pipeline.lane.twitter' : 'pipeline.lane.pixiv';
+}
+
+function partColor(p: Job): string {
+  return workerColor(workerIndex(p.worker ?? (p.lane === 'any' ? null : p.lane), lanes.value));
+}
+
+function tally(j: Job): { new: number; kept: number; dropped: number } {
+  const c = j.counters ?? {};
+  return {
+    new: Number(c.new_posts ?? c.new ?? 0),
+    kept: Number(c.downloaded ?? 0),
+    dropped: Number(c.rejected ?? 0),
+  };
+}
 
 const laneByJob = computed(() => new Map(jobs.jobs.map((j) => [j.id, j.worker ?? j.lane])));
 
@@ -107,7 +136,7 @@ function dotColor(e: DaemonEvent): string {
       <div>
         <div class="flex items-center gap-10">
           <div class="h1">{{ $t('pipeline.title') }}</div>
-          <span class="pill" :class="pill">
+          <span class="pill" :class="pill === 'offline' ? 'paused' : pill">
             <i class="dot" />
             {{ $t(`pipeline.pill.${pill}`) }}
           </span>
@@ -121,10 +150,15 @@ function dotColor(e: DaemonEvent): string {
             })
           }}
         </div>
+        <div v-if="jobs.offline" class="sub offline">{{ $t('pipeline.offlineHint') }}</div>
       </div>
       <div class="spacer" />
       <span class="num">{{ $t('pipeline.reqPerMin', { n: jobs.pipeline?.req_per_min ?? 0 }) }}</span>
-      <button class="btn gh" @click="jobs.pauseQueue(!jobs.pipeline?.paused)">
+      <button
+        class="btn gh"
+        :disabled="!jobs.pipeline?.paused && !anyRunning && !jobs.queued.length"
+        @click="jobs.pauseQueue(!jobs.pipeline?.paused)"
+      >
         <Icon :name="jobs.pipeline?.paused ? 'play' : 'pause'" :size="13" />
         {{ jobs.pipeline?.paused ? $t('pipeline.resumeQueue') : $t('pipeline.pauseQueue') }}
       </button>
@@ -231,34 +265,73 @@ function dotColor(e: DaemonEvent): string {
           <div class="phead">
             <span class="ptitle">{{ $t('pipeline.completed') }}</span>
             <div class="spacer" />
-            <button v-if="jobs.completedToday.length > 5" class="kv linkish" @click="showAll = !showAll">
-              {{
-                showAll ? $t('pipeline.seeFewer') : $t('pipeline.seeAll', { n: jobs.completedToday.length })
-              }}
+            <button v-if="jobs.runsToday.length > 5" class="kv linkish" @click="showAll = !showAll">
+              {{ showAll ? $t('pipeline.seeFewer') : $t('pipeline.seeAll', { n: jobs.runsToday.length }) }}
             </button>
           </div>
           <div v-if="completed.length" class="done-rows">
-            <div v-for="j in completed" :key="j.id" class="drow">
-              <WorkerAvatar :sha="name(j).cover" :size="22" :ring="false" class="faded" />
-              <b class="dn">{{ name(j).name }}</b>
-              <span v-if="name(j).jp" class="jp">{{ name(j).jp }}</span>
-              <span v-if="j.state !== 'succeeded'" class="st" :class="j.state">
-                {{ $t(`pipeline.state.${j.state}`) }}
-              </span>
-              <div class="spacer" />
-              <i18n-t keypath="pipeline.completedRow" tag="span" class="kv tallies">
-                <template #new>
-                  <span class="ok">{{ j.counters.new_posts ?? j.counters.new ?? 0 }}</span>
-                </template>
-                <template #kept>
-                  <b>{{ j.counters.downloaded ?? 0 }}</b>
-                </template>
-                <template #dropped>
-                  <span class="err">{{ j.counters.rejected ?? 0 }}</span>
-                </template>
-              </i18n-t>
-              <span class="num tm">{{ clock(j.finished_at).slice(0, 5) }}</span>
-            </div>
+            <template v-for="r in completed" :key="r.id">
+              <button
+                class="drow"
+                :class="{ open: unfolded.has(r.id) }"
+                :aria-expanded="unfolded.has(r.id)"
+                :title="$t('pipeline.parts')"
+                @click="unfold(r.id)"
+              >
+                <Icon name="chevron-right" :size="12" class="chev" />
+                <WorkerAvatar :sha="name(r.jobs[0]!).cover" :size="22" :ring="false" class="faded" />
+                <b class="dn">{{ name(r.jobs[0]!).name }}</b>
+                <span v-if="name(r.jobs[0]!).jp" class="jp">{{ name(r.jobs[0]!).jp }}</span>
+                <span
+                  v-if="r.state !== 'succeeded'"
+                  class="st"
+                  :class="r.state"
+                  :title="r.error ?? undefined"
+                >
+                  {{ $t(`pipeline.state.${r.state}`) }}
+                </span>
+                <div class="spacer" />
+                <i18n-t keypath="pipeline.completedRow" tag="span" class="kv tallies">
+                  <template #new>
+                    <span class="ok">{{ r.counters.new }}</span>
+                  </template>
+                  <template #kept>
+                    <b>{{ r.counters.kept }}</b>
+                  </template>
+                  <template #dropped>
+                    <span class="err">{{ r.counters.dropped }}</span>
+                  </template>
+                </i18n-t>
+                <span class="num tm">{{ clock(r.finished_at).slice(0, 5) }}</span>
+              </button>
+              <div v-if="unfolded.has(r.id)" class="parts">
+                <div v-for="p in r.parts" :key="p.id" class="prow">
+                  <i class="dot" :style="{ background: partColor(p) }" />
+                  <span class="pn">{{ $t(partKey(p)) }}</span>
+                  <span
+                    v-if="p.state !== 'succeeded'"
+                    class="st"
+                    :class="p.state"
+                    :title="p.error ?? undefined"
+                  >
+                    {{ $t(`pipeline.state.${p.state}`) }}
+                  </span>
+                  <div class="spacer" />
+                  <i18n-t keypath="pipeline.completedRow" tag="span" class="kv tallies">
+                    <template #new>
+                      <span class="ok">{{ tally(p).new }}</span>
+                    </template>
+                    <template #kept>
+                      <b>{{ tally(p).kept }}</b>
+                    </template>
+                    <template #dropped>
+                      <span class="err">{{ tally(p).dropped }}</span>
+                    </template>
+                  </i18n-t>
+                  <span class="num tm">{{ clock(p.finished_at).slice(0, 5) }}</span>
+                </div>
+              </div>
+            </template>
           </div>
           <div v-else class="kv pad">{{ $t('pipeline.noneToday') }}</div>
         </div>
@@ -347,6 +420,11 @@ function dotColor(e: DaemonEvent): string {
 .pill.paused {
   color: oklch(0.8 0.15 75);
   border-color: color-mix(in oklch, oklch(0.8 0.15 75) 45%, transparent);
+}
+.sub.offline {
+  margin-top: 4px;
+  max-width: 62ch;
+  color: oklch(0.8 0.15 75);
 }
 .grid2 {
   display: grid;
@@ -540,8 +618,55 @@ function dotColor(e: DaemonEvent): string {
   display: flex;
   align-items: center;
   gap: 9px;
+  width: 100%;
   padding: 9px 13px;
+  border: 0;
   border-bottom: 1px solid var(--line-soft);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.done-rows .drow:hover {
+  background: color-mix(in oklch, var(--surf2) 60%, transparent);
+}
+.done-rows .drow:focus-visible {
+  outline: 1px solid var(--ember);
+  outline-offset: -1px;
+}
+.chev {
+  flex: 0 0 auto;
+  color: var(--dim);
+  transition: transform 0.15s;
+}
+.drow.open .chev {
+  transform: rotate(90deg);
+}
+/* the run unfolded: its pixiv half, its X half, the sweep that followed */
+.parts {
+  border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in oklch, var(--surf2) 35%, transparent);
+}
+.prow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 13px 6px 48px;
+  font-size: 12px;
+}
+.prow .dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+}
+.pn {
+  color: var(--tx);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chev {
+    transition: none;
+  }
 }
 .faded {
   opacity: 0.8;

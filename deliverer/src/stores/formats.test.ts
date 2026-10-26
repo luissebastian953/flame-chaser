@@ -42,7 +42,7 @@ describe('useFormats', () => {
     const fm = useFormats();
     fm.region = 'en-US';
 
-    expect(fm.bytes(null)).toBe('—');
+    expect(fm.bytes(null)).toBe('-');
     expect(fm.bytes(512)).toBe('512 B');
     expect(fm.bytes(1536 * 1024 * 1024)).toBe('1.5 GiB');
     fm.sizeUnit = 'decimal';
@@ -60,8 +60,8 @@ describe('useFormats', () => {
     expect(fm.date(d, true)).toMatch(/^2026-09-07 0?3:04 PM$/);
     fm.dateStyle = 'locale';
     expect(fm.date(d)).toBe('Sep 7, 2026');
-    expect(fm.date('not a date')).toBe('—');
-    expect(fm.date(null)).toBe('—');
+    expect(fm.date('not a date')).toBe('-');
+    expect(fm.date(null)).toBe('-');
   });
 
   it('groups numbers per region', () => {

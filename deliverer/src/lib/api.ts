@@ -134,21 +134,7 @@ export const TYPES = [
   'job.item',
   'job.log',
   'job.finished',
+  'pipeline.paused',
   'rate.budget',
   'library.media',
 ];
-
-// ---------------------------------------------------------------- heartbeat
-/**
- * Layer 2 of the sidecar lifecycle. The daemon exits after ~30s without one;
- * this is what makes a force-quit shell take the crawler down with it.
- */
-export function startHeartbeat(intervalMs = 5000): () => void {
-  const id = setInterval(() => {
-    api.post('/api/heartbeat').catch(() => {
-      /* daemon gone; the endpoint store will notice on the next call */
-    });
-  }, intervalMs);
-
-  return () => clearInterval(id);
-}

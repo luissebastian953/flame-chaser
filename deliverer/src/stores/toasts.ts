@@ -36,7 +36,25 @@ export interface ErrorToast {
   retry: () => Promise<void>;
 }
 
-export type Toast = RunToast | ErrorToast;
+/** images went to trash (or away): Undo while it shows */
+export interface DeleteToast {
+  kind: 'delete';
+  id: number;
+  slug: string;
+  label: string;
+  images: number;
+  bytes: number;
+  forgotten: number;
+  permanent: boolean;
+  /** the trash batch to restore; null when the deletion was permanent */
+  batchId: string | null;
+  undo: () => Promise<void>;
+}
+
+export type Toast = RunToast | ErrorToast | DeleteToast;
+
+/** a deletion toast stays ten seconds, then goes on its own */
+export const DELETE_TTL = 10000;
 
 export const TOAST_MAX = 3;
 
@@ -66,6 +84,13 @@ export const useToasts = defineStore('toasts', {
     },
     error(t: Omit<ErrorToast, 'kind' | 'id'>): ErrorToast {
       const toast: ErrorToast = { kind: 'error', id: ++seq, ...t };
+      this.push(toast);
+      return toast;
+    },
+    /** one deletion; a newer one retires the older (its Undo window is over) */
+    deleted(t: Omit<DeleteToast, 'kind' | 'id'>): DeleteToast {
+      for (const old of this.items) if (old.kind === 'delete') this.dismiss(old.id);
+      const toast: DeleteToast = { kind: 'delete', id: ++seq, ...t };
       this.push(toast);
       return toast;
     },

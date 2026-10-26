@@ -7,10 +7,10 @@ description: Deploy Curio: the desktop release pipeline (tag → CI → installe
 
 Two deployment targets, nothing else: the **desktop app** users install
 (and which updates itself), and the **Docker browser-mode stack** for
-development without Tauri. There is no server deployment — the daemon is a
+development without Tauri. There is no server deployment - the daemon is a
 loopback sidecar, never a network service.
 
-## Desktop release — summary (full procedure: `cut-release`)
+## Desktop release - summary (full procedure: `cut-release`)
 
 ```
 scripts/bump-version.sh X.Y.Z                 # tauri.conf.json is the source; syncs package.json,
@@ -34,7 +34,7 @@ reports the new backend version, `latest.json` reachable).
 
 ### Secrets (GitHub → Settings → Secrets → Actions)
 
-- `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` —
+- `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` -
   required; from `pnpm tauri signer generate -w ~/.tauri/curio.key`. Losing
   the key strands every install; it is never in the repo.
 - Optional until there is a Developer ID: `APPLE_CERTIFICATE`,
@@ -59,10 +59,10 @@ macOS: open the dmg, drag to Applications. Windows: run the NSIS `.exe`
 `curl -fsSL https://github.com/<owner>/flame-chaser/releases/latest/download/install-linux.sh | sh`
 (AppImage to `~/.local/bin/curio` + a `.desktop` entry; x86_64 only). After
 that the app checks `latest.json` daily and on demand (Settings › Updates),
-downloads freely, and **installs only when the job queue is idle** — never
+downloads freely, and **installs only when the job queue is idle** - never
 over a running crawl. Shell and sidecar update together in one artifact.
 
-## Docker — browser-mode dev stack
+## Docker - browser-mode dev stack
 
 ```
 docker compose up -d --build          # first time, or after a Dockerfile / compose change
@@ -92,11 +92,11 @@ bind-mounted at `/app`; `node_modules` are container-only volumes.
 
 The container being up means dawnmaker is up, not Vite. `entrypoint.sh` starts
 the daemon *first*, so port 8765 answering (`401 bad token`) while 5173 gives
-"empty reply" means the entrypoint died or stalled between the two — check
+"empty reply" means the entrypoint died or stalled between the two - check
 `docker compose logs dev` for the `curio: webview …` line; no line, no Vite.
 
 The stall to know about is `pnpm install` asking *"The modules directories will
-be removed and reinstalled from scratch. Proceed?"* — with a tty and no stdin
+be removed and reinstalled from scratch. Proceed?"* - with a tty and no stdin
 that prompt waits forever. It appears when the `storeDir` recorded in
 `/app/node_modules/.modules.yaml` (written at image build, `/pnpm/store/v10`)
 no longer matches the store pnpm resolves at run time: `/app` is a bind mount
@@ -125,8 +125,8 @@ the code inside the container (`docker compose exec dev python …`), or
 
 | You changed | Do |
 |---|---|
-| Vue source | nothing — Vite HMR picks it up |
-| Python source | `docker compose restart dev` — the running daemon keeps the code it started with (each job logs `engine up …`); a restart kills a running crawl, so wait for idle |
+| Vue source | nothing - Vite HMR picks it up |
+| Python source | `docker compose restart dev` - the running daemon keeps the code it started with (each job logs `engine up …`); a restart kills a running crawl, so wait for idle |
 | a Python test/lint run | `docker compose run --rm dev sh -c 'cd reaver && ./check.sh'` |
 | `deliverer/package.json` / lockfile | `docker compose restart dev` (entrypoint runs `pnpm install --frozen-lockfile`) |
 | `reaver/pyproject.toml` deps | `docker compose up -d --build` (pip install is an image layer) |

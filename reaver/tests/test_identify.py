@@ -161,6 +161,26 @@ def test_identified_at_download(tmp: Path) -> None:
     print(f"  at download:          ok ({ident.calls} named or unidentified, none rejected)")
 
 
+def test_crawl_rule_rejects(tmp: Path) -> None:
+    """Settings › Duplicates' crawl-time rule (coreflame/trash.py): once the
+    gallery knows its character, an image named as someone else is thrown
+    away at download like a kind the archive does not keep."""
+    answers = [([["raiden_mei", 0.95]], []), ([["raiden_shogun", 0.95]], [])]
+    ident = FakeIdentifier(answers)
+    runner, cfg = runner_with_identifier(tmp / "r", ident)
+    cfg.cleanup_rule = {"min_score": 0.5, "other_character": True}
+    store = Store(cfg.db_path)
+    store.upsert_watch(Watch(slug="mei", pixiv_tags=["雷電芽衣"]))
+    j = run(runner, store, "poll", {})
+    assert j.state == SUCCEEDED, j.error
+    rejected = media_by_state(store, "rejected")
+    assert rejected and all(r["error"].startswith("identity:other=raiden_shogun") for r in rejected)
+    assert media_by_state(store, "stored")
+    assert j.counters["rejected"] == len(rejected)
+    assert len(rejected) + len(media_by_state(store, "stored")) == ident.calls
+    print(f"  crawl-time rule:      ok ({len(rejected)} named as someone else, thrown away)")
+
+
 def test_off_costs_nothing(tmp: Path) -> None:
     runner, cfg = runner_with_identifier(tmp / "b", None)
     store = Store(cfg.db_path)
@@ -225,6 +245,7 @@ if __name__ == "__main__":
         test_the_rule()
         test_encode_matches_camie_input()
         test_identified_at_download(tmp)
+        test_crawl_rule_rejects(tmp)
         test_off_costs_nothing(tmp)
         test_backlog_and_new_model(tmp)
         test_shares_the_gender_read(tmp)
