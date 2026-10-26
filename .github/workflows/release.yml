@@ -36,12 +36,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # app alongside dmg: only the app target emits Curio.app.tar.gz + .sig,
+          # which is what the updater downloads; dmg alone leaves macOS out of latest.json
           - os: macos-latest
             target: aarch64-apple-darwin
-            bundles: dmg
-          - os: macos-13            # last Intel runner
+            bundles: app,dmg
+          - os: macos-15-intel      # macos-13 was retired 2025-12; Intel runners end fall 2027
             target: x86_64-apple-darwin
-            bundles: dmg
+            bundles: app,dmg
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             bundles: nsis

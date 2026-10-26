@@ -56,7 +56,7 @@ forgotten and it produces the worst bug in the system: the app updates, reports
 the new version, and runs old backend code. On a clean runner
 `resources/sidecar/` is empty; locally it holds last week's daemon.
 
-Matrix: `macos-latest` (aarch64), `macos-13` (x86_64), `ubuntu-22.04`,
+Matrix: `macos-latest` (aarch64), `macos-15-intel` (x86_64), `ubuntu-22.04`,
 `windows-latest`; every job installs with `pnpm install --frozen-lockfile`
 and runs Tauri via `pnpm tauri`.
 Secrets: `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`,

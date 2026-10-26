@@ -200,7 +200,7 @@ git tag v0.2.0 && git push origin master --tags
 
 1. **check** - `scripts/check-version.sh` (all four version strings agree and
    match the tag), `reaver/check.sh`, and `pnpm --filter deliverer run check`.
-2. **build** matrix - `macos-latest` (aarch64, dmg), `macos-13` (x86_64, dmg),
+2. **build** matrix - `macos-latest` (aarch64, dmg), `macos-15-intel` (x86_64, dmg),
    `windows-latest` (nsis), `ubuntu-22.04` (appimage,deb). Each job builds the
    sidecar **before** `tauri-action`, smokes the built binary (`--help` must
    print the right version), then `tauri-action` builds, signs and uploads to a
