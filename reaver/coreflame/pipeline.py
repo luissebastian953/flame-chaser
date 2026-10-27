@@ -17,6 +17,7 @@ from .kinds import KEEP, Label, LabelError, Labels, ModelError, kept, make_label
 from .library import LibraryView, safe_name
 from .models import DiscoverStats, IllustRecord, Watch
 from .online import Offline
+from .origin import Detects, declared, judge, make_detector
 from .people import People, Tags, accepts
 from .seen import SeenState, SkipReason
 from .sources.pixiv import PixivAdapter
@@ -41,6 +42,7 @@ class RunStats:
     labeled: int = 0  # images given a kind (coreflame/kinds.py) at ingest
     rejected: int = 0  # labelled as a kind the archive does not keep; never stored
     identified: int = 0  # stored images given character names (coreflame/identify.py)
+    judged: int = 0  # stored images given an origin, AI or by hand (coreflame/origin.py)
     notes: list[str] = field(default_factory=list)
 
     def merge(self, other: RunStats) -> RunStats:
@@ -57,6 +59,7 @@ class RunStats:
             "labeled",
             "rejected",
             "identified",
+            "judged",
         ):
             setattr(self, f, getattr(self, f) + getattr(other, f))
         self.notes += other.notes
@@ -361,6 +364,7 @@ SAFETY_FACTOR = 10  # give up after listing this many times the target
 LABELS_OFF = "labels off"  # RunStats note: the classifier failed this run
 TAGS_OFF = "people tags off"  # RunStats note: the tagger failed this run
 IDENT_OFF = "character names off"  # RunStats note: the identifier failed this run
+ORIGIN_OFF = "AI detection off"  # RunStats note: the detector failed this run
 
 
 @dataclass
@@ -467,10 +471,11 @@ def _drain_downloads(
     tagger: Tags | None = None,
     identifier: Identifies | None = None,
     cleanup: dict[str, Any] | None = None,
-) -> tuple[Labels | None, Tags | None, Identifies | None]:
+    detector: Detects | None = None,
+) -> tuple[Labels | None, Tags | None, Identifies | None, Detects | None]:
     """Download (and judge) everything pending now. Returns the labeler,
-    tagger and identifier, each None once it has proved unusable, so the
-    caller stops handing it over."""
+    tagger, identifier and detector, each None once it has proved unusable,
+    so the caller stops handing it over."""
     while store.pending_media(1, source="twitter"):
         got = download_pending(
             store,
@@ -485,6 +490,7 @@ def _drain_downloads(
             identifier=identifier,
             source="twitter",  # the X worker never touches pixiv's hosts
             cleanup=cleanup,
+            detector=detector,
         )
         st.merge(got)
         if LABELS_OFF in got.notes:
@@ -493,9 +499,11 @@ def _drain_downloads(
             tagger = None
         if IDENT_OFF in got.notes:
             identifier = None
+        if ORIGIN_OFF in got.notes:
+            detector = None
         if not (got.downloaded or got.dupes or got.failed or got.rejected):
             break  # nothing moved: never spin
-    return labeler, tagger, identifier
+    return labeler, tagger, identifier, detector
 
 
 def _kept(store: Store, external_id: str) -> bool:
@@ -524,6 +532,7 @@ def search_to_target(
     tagger: Tags | None = None,
     identifier: Identifies | None = None,
     cleanup: dict[str, Any] | None = None,
+    detector: Detects | None = None,
 ) -> RunStats:
     """Search X for one character until exactly `target` NEW posts are kept --
     posts left holding at least one stored image after the visited gate, the
@@ -571,7 +580,7 @@ def search_to_target(
                     store, tw, rec, ws, st, c, keep_unmatched=False, label=f"search {walk.term}"
                 )
                 if watch.slug in hits:
-                    labeler, tagger, identifier = _drain_downloads(
+                    labeler, tagger, identifier, detector = _drain_downloads(
                         store,
                         blobs,
                         pixiv,
@@ -583,6 +592,7 @@ def search_to_target(
                         tagger,
                         identifier,
                         cleanup,
+                        detector,
                     )
                     if _kept(store, rec.external_id):
                         kept += 1
@@ -625,6 +635,7 @@ def download_pending(
     identifier: Identifies | None = None,
     source: str | None = None,
     cleanup: dict[str, Any] | None = None,
+    detector: Detects | None = None,
 ) -> RunStats:
     """`announce=False` when a caller interleaves downloads with its own stage
     (search_to_target): no stage change, and its progress bar is left alone.
@@ -632,7 +643,8 @@ def download_pending(
     rejects one -- unless `cleanup` (Settings › Duplicates' crawl-time rule,
     coreflame/trash.py) says the name is wrong or too unsure. `source`
     downloads only that source's media -- a worker stays on its own hosts
-    (coreflame/jobs.py lanes)."""
+    (coreflame/jobs.py lanes). `detector` says whether a stored image is
+    AI-made when its post did not (coreflame/origin.py); it only labels."""
     st = RunStats()
     primaries: dict[str, str | None] = {}  # each character's name, read once per run
     c = _ctx(ctx)
@@ -787,6 +799,7 @@ def download_pending(
             variant=variant,
         )
         st.downloaded += 1
+        detector = _judge_one(store, detector, sha, data, c, st)
         who = ""
         if identifier is not None:
             identifier, who, ident = _identify_one(store, identifier, sha, data, people, c, st)
@@ -881,6 +894,44 @@ def _label_one(
     store.set_kind(sha, lab.kind, lab.scores, lab.model)
     st.labeled += 1
     return lab
+
+
+def _judge_one(
+    store: Store, detector: Detects | None, sha: str, data: bytes, c: JobContext, st: RunStats
+) -> Detects | None:
+    """How one freshly stored image was made: what its post declared, else
+    the detector's word. Returns the detector (None once it proved unusable:
+    the rest stay pending for the label job). Never rejects."""
+    said = declared(*_facts(store, sha))
+    score = None
+    if said is None and detector is not None:
+        try:
+            score = detector.score(data)
+        except LabelError as e:
+            c.log(f"origin {sha[:12]}: {e}", level="warning")  # stays pending
+        except ModelError as e:
+            c.log(f"AI detection off for this run: {e}", level="warning")
+            st.notes.append(ORIGIN_OFF)
+            detector = None
+    verdict = judge(said, score, detector.model if detector is not None else "")
+    if verdict is not None:
+        store.set_origin(sha, verdict)
+        st.judged += 1
+    return detector
+
+
+def _facts(store: Store, sha: str) -> tuple[dict[str, Any], list[str]]:
+    """Every post carrying the image, folded to one: a pixiv flag from any
+    of them, and all of their tags."""
+    meta: dict[str, Any] = {}
+    tags: list[str] = []
+    for m, t in store.origin_facts(sha):
+        if m.get("ai_type") is not None and not meta:
+            meta = m
+        if str(m.get("ai_type")) == "2":
+            meta = m
+        tags += t
+    return meta, tags
 
 
 def discard_unkept(
@@ -1082,6 +1133,48 @@ def label_pending(
     return out
 
 
+def judge_pending(
+    store: Store,
+    blobs: BlobStore,
+    detector: Detects | None,
+    limit: int | None = None,
+    ctx: JobContext | None = None,
+) -> dict[str, int]:
+    """Give stored images with no origin yet (or a verdict from an older
+    model) theirs: what the post declared, else the detector's word. Without
+    a detector only declared and tagged images are judged; the rest stay
+    pending. Reads each blob from disk; never removes an image. A ModelError
+    propagates: nothing left in the backlog can be judged without it."""
+    c = _ctx(ctx)
+    rows = store.unjudged_media(detector.model if detector is not None else "", limit)
+    out = {"judged": 0, "ai": 0, "human": 0, "judge_failed": 0}
+    if not rows:
+        return out
+    c.stage("origin", total=len(rows))  # the backlog count IS an honest total
+    for i, row in enumerate(rows):
+        c.check()
+        c.progress(i, len(rows))
+        sha = row["sha256"]
+        said = declared(*_facts(store, sha))
+        score = None
+        if said is None and detector is not None:
+            try:
+                score = detector.score(blobs.path_for(sha, row["ext"]).read_bytes())
+            except (OSError, LabelError) as e:
+                out["judge_failed"] += 1
+                c.log(f"origin {sha[:12]}: {e}", level="warning")
+                continue
+        verdict = judge(said, score, detector.model if detector is not None else "")
+        if verdict is None:
+            continue  # nothing said and no detector: still pending
+        store.set_origin(sha, verdict)
+        out["judged"] += 1
+        out[verdict.state] += 1
+        c.item(f"{sha[:12]} {verdict.state} ({verdict.by})", sha=sha, action="judged")
+    c.progress(len(rows), len(rows))
+    return out
+
+
 def run_all(
     cfg: Config,
     do_pixiv: bool = True,
@@ -1125,6 +1218,7 @@ def run_all(
                     tw,
                     threshold=cfg.dupe_threshold,
                     labeler=make_labeler(cfg),
+                    detector=make_detector(cfg),
                 )
             )
     finally:

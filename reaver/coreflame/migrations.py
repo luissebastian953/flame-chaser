@@ -425,3 +425,22 @@ CREATE TABLE IF NOT EXISTS queue_state (
     value TEXT NOT NULL
 )
 """
+
+
+@migration(13, "image_origin")
+def _v13() -> str:
+    # how each image was made (coreflame/origin.py), keyed by the blob's sha
+    # like image_kinds: ai or human, and what said so - the artist's pixiv flag,
+    # an AI hashtag, or the detector (with its score, so the cut can move).
+    # No row = not judged yet, which the gallery shows rather than hides.
+    return """
+CREATE TABLE IF NOT EXISTS image_origin (
+    sha256    TEXT PRIMARY KEY,
+    state     TEXT NOT NULL CHECK (state IN ('ai','human')),
+    by        TEXT NOT NULL CHECK (by IN ('declared','tags','model')),
+    score     REAL,
+    model     TEXT NOT NULL DEFAULT '',
+    judged_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS image_origin_state ON image_origin(state)
+"""

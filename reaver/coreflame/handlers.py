@@ -16,11 +16,13 @@ from .identify import Identifier, Identifies, make_identifier
 from .jobs import LANES, Handler, JobContext, JobRunner
 from .kinds import Labeler, Labels, make_labeler
 from .models import Watch
+from .origin import Detector, Detects, make_detector
 from .people import Tagger, Tags, make_tagger
 from .pipeline import (
     RunStats,
     download_pending,
     identify_pending,
+    judge_pending,
     label_pending,
     people_pending,
     poll_pixiv,
@@ -64,6 +66,7 @@ class Adapters:
     labeler: Labels | None = None  # None: numpy/onnxruntime not installed
     tagger: Tags | None = None  # same deps; the gender filter, and one of the identifier's votes
     identifier: Identifies | None = None  # None: switched off in Settings, or no deps
+    detector: Detects | None = None  # AI-made or by hand (origin.py); None: no deps
 
     def __init__(self, cfg: Config, store: Any) -> None:
         self.pixiv = make_pixiv(cfg, sink=store)
@@ -79,6 +82,7 @@ class Adapters:
         self.identifier = make_identifier(
             cfg, self.tagger if isinstance(self.tagger, Tagger) else None
         )
+        self.detector = make_detector(cfg)
         self.cfg = cfg
 
     def labels_for(self, ctx: JobContext) -> Labels | None:
@@ -101,6 +105,12 @@ class Adapters:
             self.identifier.tagger.log = ctx.log
         return self.identifier
 
+    def detect_for(self, ctx: JobContext) -> Detects | None:
+        """The AI detector with this job's log bound (its first use downloads 17 MB)."""
+        if isinstance(self.detector, Detector):
+            self.detector.log = ctx.log
+        return self.detector
+
     def close(self) -> None:
         self.pixiv.close()
         self.twitter.close()
@@ -122,6 +132,7 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
             tagger=a.tags_for(ctx),
             identifier=a.identify_for(ctx),
             cleanup=a.cfg.cleanup_rule,
+            detector=a.detect_for(ctx),
             source=source,
         )
 
@@ -148,6 +159,7 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                     tagger=a.tags_for(ctx),
                     identifier=a.identify_for(ctx),
                     cleanup=a.cfg.cleanup_rule,
+                    detector=a.detect_for(ctx),
                 )
             )
         return st
@@ -281,6 +293,7 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                     tagger=a.tags_for(ctx),
                     identifier=a.identify_for(ctx),
                     cleanup=a.cfg.cleanup_rule,
+                    detector=a.detect_for(ctx),
                     source=source if source in LANES else None,
                 )
             )
@@ -322,6 +335,12 @@ def build_handlers(make_adapters: Callable[[JobContext], Adapters]) -> dict[str,
                         ctx.store, a.blobs, identifier, int(limit) if limit else None, ctx=ctx
                     )
                 )
+            # AI-made or by hand (coreflame/origin.py): declared ones need no model
+            out.update(
+                judge_pending(
+                    ctx.store, a.blobs, a.detect_for(ctx), int(limit) if limit else None, ctx=ctx
+                )
+            )
             return out
         finally:
             a.close()

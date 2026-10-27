@@ -52,6 +52,15 @@
     "characters": "characters",
     "unidentified": "unidentified",
     "notIdentified": "not identified yet",
+    "made": "made",
+    "madeAi": "AI-made",
+    "madeHuman": "Hand-drawn",
+    "madeBy": {
+      "declared": "declared by the artist",
+      "tags": "from its tags",
+      "model": "detected {n}%"
+    },
+    "notJudged": "not judged yet",
     "score": "{n}%",
     "sameImageOn": "Same image on {source}",
     "openOn": "Open on {source}",
@@ -125,6 +134,24 @@
     "off": "Character names are off - switch them on in Settings › Characters",
     "unavailable": "Character names are off: the optional classifier is not installed ({cmd})",
     "failed": "Identifying failed: {error}"
+  },
+  "made": {
+    "title": "Made",
+    "state": {
+      "human": "Hand-drawn",
+      "ai": "AI-made",
+      "pending": "Not judged yet"
+    },
+    "judgeNow": "Judge 0 images | Judge 1 image | Judge {n} images",
+    "judging": "Judging… {done} / {total}",
+    "judgingStarting": "Judging…",
+    "policy": "labels only - nothing is removed",
+    "firstUse": "the first run downloads the detector (~17 MB)",
+    "unavailable": "AI detection is off: the optional classifier is not installed ({cmd})",
+    "failed": "Judging failed: {error}"
+  },
+  "tile": {
+    "ai": "AI"
   },
   "delete": {
     "menu": {

@@ -307,6 +307,7 @@ classDiagram
     +Optional~Labels~ labeler
     +Optional~Tags~ tagger
     +Optional~Identifies~ identifier
+    +Optional~Detects~ detector
     +close()
   }
   class pipeline {
@@ -337,6 +338,10 @@ classDiagram
     <<protocol>>
     +identify(data, people) Identity
   }
+  class Detects {
+    <<protocol>>
+    +score(data) float
+  }
 
   Adapter <|.. PixivAdapter
   Adapter <|.. TwitterAdapter
@@ -361,6 +366,7 @@ classDiagram
   Adapters o-- Labels
   Adapters o-- Tags
   Adapters o-- Identifies
+  Adapters o-- Detects
   pipeline ..> Adapters : built per job (handlers.py)
   pipeline ..> Store
   pipeline ..> dedupe
@@ -373,9 +379,10 @@ classDiagram
 `handlers.build_handlers` maps a job type (`poll`, `timelines`, `link`,
 `media`, `tags`, `label`, `export`) to a function `(JobContext) -> counters`;
 `handlers.plan` splits one `poll` request into per-source jobs. The classifier
-protocols (`Labels`, `Tags`, `Identifies`) have ONNX implementations behind the
-optional `classify` extra and are `None` when numpy/onnxruntime are absent, so
-the engine stays importable without them.
+protocols (`Labels`, `Tags`, `Identifies`, `Detects`) have ONNX implementations
+behind the optional `classify` extra and are `None` when numpy/onnxruntime are
+absent, so the engine stays importable without them (`Detects` is the AI-or-hand
+detector of `origin.py`; pixiv's flag and AI hashtags are read without it).
 
 ## 3.3 Daemon (`dawnmaker/`)
 

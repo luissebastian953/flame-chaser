@@ -159,6 +159,41 @@ describe('DetailAside', () => {
     w.unmount();
   });
 
+  it('the made row says AI-made or hand-drawn and who said so, or that it is not judged yet', async () => {
+    const w = mountAside(
+      post({
+        media: [
+          media({ idx: 0, origin: { state: 'ai', by: 'declared', score: null } }),
+          media({ idx: 1, origin: { state: 'human', by: 'model', score: 0.0749 } }),
+          media({ idx: 2, origin: { state: 'ai', by: 'tags', score: null } }),
+          media({ idx: 3, origin: null }),
+        ],
+        linked: [],
+      }),
+    );
+
+    const made = () =>
+      w
+        .findAll('.meta > div')
+        .find((d) => d.text().startsWith('made'))!
+        .text();
+
+    expect(made()).toContain('AI-made');
+    expect(made()).toContain('declared by the artist');
+
+    await w.findAll('.strip .tile')[1]!.trigger('click');
+    expect(made()).toContain('Hand-drawn');
+    expect(made()).toContain('detected 93%');
+
+    await w.findAll('.strip .tile')[2]!.trigger('click');
+    expect(made()).toContain('AI-made');
+    expect(made()).toContain('from its tags');
+
+    await w.findAll('.strip .tile')[3]!.trigger('click');
+    expect(made()).toContain('not judged yet');
+    w.unmount();
+  });
+
   it('× emits close', async () => {
     const w = mountAside();
     await w.find('[aria-label="Close"]').trigger('click');

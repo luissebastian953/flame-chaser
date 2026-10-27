@@ -6,6 +6,7 @@ person using the app, not for git log.
 
 ## Unreleased
 
+- Added: every image is told apart as AI-made or hand-drawn - from the artist's own flag on pixiv, from an AI hashtag on the post (#AIイラスト, #AIart, #NovelAI and the like), or, when the post says nothing, from a small detector that runs with the other classifiers. Nothing is removed for it: the gallery gets a Made row (Hand-drawn / AI-made / Not judged yet), AI tiles carry a small AI mark, and the image details say how the call was made ("declared by the artist", "from its tags", "detected 97%"). "Judge N images" labels what was stored before; flagged and tagged images are judged even without the optional classifier. A small database migration runs on first launch
 - Changed: while choosing images to delete, a tile you keep back out moves to the end of its grid (Smart's matches, By tag's grid) so the ones still marked lead
 - Changed: the Clear button in the selection bar is greyed out while there is nothing to clear
 - Changed: while choosing images to delete By tag, the chips stay where they are in their row; it is the images behind the picked chips that move to the front of the grid, so the selection reads in one place without the rows reshuffling

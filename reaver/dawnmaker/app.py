@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from coreflame import __version__, bundle, handlers, identify, kinds, people, tags, trash
+from coreflame import __version__, bundle, handlers, identify, kinds, origin, people, tags, trash
 from coreflame.blobs import BlobStore
 from coreflame.config import Config
 from coreflame.db import Store
@@ -176,6 +176,8 @@ class TagAction(BaseModel):
 
 
 IDENT_STATES = ("identified", "unidentified", "pending")  # gallery `ident` filter
+# a stale model verdict reads as pending; a declared or tagged one never goes stale
+ORIGIN_JOIN = "LEFT JOIN image_origin o ON o.sha256=m.sha256 AND (o.by<>'model' OR o.model=?)"
 
 
 class CleanupRuleIn(BaseModel):
@@ -665,6 +667,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         kinds_: str | None = Query(None, alias="kinds"),
         ident: str | None = None,
         character: str | None = None,
+        origin_: str | None = Query(None, alias="origin"),
         order: str = "newest",
         s: Store = Depends(store),
     ) -> dict:
@@ -672,14 +675,16 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         skips rows when a crawl inserts while the user scrolls. `kinds` is a
         comma list of image kinds to show (plus `unlabeled`); absent = all.
         `ident` is a comma list of identified / unidentified / pending (not
-        identified yet); `character` keeps the images naming that character.
+        identified yet); `character` keeps the images naming that character;
+        `origin` a comma list of ai / human / pending (coreflame/origin.py).
         `order` is newest (default) or oldest first; a cursor only continues
         the order it came from."""
         if order not in ("newest", "oldest"):
             raise HTTPException(400, {"code": "bad_order", "message": order})
         cmp, direction = ("<", "DESC") if order == "newest" else (">", "ASC")
         where = ["pw.slug=?", "m.state='stored'", "p.state='live'"]
-        args: list[Any] = [identify.IDENTIFIER_ID, slug]  # the JOIN's ? comes first
+        # the JOINs' ? come first, in JOIN order
+        args: list[Any] = [identify.IDENTIFIER_ID, origin.DETECTOR_ID, slug]
         if source:
             where.append("p.source=?")
             args.append(source)
@@ -702,6 +707,9 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
                 "WHERE ic.sha256=m.sha256 AND ic.name=?)"
             )
             args.append(character)
+        if origin_ is not None:
+            where.append(_origin_in(origin_))
+            args += [x for x in origin_.split(",") if x]
         if r18 == "exclude":
             where.append("p.is_r18=0")
         if cursor:
@@ -714,12 +722,14 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         rows = s.conn.execute(
             f"""SELECT m.sha256, m.source, m.external_id, m.idx, m.width, m.height,
                        p.posted_at, p.artist_name, p.title, k.kind,
-                       COALESCE(i.state,'pending') AS identity
+                       COALESCE(i.state,'pending') AS identity,
+                       COALESCE(o.state,'pending') AS origin, o.by AS origin_by
                 FROM post_watches pw
                 JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
                 JOIN media m ON m.source=p.source AND m.external_id=p.external_id
                 LEFT JOIN image_kinds k ON k.sha256=m.sha256
                 LEFT JOIN image_identity i ON i.sha256=m.sha256 AND i.model=?
+                {ORIGIN_JOIN}
                 WHERE {" AND ".join(where)}
                 ORDER BY p.posted_at {direction}, p.external_id {direction}, m.idx
                 LIMIT ?""",
@@ -765,6 +775,19 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             },
         }
 
+    @app.get("/api/gallery/{slug}/origins")
+    def gallery_origins(slug: str, r18: str = "exclude", s: Store = Depends(store)) -> dict:
+        """How this character's images were made (coreflame/origin.py): how
+        many are AI-made / by hand / not judged yet, and whether this install
+        can run the detector at all."""
+        return {
+            "counts": s.origin_counts(slug, origin.DETECTOR_ID, include_r18=r18 != "exclude"),
+            "detector": {
+                "available": kinds.runtime_available(),
+                "models": origin.models_present(state.cfg.home),
+            },
+        }
+
     # -- deletion (coreflame/trash.py) ------------------------------------------
     def _watch(s: Store, slug: str) -> Watch:
         w = next((w for w in s.watches() if w.slug == slug), None)
@@ -779,6 +802,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         ident: str | None,
         character: str | None,
         r18: str,
+        origin_: str | None = None,
     ) -> tuple[list[str], list[Any]]:
         """The grid's own visibility rules, shared with the selection lists:
         what the user cannot see is never selected for deletion."""
@@ -806,9 +830,18 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
                 "WHERE ic.sha256=m.sha256 AND ic.name=?)"
             )
             args.append(character)
+        if origin_ is not None:
+            where.append(_origin_in(origin_))
+            args += [x for x in origin_.split(",") if x]
         if r18 == "exclude":
             where.append("p.is_r18=0")
         return where, args
+
+    def _origin_in(origin_: str) -> str:
+        want = [x for x in origin_.split(",") if x]
+        if not want or any(x not in origin.STATES for x in want):
+            raise HTTPException(400, {"code": "bad_origin", "message": origin_})
+        return f"COALESCE(o.state,'pending') IN ({','.join('?' * len(want))})"
 
     @app.get("/api/gallery/{slug}/images")
     def gallery_images(
@@ -818,11 +851,13 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         kinds_: str | None = Query(None, alias="kinds"),
         ident: str | None = None,
         character: str | None = None,
+        origin_: str | None = Query(None, alias="origin"),
         tag: str | None = None,
         artist: str | None = None,
         sel_kind: str | None = None,
         sel_ident: str | None = None,
         sel_character: str | None = None,
+        sel_origin: str | None = None,
         s: Store = Depends(store),
     ) -> dict:
         """Every image of this gallery (its shas, in grid order) that carries
@@ -830,8 +865,8 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         an identification state or a character -- what By tag and All select
         with. The grid's own filters (`source kinds ident character`) still
         apply, so a hidden image is never picked. No term = everything shown."""
-        where, args = _grid_where(slug, source, kinds_, ident, character, r18)
-        args = [identify.IDENTIFIER_ID, *args]
+        where, args = _grid_where(slug, source, kinds_, ident, character, r18, origin_)
+        args = [identify.IDENTIFIER_ID, origin.DETECTOR_ID, *args]
         if tag:
             where.append(
                 "EXISTS (SELECT 1 FROM post_tags t WHERE t.source=p.source "
@@ -857,12 +892,18 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
                 "EXISTS (SELECT 1 FROM image_characters ic WHERE ic.sha256=m.sha256 AND ic.name=?)"
             )
             args.append(sel_character)
+        if sel_origin:
+            if sel_origin not in origin.STATES:
+                raise HTTPException(400, {"code": "bad_origin", "message": sel_origin})
+            where.append("COALESCE(o.state,'pending')=?")
+            args.append(sel_origin)
         rows = s.conn.execute(
             f"""SELECT m.sha256, m.source FROM post_watches pw
                 JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
                 JOIN media m ON m.source=p.source AND m.external_id=p.external_id
                 LEFT JOIN image_kinds k ON k.sha256=m.sha256
                 LEFT JOIN image_identity i ON i.sha256=m.sha256 AND i.model=?
+                {ORIGIN_JOIN}
                 WHERE {" AND ".join(where)}
                 ORDER BY p.posted_at DESC, p.external_id DESC, m.idx""",
             args,
@@ -1069,8 +1110,13 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         if p is None:
             raise nf("no_post", f"{source}/{external_id}")
         media = _media_rows(s, source, external_id)
+        shas = [m["sha256"] for m in media if m["sha256"]]
+        # how each image was made (coreflame/origin.py); null = not judged yet
+        made = s.origins(shas, origin.DETECTOR_ID)
+        for m in media:
+            m["origin"] = made.get(m["sha256"] or "")
         # who each image shows (coreflame/identify.py); null = not identified yet
-        found = s.identities([m["sha256"] for m in media if m["sha256"]])
+        found = s.identities(shas)
         for m in media:
             got = found.get(m["sha256"] or "")
             if got is None or got["model"] != identify.IDENTIFIER_ID:

@@ -113,6 +113,10 @@ export interface GalleryItem {
   kind: ImageKind | null;
   /** whether its character is named (coreflame/identify.py) */
   identity: IdentState;
+  /** how it was made (coreflame/origin.py): AI-made, hand-drawn, or not judged yet */
+  origin: OriginState;
+  /** who said so; null while pending */
+  origin_by: OriginBy | null;
 }
 
 /** which end of the timeline a gallery grid starts from */
@@ -147,6 +151,22 @@ export interface CharacterHit {
   tag: string;
   score: number;
   by: 'wd' | 'camie' | 'both';
+}
+
+/** ai = AI-made; human = hand-drawn; pending = not judged yet */
+export type OriginState = 'ai' | 'human' | 'pending';
+
+/**
+ * declared = the artist flagged it on pixiv; tags = the post carries an AI tag
+ * such as #AIイラスト; model = the detector decided
+ */
+export type OriginBy = 'declared' | 'tags' | 'model';
+
+/** GET /api/gallery/{slug}/origins */
+export interface GalleryOrigins {
+  counts: Record<OriginState, number>;
+  /** available = classifier deps installed; models = the detector file is on disk */
+  detector: { available: boolean; models: boolean };
 }
 
 /** GET /api/gallery/{slug}/kinds */
@@ -206,6 +226,8 @@ export interface PostMedia {
   source_variant: string;
   /** null = not identified yet; absent on a linked post's media */
   identity?: { state: 'identified' | 'unidentified'; characters: CharacterHit[] } | null;
+  /** how it was made; `score` = p(ai) when the detector ran, else null. null = not judged yet; absent on a linked post's media */
+  origin?: { state: 'ai' | 'human'; by: OriginBy; score: number | null } | null;
 }
 
 export interface LinkedPost {
@@ -285,7 +307,7 @@ export interface Health {
 export type DeleteMode = 'image' | 'tag' | 'smart' | 'all';
 
 /** a chip By tag selects with: what it is and which images carry it */
-export type TermKind = 'tag' | 'kind' | 'ident' | 'character' | 'artist';
+export type TermKind = 'tag' | 'kind' | 'ident' | 'character' | 'artist' | 'origin';
 
 /** GET /api/gallery/{slug}/artists */
 export interface GalleryArtist {

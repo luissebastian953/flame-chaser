@@ -1,10 +1,12 @@
 import type {
   GalleryCharacters,
   GalleryKinds,
+  GalleryOrigins,
   GalleryPage,
   GridOrder,
   IdentState,
   KindFilter,
+  OriginState,
   PostDetail,
   Source,
   TagStat,
@@ -38,6 +40,11 @@ export const IDENT_STATES: IdentState[] = ['identified', 'unidentified', 'pendin
 
 const WHO_KEY = 'curio.gallery.who';
 
+/** Hand-drawn / AI-made / not judged yet, in chip order. */
+export const ORIGIN_STATES: OriginState[] = ['human', 'ai', 'pending'];
+
+const MADE_KEY = 'curio.gallery.made';
+
 /** Per-viewer convenience, like the theme: localStorage, never the daemon. */
 function loadShow(): KindFilter[] {
   try {
@@ -65,6 +72,19 @@ function loadWho(): IdentState[] {
   return [...IDENT_STATES];
 }
 
+function loadMade(): OriginState[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(MADE_KEY) ?? 'null');
+    if (Array.isArray(v) && v.length && v.every((k) => ORIGIN_STATES.includes(k as OriginState))) {
+      return v as OriginState[];
+    }
+  } catch {
+    /* defaults */
+  }
+
+  return [...ORIGIN_STATES];
+}
+
 export const useLibrary = defineStore('library', {
   state: () => ({
     watches: [] as Watch[],
@@ -84,6 +104,9 @@ export const useLibrary = defineStore('library', {
     /** one character the grid is narrowed to (this gallery only), or null */
     character: null as string | null,
     characters: null as GalleryCharacters | null,
+    /** which origins (AI-made / hand-drawn / not judged) the grid shows (remembered) */
+    made: loadMade(),
+    origins: null as GalleryOrigins | null,
     /** one source the grid is narrowed to (this gallery only), or null for every source */
     source: null as Source | null,
     /** newest or oldest first; kept while the app runs */
@@ -97,7 +120,7 @@ export const useLibrary = defineStore('library', {
       s.watches.find((w) => w.slug === slug)?.kind_filter === false ? ALL_KIND_FILTERS : KIND_FILTERS,
     /**
      * The grid's filters as query parameters (kinds, identification state or
-     * character, source) -- what every page of the grid sends, and what a
+     * character, origin, source) -- what every page of the grid sends, and what a
      * selection list (stores/deletion.ts) sends so it never picks an image
      * the grid is not showing.
      */
@@ -110,6 +133,8 @@ export const useLibrary = defineStore('library', {
         // a chosen character replaces the identified/unidentified choice
         if (this.character) q.set('character', this.character);
         else if (this.who.length && this.who.length < IDENT_STATES.length) q.set('ident', this.who.join(','));
+        // independent of the character choice: how an image was made is not who is in it
+        if (this.made.length && this.made.length < ORIGIN_STATES.length) q.set('origin', this.made.join(','));
         if (this.source) q.set('source', this.source);
         return q;
       };
@@ -182,6 +207,20 @@ export const useLibrary = defineStore('library', {
       this.who = IDENT_STATES.filter((k) => who.includes(k));
       try {
         localStorage.setItem(WHO_KEY, JSON.stringify(this.who));
+      } catch {
+        /* best effort */
+      }
+
+      await this.loadGrid(slug, true);
+    },
+    async loadOrigins(slug: string) {
+      this.origins = await api.get<GalleryOrigins>(`/api/gallery/${slug}/origins`);
+    },
+    /** Change which origins the grid shows; remembered, and the grid starts over. */
+    async setMade(slug: string, made: OriginState[]) {
+      this.made = ORIGIN_STATES.filter((k) => made.includes(k));
+      try {
+        localStorage.setItem(MADE_KEY, JSON.stringify(this.made));
       } catch {
         /* best effort */
       }

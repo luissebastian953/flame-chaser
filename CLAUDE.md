@@ -86,8 +86,8 @@ so and stop - don't just change it.
   `datetime.UTC`, no `StrEnum`. Engine deps: `httpx`, `Pillow`, `gallery-dl`,
   `pydantic`, `glom`. Daemon adds `fastapi`, `uvicorn`. The optional
   `classify` extra adds `numpy` + `onnxruntime` for image kinds, the gender
-  filter and character names (`coreflame/kinds.py`, `people.py`,
-  `identify.py`), imported lazily. Keep the engine importable without
+  filter, character names and the AI-or-hand detector (`coreflame/kinds.py`,
+  `people.py`, `identify.py`, `origin.py`), imported lazily. Keep the engine importable without
   the daemon's deps or the classifier's.
 - **IDs are `str`, always.** Snowflakes exceed JS safe-integer range.
 - **Datetimes are tz-aware UTC** at the adapter edge. Never naive.

@@ -9,6 +9,8 @@ import type { GalleryItem } from '@/lib/types';
  * reads at a glance; faded further when a tag choice left it out, an amber
  * ring with "kept" when the user took it back out of a set, and a reason
  * badge (score, other character, duplicate, the tag that pulled it in).
+ * Top-right corner marks: X for a post from X, AI for an AI-made image
+ * (outside select mode only, where the marks would fight the checkbox).
  */
 const props = defineProps<{
   sha: string;
@@ -57,7 +59,10 @@ const label = computed(() => {
     <span v-if="select && !excluded" class="cb" aria-hidden="true">
       <Icon v-if="picked" name="check" :size="12" />
     </span>
-    <span v-if="item?.source === 'twitter'" class="xb">{{ $t('gallery.aside.source.twitter') }}</span>
+    <span class="marks">
+      <span v-if="!select && item?.origin === 'ai'" class="xb ai">{{ $t('gallery.tile.ai') }}</span>
+      <span v-if="item?.source === 'twitter'" class="xb">{{ $t('gallery.aside.source.twitter') }}</span>
+    </span>
     <span v-if="badge" class="badge" :class="tone ?? 'dim'">
       {{ kept ? $t('gallery.delete.smart.badge.kept', { text: badge }) : badge }}
     </span>
@@ -144,18 +149,26 @@ const label = computed(() => {
   background: var(--color-rose);
   border-color: var(--color-rose);
 }
-.xb {
+.marks {
   position: absolute;
   top: 6px;
   right: 6px;
-  width: 15px;
+  display: flex;
+  gap: 3px;
+}
+.xb {
+  min-width: 15px;
   height: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0 3px;
   background: color-mix(in oklch, var(--color-bg) 78%, transparent);
   color: var(--color-cyan);
   font: 600 8px var(--font-sans);
+}
+.xb.ai {
+  color: var(--color-tx);
 }
 .badge {
   position: absolute;

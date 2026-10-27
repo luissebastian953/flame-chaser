@@ -40,6 +40,8 @@ function item(external_id: string, source: string): GalleryItem {
     thumb_url: '',
     kind: 'illustration',
     identity: 'pending',
+    origin: 'pending',
+    origin_by: null,
   };
 }
 
@@ -95,6 +97,8 @@ function respond(path: string) {
       characters: [],
       identifier: { enabled: true, available: true, models: true },
     };
+  if (path === '/api/gallery/ganyu/origins')
+    return { counts: { ai: 0, human: 0, pending: 0 }, detector: { available: true, models: true } };
   if (path.startsWith('/api/posts/')) return detail;
   if (path.startsWith('/api/gallery/ganyu/images?')) {
     // By tag: the daemon's list for one term, filtered like the grid

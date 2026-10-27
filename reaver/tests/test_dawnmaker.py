@@ -386,6 +386,74 @@ def test_gallery_identity_filter(tmp: Path) -> None:
     print("  gallery identity:     ok (ident + character filters, counts, detail, switch)")
 
 
+def test_gallery_origin_filter(tmp: Path) -> None:
+    """AI-made or by hand (coreflame/origin.py) labels, never deletes:
+    `origin` narrows the grid, the counts feed the chips, By tag selects
+    with `sel_origin`, and post detail says how each image was made."""
+    import hashlib
+
+    from coreflame import origin
+    from coreflame.origin import Origin
+
+    client, store, state = boot(tmp / "origin")
+    store.upsert_watch(Watch(slug="ff", pixiv_tags=["ホタル"]))
+    made = {
+        "401": Origin("ai", "declared"),
+        "402": Origin("human", "model", 0.03, origin.DETECTOR_ID),
+        "403": None,  # not judged yet
+        "404": Origin("ai", "model", 0.98, "older-model"),  # stale: reads as pending
+    }
+    for i, (eid, o) in enumerate(made.items(), 1):
+        data = _img(80 + i, (300, 400))
+        store.upsert_post(
+            IllustRecord(
+                source="pixiv",
+                external_id=eid,
+                artist_id="a",
+                posted_at=f"2026-09-1{i}T10:00:00+00:00",
+                media=[{"index": 0, "url": f"https://x/og{i}.png"}],
+            ),
+            "ff",
+        )
+        state.blobs.put(data, "png")
+        sha = hashlib.sha256(data).hexdigest()
+        store.mark_media("pixiv", eid, 0, state="stored", sha=sha, nbytes=len(data), ext="png")
+        if o is not None:
+            store.set_origin(sha, o)
+
+    def ids(q: str) -> list[str]:
+        r = client.get(f"/api/gallery/ff{q}")
+        assert r.status_code == 200, r.text
+        return [it["external_id"] for it in r.json()["items"]]
+
+    assert ids("") == ["404", "403", "402", "401"]
+    assert ids("?origin=ai") == ["401"]
+    assert ids("?origin=human,pending") == ["404", "403", "402"]
+    assert ids("?origin=pending&ident=pending") == ["404", "403"]
+    items = client.get("/api/gallery/ff").json()["items"]
+    assert [it["origin"] for it in items] == ["pending", "pending", "human", "ai"]
+    assert [it["origin_by"] for it in items] == [None, None, "model", "declared"]
+    for bad in ("?origin=bogus", "?origin=", "?origin=ai,nope"):
+        r = client.get(f"/api/gallery/ff{bad}")
+        assert r.status_code == 400 and r.json()["error"]["code"] == "bad_origin", bad
+
+    c = client.get("/api/gallery/ff/origins").json()
+    assert c["counts"] == {"ai": 1, "human": 1, "pending": 2}
+    assert set(c["detector"]) == {"available", "models"}
+
+    sel = client.get("/api/gallery/ff/images?sel_origin=pending").json()
+    assert len(sel["shas"]) == 2
+    assert len(client.get("/api/gallery/ff/images?origin=ai&sel_origin=ai").json()["shas"]) == 1
+    assert client.get("/api/gallery/ff/images?sel_origin=nope").status_code == 400
+
+    d = client.get("/api/posts/pixiv/401").json()
+    assert d["media"][0]["origin"] == {"state": "ai", "by": "declared", "score": None}
+    assert client.get("/api/posts/pixiv/402").json()["media"][0]["origin"]["score"] == 0.03
+    assert client.get("/api/posts/pixiv/403").json()["media"][0]["origin"] is None
+    assert client.get("/api/posts/pixiv/404").json()["media"][0]["origin"] is None  # stale
+    print("  gallery origin:       ok (filter, counts, By tag term, detail)")
+
+
 def test_watch_target_and_kind_filter(tmp: Path) -> None:
     client, _, _ = boot(tmp / "w")
     body = {"slug": "mei", "match_terms": ["raiden mei"], "sources": ["twitter"]}
@@ -919,6 +987,7 @@ if __name__ == "__main__":
         test_gallery_keyset_and_media(tmp)
         test_gallery_kinds_filter(tmp)
         test_gallery_identity_filter(tmp)
+        test_gallery_origin_filter(tmp)
         test_watch_target_and_kind_filter(tmp)
         test_post_detail_links_cross_source(tmp)
         test_delete_and_trash_api(tmp)

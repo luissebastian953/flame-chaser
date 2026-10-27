@@ -52,6 +52,15 @@
     "characters": "キャラクター",
     "unidentified": "未特定",
     "notIdentified": "まだ特定していません",
+    "made": "制作",
+    "madeAi": "AI生成",
+    "madeHuman": "手描き",
+    "madeBy": {
+      "declared": "作者が申告",
+      "tags": "タグから",
+      "model": "検出 {n}%"
+    },
+    "notJudged": "まだ判定していません",
     "score": "{n}%",
     "sameImageOn": "{source} の同じ画像",
     "openOn": "{source} で開く",
@@ -125,6 +134,24 @@
     "off": "キャラクター名はオフです - 設定 › キャラクター でオンにできます",
     "unavailable": "キャラクター名はオフです: 任意の分類器がインストールされていません（{cmd}）",
     "failed": "特定に失敗: {error}"
+  },
+  "made": {
+    "title": "制作",
+    "state": {
+      "human": "手描き",
+      "ai": "AI生成",
+      "pending": "未判定"
+    },
+    "judgeNow": "0枚を判定 | 1枚を判定 | {n}枚を判定",
+    "judging": "判定中… {done} / {total}",
+    "judgingStarting": "判定中…",
+    "policy": "ラベルを付けるだけ - 何も削除されません",
+    "firstUse": "初回実行時に検出器（約 17 MB）をダウンロードします",
+    "unavailable": "AI判定はオフです: 任意の分類器がインストールされていません（{cmd}）",
+    "failed": "判定に失敗: {error}"
+  },
+  "tile": {
+    "ai": "AI"
   },
   "delete": {
     "menu": {

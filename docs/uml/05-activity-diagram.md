@@ -88,7 +88,8 @@ flowchart TD
   put --> th["ThumbStore.make → thumbs/…/sha.webp 400 px"]
   th --> row["mark_media stored: sha, phash, bytes, w×h, variant"]
   row --> place["LibraryView.place → by-character/slug/… hardlink,<br/>for every watch the post belongs to"]
-  place --> ident{"identify_characters on?"}
+  place --> made["origin: pixiv flag / AI hashtag / detector → image_origin<br/>(labels only)"]
+  made --> ident{"identify_characters on?"}
   ident -- yes --> id["Identifier: WD + Camie vouch → image_identity, image_characters"]
   ident -- no --> ev
   id --> rule{"cleanup rule active and<br/>verdict says discard?"}

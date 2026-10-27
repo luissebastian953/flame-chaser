@@ -62,6 +62,7 @@ const TERM_PARAM: Record<TermKind, string> = {
   ident: 'sel_ident',
   character: 'sel_character',
   artist: 'artist',
+  origin: 'sel_origin',
 };
 
 let smartTimer: ReturnType<typeof setTimeout> | null = null;

@@ -443,6 +443,7 @@ async function reload() {
     lib.loadKinds(props.slug),
     lib.loadWatches(),
     lib.loadCharacters(props.slug),
+    lib.loadOrigins(props.slug),
   ]);
 }
 
@@ -499,6 +500,7 @@ async function load() {
   lib.character = null;
   lib.source = null;
   lib.kinds = null;
+  lib.origins = null;
   allTags.value = false;
   artists.value = [];
   shown.value = null;
@@ -509,6 +511,7 @@ async function load() {
     lib.loadTags(props.slug),
     lib.loadKinds(props.slug),
     lib.loadCharacters(props.slug),
+    lib.loadOrigins(props.slug),
   ]);
 
   void loadSuggested();
@@ -707,6 +710,7 @@ watch(() => props.slug, load);
         </div>
         <KindFilter :slug="slug" />
         <IdentityFilter :slug="slug" />
+        <OriginFilter :slug="slug" />
         <div v-if="del.mode === 'tag' && artists.length" class="artists">
           <span class="ptitle">{{ $t('gallery.delete.tag.artists') }}</span>
           <button

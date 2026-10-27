@@ -24,6 +24,21 @@ const row = computed(() =>
   cur.value && !cur.value.linked ? props.post.media.find((m) => m.idx === cur.value!.idx) : undefined,
 );
 
+/**
+ * who said how the image was made: the artist, its tags, or the detector -
+ * shown with its confidence in the verdict it gave (p(ai) for AI-made,
+ * 1 - p(ai) for hand-drawn), never the raw AI score under a "Hand-drawn"
+ */
+const madeBy = computed(() => {
+  const o = row.value?.origin;
+  if (!o) return '';
+  if (o.by === 'model') {
+    const ai = Math.round((o.score ?? 0) * 100);
+    return t('gallery.aside.madeBy.model', { n: o.state === 'ai' ? ai : 100 - ai });
+  }
+  return t(`gallery.aside.madeBy.${o.by}`);
+});
+
 const own = computed(() => set.value.filter((it) => !it.linked));
 const others = computed(() => set.value.filter((it) => it.linked));
 const divider = computed(() => linkedStart(set.value));
@@ -258,6 +273,20 @@ const storedAt = computed(() => {
           </span>
           <span v-else-if="row.identity" class="kv">{{ $t('gallery.aside.unidentified') }}</span>
           <span v-else class="kv">{{ $t('gallery.aside.notIdentified') }}</span>
+        </div>
+        <div v-if="row">
+          <span class="kv ib">
+            <Icon v-if="row.origin?.state === 'ai'" name="cpu" :size="12" />
+            <Icon v-else name="edit" :size="12" />
+            {{ $t('gallery.aside.made') }}
+          </span>
+          <span v-if="row.origin" class="who">
+            <span>
+              {{ row.origin.state === 'ai' ? $t('gallery.aside.madeAi') : $t('gallery.aside.madeHuman') }}
+              <em class="mono">{{ madeBy }}</em>
+            </span>
+          </span>
+          <span v-else class="kv">{{ $t('gallery.aside.notJudged') }}</span>
         </div>
         <div>
           <span class="kv ib">

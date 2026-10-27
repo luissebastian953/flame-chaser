@@ -58,7 +58,7 @@ metadata, no free API since February 2026, and polices automation).
 | Crawl | per character: pixiv discover → tags → link → download; X search to target + followed timelines | `handlers.plan`, `pipeline.py` |
 | Queue | one worker per source, pause (queue and job), reorder, run now, cancel, retry; survives restart | `jobs.py` |
 | Live view | stages, progress, items, log, requests per minute, per worker; mini window and tray when unfocused | SSE, `jobs` store, `background.ts`, `pip.rs` |
-| Gallery | characters, cursor-paginated grid with source / kind / who / character filters, post detail with pages, related and linked posts, fullscreen viewer | `/api/gallery/*`, `/api/posts/*` |
+| Gallery | characters, cursor-paginated grid with source / kind / who / character / made (AI or by hand) filters, post detail with pages, related and linked posts, fullscreen viewer | `/api/gallery/*`, `/api/posts/*` |
 | Curation | watch or ignore observed tags; delete by image, tag, Smart criteria or all, to a 30-day trash with Undo; crawl-time cleanup rule | `tags.py`, `trash.py` |
 | Accounts | sign in via the site's own page, verify before storing, show expiry | `auth.rs`, `dawnmaker/auth.py` |
 | Storage | pick the library folder (refuse sync roots), usage figures, export/import the archive as one file | `library.py`, `bundle.py` |
@@ -321,6 +321,13 @@ erDiagram
     real score
     text by
   }
+  IMAGE_ORIGIN {
+    text sha256 PK
+    text state "ai | human"
+    text by "declared | tags | model"
+    real score
+    text model
+  }
   TRASH_BATCHES {
     text id PK
     text slug
@@ -370,6 +377,7 @@ erDiagram
   MEDIA ||--o| IMAGE_PEOPLE : "by sha256"
   MEDIA ||--o| IMAGE_IDENTITY : "by sha256"
   IMAGE_IDENTITY ||--o{ IMAGE_CHARACTERS : "named"
+  MEDIA ||--o| IMAGE_ORIGIN : "by sha256"
   JOBS ||--o{ JOB_LOG : "emits"
   TRASH_BATCHES ||--|{ TRASH_ITEMS : "holds"
   MEDIA ||--o| TRASH_ITEMS : "moved to"
@@ -427,7 +435,7 @@ posts, ~100k images, ~100 GB of blobs.
 | Grid page | ~15 KB per card | thumbnails at ingest; full-size PNGs never cross the webview |
 | SSE | 500-event ring buffer, bounded per-client queue (1000) | a stalled client drops events, never blocks the producer |
 | Raw retention | zlib'd JSON per fetched detail (a few KB each) | makes re-normalisation free; `raw_payloads` is the biggest table and still small beside the blobs |
-| Classifier | ~30 ms per image on CPU for kind; WD and Camie models ~470 MB + ~790 MB downloaded once | only on bytes that passed dedupe and the filters |
+| Classifier | ~30 ms per image on CPU for kind and again for AI-or-hand; WD and Camie models ~470 MB + ~790 MB downloaded once, the AI detector 17 MB | only on bytes that passed dedupe and the filters |
 
 ## 6. Core mechanisms
 
@@ -453,9 +461,10 @@ states and steps.
    (`bookmark_count` ≠ `favorite_count`).
 4. **Two-level dedupe** (**LB**). sha256 for exact; dHash with Hamming ≤ 6
    (configurable) within one artist for the PNG-vs-JPEG repost.
-5. **Image kinds, people, identity** (optional `classify` extra). Keep only
-   illustration and screencap; a per-character gender rule; two taggers
-   vouch for a character name. Verdicts are rows on the sha; a rejected image
+5. **Image kinds, people, identity, origin** (optional `classify` extra). Keep
+   only illustration and screencap; a per-character gender rule; two taggers
+   vouch for a character name; AI-made or by hand from pixiv's flag, an AI
+   hashtag, or a detector. Verdicts are rows on the sha; a rejected image
    keeps its url and is reopened when a rule loosens.
 6. **The job queue.** Rows, not objects: `jobs` is the queue, the history and
    the cross-process control plane (`cancel_requested`, `pause_requested`).

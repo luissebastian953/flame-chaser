@@ -25,6 +25,7 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
 │   ├── names.py      a character's names + forms from Danbooru and Wikidata (form suggestions)
 │   ├── people.py     who is in a picture (WD tagger v3): per-character gender filter, full/partial
 │   ├── identify.py   the character's name (WD v3 + Camie v2 vouch for each other) or unidentified; labels only
+│   ├── origin.py     AI-made or by hand: pixiv's aiType flag, an AI hashtag, else deepghs/anime_ai_check; labels only
 │   ├── trash.py      deleting images: batches to <library>/trash, forget/reopen posts, undo, 30-day purge, Smart criteria, crawl-time rule
 │   ├── library.py    hardlink view, gc, import, usage (Settings › Storage figures)
 │   ├── bundle.py     export/import the archive as one file: .curio (framed, hashed, scan-recoverable) or .zip; inspect, verify, merge/restore
@@ -59,6 +60,7 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
     ├── test_speed.py     measurement over a fake transport, the OS parsers, the meter
     ├── test_people.py    gender rules, tagger input, reject at download, backlog, loosening (fake tagger)
     ├── test_identify.py  naming rule, form folding, at download (never rejects unless the cleanup rule says so), backlog, new model (fake)
+    ├── test_origin.py    hashtag fold, declared vs the model's cut, at download (never rejects), backlog without and with the detector, new model (fake)
     ├── test_trash.py     delete to trash, forget vs reopen, undo, permanent, purge, Smart matches, crawl verdict
     ├── test_bundle.py    both codecs round-trip, inspect conflicts, merge policies + rules, restore, bit flip / truncation / salvage
     └── test_dawnmaker.py the HTTP surface via TestClient (auth layers, routes, SSE)

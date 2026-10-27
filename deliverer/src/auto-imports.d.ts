@@ -24,6 +24,7 @@ declare global {
   const KIND_FILTERS: typeof import('./stores/library').KIND_FILTERS
   const MODES: typeof import('./stores/background').MODES
   const OPEN_REFRESH_MS: typeof import('./stores/network').OPEN_REFRESH_MS
+  const ORIGIN_STATES: typeof import('./stores/library').ORIGIN_STATES
   const PIP_DELAY: typeof import('./lib/background').PIP_DELAY
   const PIP_HEIGHT: typeof import('./lib/background').PIP_HEIGHT
   const PIP_LINGER: typeof import('./lib/background').PIP_LINGER
@@ -229,7 +230,7 @@ declare global {
   export type { ViewerItem } from './lib/related'
   import('./lib/related')
   // @ts-ignore
-  export type { Source, Gender, GenderMode, Watch, JobState, Lane, Job, WorkerSlot, RateBudget, PauseReason, PipelineState, LogLine, GalleryItem, GridOrder, GalleryPage, ImageKind, KindFilter, IdentState, GalleryCharacters, CharacterHit, GalleryKinds, TagStat, PostDetail, PostMedia, LinkedPost, NameSuggestion, CharacterNames, ProbeResult, SourcesStatus, Health, DeleteMode, TermKind, GalleryArtist, SmartReason, SmartMatch, SmartResult, CleanupRule, ReviewSummary, DeletePreview, DeleteResult, TrashSummary, NetworkSpeed, BundleFormat, WatchPolicy, BundleExportBody, BundleConflict, BundleInspect, BundleImportBody, BundleImportResult, StorageUsage } from './lib/types'
+  export type { Source, Gender, GenderMode, Watch, JobState, Lane, Job, WorkerSlot, RateBudget, PauseReason, PipelineState, LogLine, GalleryItem, GridOrder, GalleryPage, ImageKind, KindFilter, IdentState, GalleryCharacters, CharacterHit, OriginState, OriginBy, GalleryOrigins, GalleryKinds, TagStat, PostDetail, PostMedia, LinkedPost, NameSuggestion, CharacterNames, ProbeResult, SourcesStatus, Health, DeleteMode, TermKind, GalleryArtist, SmartReason, SmartMatch, SmartResult, CleanupRule, ReviewSummary, DeletePreview, DeleteResult, TrashSummary, NetworkSpeed, BundleFormat, WatchPolicy, BundleExportBody, BundleConflict, BundleInspect, BundleImportBody, BundleImportResult, StorageUsage } from './lib/types'
   import('./lib/types')
 }
 
@@ -254,6 +255,7 @@ declare module 'vue' {
     readonly KIND_FILTERS: UnwrapRef<typeof import('./stores/library')['KIND_FILTERS']>
     readonly MODES: UnwrapRef<typeof import('./stores/background')['MODES']>
     readonly OPEN_REFRESH_MS: UnwrapRef<typeof import('./stores/network')['OPEN_REFRESH_MS']>
+    readonly ORIGIN_STATES: UnwrapRef<typeof import('./stores/library')['ORIGIN_STATES']>
     readonly PIP_DELAY: UnwrapRef<typeof import('./lib/background')['PIP_DELAY']>
     readonly PIP_HEIGHT: UnwrapRef<typeof import('./lib/background')['PIP_HEIGHT']>
     readonly PIP_LINGER: UnwrapRef<typeof import('./lib/background')['PIP_LINGER']>

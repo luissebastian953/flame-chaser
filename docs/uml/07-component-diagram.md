@@ -42,11 +42,11 @@ flowchart TB
     models["models.py<br/>Watch · IllustRecord · MediaRef · Tag"]
     db["db.py + migrations.py + seen.py<br/>Store · forward-only schema · visited gate"]
     jobs["jobs.py + handlers.py<br/>JobRunner · lanes · JobContext · plan"]
-    pipe["pipeline.py<br/>poll · link · search_to_target · download · label · identify"]
+    pipe["pipeline.py<br/>poll · link · search_to_target · download · label · identify · judge"]
     http["http.py + net.py + online.py<br/>SourceClient · token buckets · METER · DoH · NetWatch"]
     srcs["sources/<br/>Adapter protocol · pixiv.py · twitter.py · specs.py (glom)"]
     media["blobs.py · thumbs.py · library.py · dedupe.py · phash.py"]
-    cls["kinds.py · people.py · identify.py<br/>optional [classify]: numpy + onnxruntime"]
+    cls["kinds.py · people.py · identify.py · origin.py<br/>optional [classify]: numpy + onnxruntime"]
     extra["tags.py · trash.py · bundle.py · names.py · speed.py"]
     cli["cli.py<br/>coreflame watch · poll · jobs · bundle · net · doctor"]
   end
@@ -121,7 +121,7 @@ flowchart TB
 | Window events | main webview and `pip` window | each other | `pipeline:tick` down, `pip:*` up; `tray:*` from Rust |
 | `Adapter` protocol | `sources/base.py` | `pipeline.py`, `probe.py` | `discover(watch, since, stats)`, `fetch_media(url, referer)`; records are `IllustRecord` at the edge |
 | `Handler` | `handlers.build_handlers` | `JobRunner` | `(JobContext) -> counters`, keyed by job type |
-| `Labels` / `Tags` / `Identifies` | `kinds.py` / `people.py` / `identify.py` | `pipeline.py` | `None` when the `classify` extra is missing; the engine must import without it |
+| `Labels` / `Tags` / `Identifies` / `Detects` | `kinds.py` / `people.py` / `identify.py` / `origin.py` | `pipeline.py` | `None` when the `classify` extra is missing; the engine must import without it |
 | SQLite file | `Store` over `migrations.py` | daemon threads (one connection each), the CLI | WAL; natural-key upserts; `jobs.cancel_requested` is the cross-process cancel |
 | gallery-dl | the `gallery_dl` module run as a subprocess | `TwitterAdapter` | JSON output; cookies file and proxy passed through; owns the X protocol layer |
 

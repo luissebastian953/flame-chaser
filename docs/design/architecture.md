@@ -1042,13 +1042,16 @@ GET /gallery/{slug}?cursor=&limit=100&source=pixiv|twitter&order=newest|oldest&r
                    &kinds=illustration,unlabeled       (absent = every kind; §10.15)
                    &ident=identified,unidentified,pending   (absent = all; §10.19)
                    &character=raiden_mei               (images naming that character)
+                   &origin=ai,human,pending            (absent = all; §10.22)
                                      → {items:[{sha256,source,external_id,idx,
                                                 width,height,posted_at,
                                                 artist_name,thumb_url,
-                                                kind, identity}],  kind: null = unlabeled
-                                        next_cursor}
+                                                kind, identity,
+                                                origin, origin_by}],  kind: null = unlabeled
+                                        next_cursor}       origin_by: declared|tags|model|null
                                        400 bad_kind on an unknown or empty kinds=,
-                                       400 bad_ident on an unknown or empty ident=
+                                       400 bad_ident on an unknown or empty ident=,
+                                       400 bad_origin on an unknown or empty origin=
                                        400 bad_order on anything but newest|oldest
                                        (a cursor only continues the order it came from)
                                        (the UI always sends the kept kinds + unlabeled;
@@ -1062,6 +1065,9 @@ GET /gallery/{slug}/characters?r18=exclude
                                      → {counts:{identified,unidentified,pending},
                                         characters:[{name,label,count}],  most first
                                         identifier:{enabled,available,models}}
+GET /gallery/{slug}/origins?r18=exclude
+                                     → {counts:{ai,human,pending},          (§10.22)
+                                        detector:{available,models}}
 GET /posts/{source}/{external_id}    → full detail for the aside:
                                         media[]: every row in page order, plus
                                           path (absolute blob path when stored,
@@ -1072,6 +1078,9 @@ GET /posts/{source}/{external_id}    → full detail for the aside:
                                         media[].identity: null (not yet) |
                                           {state, characters:[{name,label,tag,
                                                                score,by}]}
+                                        media[].origin: null (not judged yet) |
+                                          {state: ai|human, by: declared|tags|model,
+                                           score: p(ai) when the model ran, else null}
                                         linked:[{source,external_id,artist_handle,
                                                  artist_name,title,permalink,
                                                  posted_at,reason,media:[…]}]
@@ -1082,7 +1091,7 @@ GET /media/{sha256}/thumb?w=400      → image/webp, Cache-Control: immutable
 GET /media/{sha256}/full             → original bytes, supports Range
 GET /gallery/{slug}/tags?state=&limit=40   → ranked observed tags               (§4b.2)
 GET /gallery/{slug}/images?tag=&artist=source:id&sel_kind=&sel_ident=&sel_character=
-                   &source=&kinds=&ident=&character=&r18=exclude
+                   &sel_origin=&source=&kinds=&ident=&character=&origin=&r18=exclude
                                      → {shas:[...]}   every image carrying one term,
                                        filtered exactly like the grid (By tag / All; §10.20)
 GET /gallery/{slug}/artists?limit=40 → [{source,artist_id,name,handle,count}]
@@ -1901,3 +1910,44 @@ Decisions that hold it together:
   focus loss and minimise, not for an app-hide.
 
 Flow: `docs/flows.md` §n.
+
+### 10.22 Origin - AI-made or by hand (`coreflame/origin.py`)
+
+Every stored image is told apart as AI-made or hand-drawn, and the label says
+who said so. Like a character's name it only labels: nothing is removed for
+being AI-made. The gallery's Made row filters Hand-drawn / AI-made / Not judged
+yet, a tile carries a small AI mark, and the image aside says "AI-made -
+declared by the artist", "from its tags" or "detected 97%".
+
+- **Three signals, trusted in that order; the first that speaks decides.**
+  (1) pixiv's own flag: artists must mark AI work since October 2022
+  (`aiType` 2, already in `source_meta.ai_type`). (2) An AI hashtag on the
+  post - X has no flag, but AI posters tag for the AI crowd: #AIイラスト,
+  #AIart, #NovelAI, #stablediffusion ... matched after `tag_norm`'s folding
+  plus the fillers people pad hashtags with (`AIart` with twenty U+FE0F,
+  `AIイラストㅤㅤ`). (3) The detector, `deepghs/anime_ai_check` (MIT), the
+  distilled mobilenetv3: 17 MB, 95.65% on its own test set, ~0.03 s per
+  image on CPU, the same 384 px encoding as kinds.py; `p(ai) ≥ 0.5` → `ai`.
+  Its author calls it reference-only, so the label always carries its basis
+  and the score is stored for the cut to move without a re-run.
+- **Measured 2026-10-27** on this archive's X crawl (2,581 posts, no pixiv
+  yet): of the 266 images whose post carried an AI tag the model scores
+  74% as AI; the undeclared ones split 42% / 58% with a deep valley in the
+  middle, and a contact sheet of each bucket read correctly by eye - the
+  42% is the archive's real share of undeclared diffusion art. A "not AI"
+  flag (`aiType` 1, pixiv's default) is not taken as a human verdict.
+- **When:** at download, right after the image is stored, before naming;
+  the `label` job does the backlog from disk - declared and tagged images
+  without the detector, so the `classify` extra is not needed for them.
+  Like the other classifiers a detector that cannot load is dropped for the
+  run and the rest stay pending.
+- **Stored per sha** (migration v13): `image_origin` (state ai|human, by
+  declared|tags|model, score, model id). A model verdict from another model
+  id reads as pending and is re-judged; a declared or tagged one never goes
+  stale. Reposts share the row like every classifier table.
+- **Limits:** a tagged pairing or an AI tag used ironically labels a drawn
+  image AI; the detector misses heavily post-processed diffusion work and
+  flags some very smooth hand painting. Either is a wrong label, never a
+  lost image. The contract: `origin=` on the grid, `/gallery/{slug}/origins`,
+  `media[].origin` on post detail (§6).
+

@@ -36,6 +36,8 @@ function item(sha256: string): GalleryItem {
     thumb_url: '',
     kind: null,
     identity: 'pending',
+    origin: 'pending',
+    origin_by: null,
   };
 }
 
@@ -315,6 +317,61 @@ describe('useLibrary identity filter', () => {
 
     expect(api.get).toHaveBeenCalledWith('/api/gallery/mei/characters');
     expect(lib.characters).toEqual(c);
+  });
+});
+
+describe('useLibrary origin filter', () => {
+  const KINDS = 'kinds=illustration%2Cscreencap%2Cunlabeled';
+
+  it('shows every origin by default and then sends no origin filter at all', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce(page([], null));
+    const lib = useLibrary();
+
+    expect(lib.made).toEqual(ORIGIN_STATES);
+    await lib.loadGrid('mei');
+
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}`);
+  });
+
+  it('setMade() keeps chip order, remembers the choice and starts the grid over', async () => {
+    vi.mocked(api.get).mockResolvedValue(page([], null));
+    const lib = useLibrary();
+
+    await lib.setMade('mei', ['pending', 'human']);
+
+    expect(lib.made).toEqual(['human', 'pending']);
+    expect(JSON.parse(localStorage.getItem('curio.gallery.made') ?? '[]')).toEqual(lib.made);
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}&origin=human%2Cpending`);
+
+    setActivePinia(createPinia());
+    expect(useLibrary().made).toEqual(['human', 'pending']); // read back at creation
+  });
+
+  it('ignores a corrupt saved choice', () => {
+    localStorage.setItem('curio.gallery.made', JSON.stringify(['nonsense']));
+    expect(useLibrary().made).toEqual(ORIGIN_STATES);
+  });
+
+  it('the origin choice rides along with a chosen character: it is not who is in the picture', async () => {
+    vi.mocked(api.get).mockResolvedValue(page([], null));
+    const lib = useLibrary();
+    lib.made = ['human'];
+
+    await lib.setCharacter('mei', 'raiden_mei');
+
+    expect(api.get).toHaveBeenLastCalledWith(
+      `/api/gallery/mei?limit=120&${KINDS}&character=raiden_mei&origin=human`,
+    );
+  });
+
+  it('loadOrigins() reads the counts and the detector state', async () => {
+    const o = { counts: { ai: 2, human: 9, pending: 1 }, detector: { available: true, models: false } };
+    vi.mocked(api.get).mockResolvedValueOnce(o);
+    const lib = useLibrary();
+    await lib.loadOrigins('mei');
+
+    expect(api.get).toHaveBeenCalledWith('/api/gallery/mei/origins');
+    expect(lib.origins).toEqual(o);
   });
 });
 

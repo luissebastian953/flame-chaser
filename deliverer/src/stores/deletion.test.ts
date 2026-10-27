@@ -102,6 +102,18 @@ describe('By tag', () => {
     expect(del.effective).toEqual(['3', '4']);
   });
 
+  it('an origin chip selects by sel_origin, filtered like the grid', async () => {
+    const del = useDeletion();
+    del.enter('ganyu', 'tag');
+    vi.mocked(api.get).mockResolvedValueOnce({ shas: ['5', '6'] });
+
+    await del.toggleTerm('origin', 'ai', 'AI-made', new URLSearchParams({ kinds: 'illustration' }), 10);
+
+    expect(api.get).toHaveBeenCalledWith('/api/gallery/ganyu/images?kinds=illustration&sel_origin=ai');
+    expect(del.isTerm('origin', 'ai')).toBe(true);
+    expect(del.effective).toEqual(['5', '6']);
+  });
+
   it('a daemon without the route raises an error toast instead of a dead chip', async () => {
     const del = useDeletion();
     del.enter('ganyu', 'tag');

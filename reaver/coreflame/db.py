@@ -475,6 +475,84 @@ class Store:
         ).fetchall()
         return {r["kind"]: r["n"] for r in rows}
 
+    # -- origin: AI-made or by hand (coreflame/origin.py) ----------------------
+    def set_origin(self, sha: str, o: Any) -> None:
+        self.conn.execute(
+            """INSERT INTO image_origin(sha256,state,by,score,model,judged_at)
+               VALUES(?,?,?,?,?,?)
+               ON CONFLICT(sha256) DO UPDATE SET state=excluded.state, by=excluded.by,
+                 score=excluded.score, model=excluded.model, judged_at=excluded.judged_at""",
+            (sha, o.state, o.by, o.score, o.model, _now()),
+        )
+
+    def origin_facts(self, sha: str) -> list[tuple[dict[str, Any], list[str]]]:
+        """What every post carrying this image says about it: the post's
+        source_meta (pixiv's aiType lives there) and its tags."""
+        out = []
+        for p in self.conn.execute(
+            """SELECT DISTINCT p.source, p.external_id, p.source_meta FROM media m
+               JOIN posts p ON p.source=m.source AND p.external_id=m.external_id
+               WHERE m.sha256=?""",
+            (sha,),
+        ).fetchall():
+            try:
+                meta = json.loads(p["source_meta"] or "{}")
+            except ValueError:
+                meta = {}
+            tags = [
+                r["tag_norm"]
+                for r in self.conn.execute(
+                    "SELECT tag_norm FROM post_tags WHERE source=? AND external_id=?",
+                    (p["source"], p["external_id"]),
+                )
+            ]
+            out.append((meta if isinstance(meta, dict) else {}, tags))
+        return out
+
+    def unjudged_media(self, model: str, limit: int | None = None) -> list[sqlite3.Row]:
+        """Stored blobs with no origin yet, or a model verdict from a different
+        model. A declared or tagged verdict never goes stale. One row per sha."""
+        return self.conn.execute(
+            """SELECT m.sha256, MIN(m.ext) AS ext FROM media m
+               LEFT JOIN image_origin o ON o.sha256=m.sha256
+               WHERE m.state='stored' AND m.sha256 IS NOT NULL
+                 AND (o.sha256 IS NULL OR (o.by='model' AND o.model<>?))
+               GROUP BY m.sha256 ORDER BY MIN(m.rowid) LIMIT ?""",
+            (model, -1 if limit is None else limit),
+        ).fetchall()
+
+    def origin_counts(self, slug: str, model: str, include_r18: bool = False) -> dict[str, int]:
+        """ai / human / pending for one character's gallery, counted exactly
+        as it lists images (stored media of live posts)."""
+        r18 = "" if include_r18 else "AND p.is_r18=0"
+        rows = self.conn.execute(
+            f"""SELECT COALESCE(o.state,'pending') AS state, count(*) AS n
+                FROM post_watches pw
+                JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
+                JOIN media m ON m.source=p.source AND m.external_id=p.external_id
+                LEFT JOIN image_origin o ON o.sha256=m.sha256 AND (o.by<>'model' OR o.model=?)
+                WHERE pw.slug=? AND m.state='stored' AND p.state='live' {r18}
+                GROUP BY 1""",
+            (model, slug),
+        ).fetchall()
+        counts = {"ai": 0, "human": 0, "pending": 0}
+        counts.update({r["state"]: r["n"] for r in rows})
+        return counts
+
+    def origins(self, shas: list[str], model: str) -> dict[str, dict[str, Any]]:
+        """sha -> {state, by, score} for post detail; a stale model verdict is left out."""
+        if not shas:
+            return {}
+        marks = ",".join("?" * len(shas))
+        return {
+            r["sha256"]: {"state": r["state"], "by": r["by"], "score": r["score"]}
+            for r in self.conn.execute(
+                f"""SELECT sha256, state, by, score FROM image_origin
+                    WHERE sha256 IN ({marks}) AND (by<>'model' OR model=?)""",
+                (*shas, model),
+            )
+        }
+
     # -- character identity (coreflame/identify.py) ---------------------------
     def set_identity(self, sha: str, ident: Any) -> None:
         """The verdict, the candidates, and one row per character named --
