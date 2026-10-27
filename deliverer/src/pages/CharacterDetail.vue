@@ -348,15 +348,18 @@ const smartMatches = computed(() => {
     const pos = new Map(visible.value.map((sha, i) => [sha, i]));
     list.sort((a, b) => (pos.get(a.sha) ?? 1e9) - (pos.get(b.sha) ?? 1e9));
   }
-  return list;
+  // a tile kept back out sinks to the end, so what is still marked leads
+  return pickedFirst(list, (m) => !del.droppedSet.has(m.sha));
 });
 
 // By tag: the images the picked chips stand for lead the grid; Smart: its matches have a grid of their own
 const rest = computed(() => {
   if (del.mode === 'smart') return lib.grid.items.filter((it) => !del.smartBySha.has(it.sha256));
   if (del.mode === 'tag' && del.terms.length) {
+    // marked first, then the chips' other images (kept back out or excluded), then the rest
     const inTerm = new Set(del.terms.flatMap((x) => x.shas));
-    return pickedFirst(lib.grid.items, (it) => inTerm.has(it.sha256));
+    const byChip = pickedFirst(lib.grid.items, (it) => inTerm.has(it.sha256));
+    return pickedFirst(byChip, (it) => del.selected.has(it.sha256));
   }
   return lib.grid.items;
 });

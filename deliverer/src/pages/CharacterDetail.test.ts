@@ -123,8 +123,11 @@ const preview = {
 function respondPost(path: string, body: unknown) {
   if (path.endsWith('/smart'))
     return {
-      matches: [{ sha256: 'sha2', reasons: [{ kind: 'score', score: 0.31 }] }],
-      counts: { score: 1, other: 0, dupe: 0, unidentified: 0 },
+      matches: [
+        { sha256: 'sha2', reasons: [{ kind: 'score', score: 0.31 }] },
+        { sha256: 'sha1', reasons: [{ kind: 'score', score: 0.4 }] },
+      ],
+      counts: { score: 2, other: 0, dupe: 0, unidentified: 0 },
       primary: 'ganyu',
       primary_label: 'Ganyu',
       characters: [],
@@ -429,8 +432,15 @@ describe('CharacterDetail deleting images', () => {
     await flushPromises();
     expect(w.text()).toContain('Criteria');
     expect(w.text()).toContain('Not Ganyu');
-    expect(w.text()).toContain('Matches · 1');
+    expect(w.text()).toContain('Matches · 2');
+    expect(w.text()).toContain('2 selected');
+    const matches = () => w.findAll('.masonry.four .tile');
+    expect(matches().map((m) => m.attributes('data-sha'))).toEqual(['sha2', 'sha1']); // lowest score first
+    expect(matches()[0]!.find('.badge').text()).toBe('0.31');
+
+    // a tile kept back out sinks to the end of the matches, the marked one leads
+    await matches()[0]!.trigger('click');
     expect(w.text()).toContain('1 selected');
-    expect(w.find('.masonry.four .tile.pick .badge').text()).toBe('0.31');
+    expect(matches().map((m) => m.attributes('data-sha'))).toEqual(['sha1', 'sha2']);
   });
 });
