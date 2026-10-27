@@ -58,7 +58,7 @@ metadata, no free API since February 2026, and polices automation).
 | Crawl | per character: pixiv discover → tags → link → download; X search to target + followed timelines | `handlers.plan`, `pipeline.py` |
 | Queue | one worker per source, pause (queue and job), reorder, run now, cancel, retry; survives restart | `jobs.py` |
 | Live view | stages, progress, items, log, requests per minute, per worker; mini window and tray when unfocused | SSE, `jobs` store, `background.ts`, `pip.rs` |
-| Gallery | characters, cursor-paginated grid with source / kind / who / character / made (AI or by hand) filters, post detail with pages, related and linked posts, fullscreen viewer | `/api/gallery/*`, `/api/posts/*` |
+| Gallery | characters, cursor-paginated grid with source and label (AI / Non-Illust / Unidentified) filters, a label badge per tile settable by hand, post detail with pages, related and linked posts, fullscreen viewer | `/api/gallery/*`, `/api/posts/*`, `/api/images/*/label` |
 | Curation | watch or ignore observed tags; delete by image, tag, Smart criteria or all, to a 30-day trash with Undo; crawl-time cleanup rule | `tags.py`, `trash.py` |
 | Accounts | sign in via the site's own page, verify before storing, show expiry | `auth.rs`, `dawnmaker/auth.py` |
 | Storage | pick the library folder (refuse sync roots), usage figures, export/import the archive as one file | `library.py`, `bundle.py` |
@@ -328,6 +328,10 @@ erDiagram
     real score
     text model
   }
+  IMAGE_LABEL {
+    text sha256 PK
+    text label "ai | non_illust | unidentified | NULL, by hand"
+  }
   TRASH_BATCHES {
     text id PK
     text slug
@@ -378,6 +382,7 @@ erDiagram
   MEDIA ||--o| IMAGE_IDENTITY : "by sha256"
   IMAGE_IDENTITY ||--o{ IMAGE_CHARACTERS : "named"
   MEDIA ||--o| IMAGE_ORIGIN : "by sha256"
+  MEDIA ||--o| IMAGE_LABEL : "set by hand"
   JOBS ||--o{ JOB_LOG : "emits"
   TRASH_BATCHES ||--|{ TRASH_ITEMS : "holds"
   MEDIA ||--o| TRASH_ITEMS : "moved to"
@@ -465,7 +470,9 @@ states and steps.
    only illustration and screencap; a per-character gender rule; two taggers
    vouch for a character name; AI-made or by hand from pixiv's flag, an AI
    hashtag, or a detector. Verdicts are rows on the sha; a rejected image
-   keeps its url and is reopened when a rule loosens.
+   keeps its url and is reopened when a rule loosens. One badge per image
+   is folded from them in SQL (`label.py`: non-illust, then AI, then
+   unidentified), and a label set by hand sits on top of the fold.
 6. **The job queue.** Rows, not objects: `jobs` is the queue, the history and
    the cross-process control plane (`cancel_requested`, `pause_requested`).
    One `plan` per request makes per-source jobs so the lanes stay

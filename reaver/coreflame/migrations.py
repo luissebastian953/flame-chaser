@@ -444,3 +444,17 @@ CREATE TABLE IF NOT EXISTS image_origin (
 );
 CREATE INDEX IF NOT EXISTS image_origin_state ON image_origin(state)
 """
+
+
+@migration(14, "image_label")
+def _v14() -> str:
+    # a label set by hand (coreflame/label.py), keyed by the blob's sha: it
+    # wins over every classifier verdict and survives re-labelling. A row with
+    # a NULL label is "no label", chosen by hand; no row = the fold decides.
+    return """
+CREATE TABLE IF NOT EXISTS image_label (
+    sha256 TEXT PRIMARY KEY,
+    label  TEXT CHECK (label IS NULL OR label IN ('ai','non_illust','unidentified')),
+    set_at TEXT NOT NULL
+)
+"""

@@ -29,6 +29,8 @@
   --color-cyan: oklch(0.74 0.198 196);
   --color-moss: oklch(0.74 0.198 158);
   --color-rose: oklch(0.74 0.19 12);
+  /* the AI label badge, and "unsure" / "kept" marks - static across themes like moss and rose */
+  --color-amber: oklch(0.8 0.15 75);
   --color-white: #fff;
   --color-black: #000;
   --color-transparent: transparent;
@@ -179,6 +181,7 @@
   --cyan: var(--color-cyan);
   --moss: var(--color-moss);
   --rose: var(--color-rose);
+  --amber: var(--color-amber);
   --font: var(--font-sans);
   --mono: var(--font-mono);
 

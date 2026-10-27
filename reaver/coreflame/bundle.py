@@ -110,6 +110,7 @@ MERGE_TABLES = (
     "image_identity",
     "image_characters",
     "image_origin",
+    "image_label",
     "seen_posts",
 )
 RUNTIME_TABLES = ("job_log", "jobs", "queue_state", "trash_items", "trash_batches")
@@ -1025,6 +1026,7 @@ def _merge(conn: sqlite3.Connection, snap: Path, opts: ImportOptions) -> dict[st
             "image_identity",
             "image_characters",
             "image_origin",
+            "image_label",
         ):
             run(t, f"INSERT OR IGNORE INTO {t} SELECT * FROM b.{t}")
         run(

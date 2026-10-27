@@ -9,8 +9,9 @@ import type { GalleryItem } from '@/lib/types';
  * reads at a glance; faded further when a tag choice left it out, an amber
  * ring with "kept" when the user took it back out of a set, and a reason
  * badge (score, other character, duplicate, the tag that pulled it in).
- * Top-right corner marks: X for a post from X, AI for an AI-made image
- * (outside select mode only, where the marks would fight the checkbox).
+ * Top-right corner mark: X for a post from X. Bottom-right: the image's label
+ * badge (AI / Non-Illust / Unidentified), outside select mode only, where the
+ * delete badge lives.
  */
 const props = defineProps<{
   sha: string;
@@ -37,6 +38,13 @@ const label = computed(() => {
   const title = props.item?.title || props.sha.slice(0, 8);
   return props.picked ? t('gallery.delete.tile.keep', { title }) : t('gallery.delete.tile.mark', { title });
 });
+
+/** outside select mode the badge is the tile's name: "Image, label: AI" */
+const labeled = computed(() =>
+  props.item?.label
+    ? t('gallery.tile.labeled', { label: t(`gallery.label.${LABEL_KEY[props.item.label]}`) })
+    : undefined,
+);
 </script>
 
 <template>
@@ -46,7 +54,7 @@ const label = computed(() => {
     :data-sha="sha"
     :aria-current="current || undefined"
     :aria-pressed="select ? picked : undefined"
-    :aria-label="select ? label : undefined"
+    :aria-label="select ? label : labeled"
     @click="emit('open', $event)"
   >
     <img
@@ -60,8 +68,10 @@ const label = computed(() => {
       <Icon v-if="picked" name="check" :size="12" />
     </span>
     <span class="marks">
-      <span v-if="!select && item?.origin === 'ai'" class="xb ai">{{ $t('gallery.tile.ai') }}</span>
       <span v-if="item?.source === 'twitter'" class="xb">{{ $t('gallery.aside.source.twitter') }}</span>
+    </span>
+    <span v-if="!select && item?.label" class="lb" :class="item.label">
+      {{ $t(`gallery.label.${LABEL_KEY[item.label]}`) }}
     </span>
     <span v-if="badge" class="badge" :class="tone ?? 'dim'">
       {{ kept ? $t('gallery.delete.smart.badge.kept', { text: badge }) : badge }}
@@ -126,7 +136,7 @@ const label = computed(() => {
 }
 /* kept back out of a set: a thin amber ring */
 .tile.kept {
-  box-shadow: inset 0 0 0 1px oklch(0.8 0.15 75);
+  box-shadow: inset 0 0 0 1px var(--color-amber);
 }
 /* not a candidate under the current tag choice */
 .tile.ex {
@@ -167,8 +177,34 @@ const label = computed(() => {
   color: var(--color-cyan);
   font: 600 8px var(--font-sans);
 }
-.xb.ai {
-  color: var(--color-tx);
+/* the label badge: amber = AI, muted = not an illustration, dashed dim = unidentified */
+.lb {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: 2px;
+  background: oklch(0.14 0.024 265 / 0.82);
+  font: 600 9px var(--font-sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lb.ai {
+  color: var(--color-amber);
+  border: 1px solid color-mix(in oklch, var(--color-amber) 55%, transparent);
+}
+.lb.non_illust {
+  color: var(--color-mut);
+  border: 1px solid var(--color-line);
+}
+.lb.unidentified {
+  color: var(--color-dim);
+  border: 1px dashed var(--color-line);
 }
 .badge {
   position: absolute;
@@ -190,7 +226,7 @@ const label = computed(() => {
   color: var(--color-rose);
 }
 .badge.amber {
-  color: oklch(0.8 0.15 75);
+  color: var(--color-amber);
 }
 .badge.cyan {
   color: var(--color-cyan);

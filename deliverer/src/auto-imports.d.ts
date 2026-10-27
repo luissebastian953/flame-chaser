@@ -15,16 +15,15 @@ declare global {
   const CHART_H: typeof import('./lib/netchart').CHART_H
   const CHART_W: typeof import('./lib/netchart').CHART_W
   const DEFAULT_DISTANCE: typeof import('./stores/deletion').DEFAULT_DISTANCE
-  const DEFAULT_KIND_FILTER: typeof import('./stores/library').DEFAULT_KIND_FILTER
   const DELETE_TTL: typeof import('./stores/toasts').DELETE_TTL
   const EffectScope: typeof import('vue').EffectScope
   const ICON_PATHS: typeof import('./lib/icons').ICON_PATHS
-  const IDENT_STATES: typeof import('./stores/library').IDENT_STATES
+  const IMAGE_LABELS: typeof import('./lib/labels').IMAGE_LABELS
   const KEEP: typeof import('./lib/netchart').KEEP
   const KIND_FILTERS: typeof import('./stores/library').KIND_FILTERS
+  const LABEL_KEY: typeof import('./lib/labels').LABEL_KEY
   const MODES: typeof import('./stores/background').MODES
   const OPEN_REFRESH_MS: typeof import('./stores/network').OPEN_REFRESH_MS
-  const ORIGIN_STATES: typeof import('./stores/library').ORIGIN_STATES
   const PIP_DELAY: typeof import('./lib/background').PIP_DELAY
   const PIP_HEIGHT: typeof import('./lib/background').PIP_HEIGHT
   const PIP_LINGER: typeof import('./lib/background').PIP_LINGER
@@ -47,6 +46,7 @@ declare global {
   const api: typeof import('./lib/api').api
   const applyUiState: typeof import('./lib/uiState').applyUiState
   const areaPath: typeof import('./lib/netchart').areaPath
+  const artistKey: typeof import('./lib/artists').artistKey
   const authedUrl: typeof import('./lib/api').authedUrl
   const barsFor: typeof import('./stores/network').barsFor
   const buildTick: typeof import('./lib/background').buildTick
@@ -83,6 +83,7 @@ declare global {
   const isRef: typeof import('vue').isRef
   const isShallow: typeof import('vue').isShallow
   const jobTitle: typeof import('./lib/pipeline').jobTitle
+  const labelKey: typeof import('./lib/labels').labelKey
   const linePath: typeof import('./lib/netchart').linePath
   const linkedStart: typeof import('./lib/related').linkedStart
   const mainReason: typeof import('./stores/deletion').mainReason
@@ -134,7 +135,6 @@ declare global {
   const shallowRef: typeof import('vue').shallowRef
   const shouldOpen: typeof import('./lib/background').shouldOpen
   const sourceOf: typeof import('./lib/pipeline').sourceOf
-  const speed: typeof import('./stores/network.test').speed
   const stageIndex: typeof import('./lib/pipeline').stageIndex
   const stagesOf: typeof import('./lib/pipeline').stagesOf
   const storeToRefs: typeof import('pinia').storeToRefs
@@ -230,7 +230,7 @@ declare global {
   export type { ViewerItem } from './lib/related'
   import('./lib/related')
   // @ts-ignore
-  export type { Source, Gender, GenderMode, Watch, JobState, Lane, Job, WorkerSlot, RateBudget, PauseReason, PipelineState, LogLine, GalleryItem, GridOrder, GalleryPage, ImageKind, KindFilter, IdentState, GalleryCharacters, CharacterHit, OriginState, OriginBy, GalleryOrigins, GalleryKinds, TagStat, PostDetail, PostMedia, LinkedPost, NameSuggestion, CharacterNames, ProbeResult, SourcesStatus, Health, DeleteMode, TermKind, GalleryArtist, SmartReason, SmartMatch, SmartResult, CleanupRule, ReviewSummary, DeletePreview, DeleteResult, TrashSummary, NetworkSpeed, BundleFormat, WatchPolicy, BundleExportBody, BundleConflict, BundleInspect, BundleImportBody, BundleImportResult, StorageUsage } from './lib/types'
+  export type { Source, Gender, GenderMode, Watch, JobState, Lane, Job, WorkerSlot, RateBudget, PauseReason, PipelineState, LogLine, GalleryItem, ImageLabel, LabelSource, GridOrder, GalleryPage, ImageKind, KindFilter, IdentState, GalleryCharacters, CharacterHit, OriginState, OriginBy, GalleryOrigins, GalleryKinds, TagStat, PostDetail, PostMedia, LinkedPost, NameSuggestion, CharacterNames, ProbeResult, SourcesStatus, Health, DeleteMode, TermKind, GalleryArtist, SmartReason, SmartMatch, SmartResult, CleanupRule, ReviewSummary, DeletePreview, DeleteResult, TrashSummary, NetworkSpeed, BundleFormat, WatchPolicy, BundleExportBody, BundleConflict, BundleInspect, BundleImportBody, BundleImportResult, StorageUsage } from './lib/types'
   import('./lib/types')
 }
 
@@ -246,16 +246,15 @@ declare module 'vue' {
     readonly CHART_H: UnwrapRef<typeof import('./lib/netchart')['CHART_H']>
     readonly CHART_W: UnwrapRef<typeof import('./lib/netchart')['CHART_W']>
     readonly DEFAULT_DISTANCE: UnwrapRef<typeof import('./stores/deletion')['DEFAULT_DISTANCE']>
-    readonly DEFAULT_KIND_FILTER: UnwrapRef<typeof import('./stores/library')['DEFAULT_KIND_FILTER']>
     readonly DELETE_TTL: UnwrapRef<typeof import('./stores/toasts')['DELETE_TTL']>
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
     readonly ICON_PATHS: UnwrapRef<typeof import('./lib/icons')['ICON_PATHS']>
-    readonly IDENT_STATES: UnwrapRef<typeof import('./stores/library')['IDENT_STATES']>
+    readonly IMAGE_LABELS: UnwrapRef<typeof import('./lib/labels')['IMAGE_LABELS']>
     readonly KEEP: UnwrapRef<typeof import('./lib/netchart')['KEEP']>
     readonly KIND_FILTERS: UnwrapRef<typeof import('./stores/library')['KIND_FILTERS']>
+    readonly LABEL_KEY: UnwrapRef<typeof import('./lib/labels')['LABEL_KEY']>
     readonly MODES: UnwrapRef<typeof import('./stores/background')['MODES']>
     readonly OPEN_REFRESH_MS: UnwrapRef<typeof import('./stores/network')['OPEN_REFRESH_MS']>
-    readonly ORIGIN_STATES: UnwrapRef<typeof import('./stores/library')['ORIGIN_STATES']>
     readonly PIP_DELAY: UnwrapRef<typeof import('./lib/background')['PIP_DELAY']>
     readonly PIP_HEIGHT: UnwrapRef<typeof import('./lib/background')['PIP_HEIGHT']>
     readonly PIP_LINGER: UnwrapRef<typeof import('./lib/background')['PIP_LINGER']>
@@ -278,6 +277,7 @@ declare module 'vue' {
     readonly api: UnwrapRef<typeof import('./lib/api')['api']>
     readonly applyUiState: UnwrapRef<typeof import('./lib/uiState')['applyUiState']>
     readonly areaPath: UnwrapRef<typeof import('./lib/netchart')['areaPath']>
+    readonly artistKey: UnwrapRef<typeof import('./lib/artists')['artistKey']>
     readonly authedUrl: UnwrapRef<typeof import('./lib/api')['authedUrl']>
     readonly barsFor: UnwrapRef<typeof import('./stores/network')['barsFor']>
     readonly buildTick: UnwrapRef<typeof import('./lib/background')['buildTick']>
@@ -314,6 +314,7 @@ declare module 'vue' {
     readonly isRef: UnwrapRef<typeof import('vue')['isRef']>
     readonly isShallow: UnwrapRef<typeof import('vue')['isShallow']>
     readonly jobTitle: UnwrapRef<typeof import('./lib/pipeline')['jobTitle']>
+    readonly labelKey: UnwrapRef<typeof import('./lib/labels')['labelKey']>
     readonly linePath: UnwrapRef<typeof import('./lib/netchart')['linePath']>
     readonly linkedStart: UnwrapRef<typeof import('./lib/related')['linkedStart']>
     readonly mainReason: UnwrapRef<typeof import('./stores/deletion')['mainReason']>

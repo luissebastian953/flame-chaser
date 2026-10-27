@@ -23,6 +23,8 @@ function item(over: Partial<GalleryItem> = {}): GalleryItem {
     identity: 'pending',
     origin: 'pending',
     origin_by: null,
+    label: null,
+    label_source: 'auto',
     ...over,
   };
 }
@@ -31,41 +33,57 @@ function mountTile(it: GalleryItem | null, select = false) {
   return mountWithPlugins(GalleryTile, { props: { sha: 'sha1', item: it, select } });
 }
 
-describe('GalleryTile corner marks', () => {
-  it('marks an AI-made image with AI; hand-drawn and unjudged ones carry nothing', () => {
+describe('GalleryTile label badge', () => {
+  it('shows the one label the daemon picked: AI, Non-Illust or Unidentified; none for a normal illustration', () => {
     expect(
-      mountTile(item({ origin: 'ai', origin_by: 'tags' }))
-        .find('.xb.ai')
+      mountTile(item({ label: 'ai' }))
+        .find('.lb')
         .text(),
     ).toBe('AI');
 
     expect(
-      mountTile(item({ origin: 'human', origin_by: 'declared' }))
-        .find('.xb.ai')
-        .exists(),
-    ).toBe(false);
+      mountTile(item({ label: 'non_illust' }))
+        .find('.lb')
+        .text(),
+    ).toBe('Non-Illust');
 
     expect(
-      mountTile(item({ origin: 'pending' }))
-        .find('.xb.ai')
+      mountTile(item({ label: 'unidentified' }))
+        .find('.lb')
+        .text(),
+    ).toBe('Unidentified');
+
+    expect(
+      mountTile(item({ label: null }))
+        .find('.lb')
         .exists(),
     ).toBe(false);
 
-    expect(mountTile(null).find('.xb.ai').exists()).toBe(false);
+    expect(mountTile(null).find('.lb').exists()).toBe(false);
   });
 
-  it('shows the X mark beside the AI mark for an AI-made image from X', () => {
-    const w = mountTile(item({ source: 'twitter', origin: 'ai', origin_by: 'model' }));
-
-    expect(w.findAll('.marks .xb').map((b) => b.text())).toEqual(['AI', 'X']);
+  it('names the tile by its label for assistive tech, and carries no name without one', () => {
+    expect(mountTile(item({ label: 'ai' })).attributes('aria-label')).toBe('Image, label: AI');
+    expect(mountTile(item({ label: null })).attributes('aria-label')).toBeUndefined();
   });
 
-  it('hides the AI mark in select mode, where the checkbox lives; the X mark stays', () => {
-    const w = mountTile(item({ source: 'twitter', origin: 'ai', origin_by: 'model' }), true);
+  it('hides the label in select mode, where the delete badge lives; the X mark stays', () => {
+    const w = mountTile(item({ source: 'twitter', label: 'ai' }), true);
 
-    expect(w.find('.xb.ai').exists()).toBe(false);
+    expect(w.find('.lb').exists()).toBe(false);
     expect(w.findAll('.marks .xb').map((b) => b.text())).toEqual(['X']);
     expect(w.find('.cb').exists()).toBe(true);
+    expect(w.attributes('aria-label')).toBe('Mark t'); // the select-mode name wins
+  });
+
+  it('the X mark is the only corner mark; a pixiv image has none', () => {
+    expect(
+      mountTile(item({ source: 'twitter', label: 'ai' }))
+        .findAll('.marks .xb')
+        .map((b) => b.text()),
+    ).toEqual(['X']);
+
+    expect(mountTile(item()).findAll('.marks .xb')).toHaveLength(0);
   });
 
   it('opens on click', async () => {

@@ -42,6 +42,8 @@ function item(external_id: string, source: string): GalleryItem {
     identity: 'pending',
     origin: 'pending',
     origin_by: null,
+    label: null,
+    label_source: 'auto',
   };
 }
 
@@ -106,7 +108,7 @@ function respond(path: string) {
       ? { shas: ['sha2'], sources: { sha2: 'twitter' } }
       : { shas: ['sha1', 'sha2'], sources: { sha1: 'pixiv', sha2: 'twitter' } };
   }
-  if (path === '/api/gallery/ganyu/artists')
+  if (path === '/api/gallery/ganyu/artists?limit=300')
     return [{ source: 'pixiv', artist_id: 'a', name: 'Alpha', handle: '', count: 2 }];
   if (path === '/api/trash') return { count: 0, bytes: 0, oldest: null, days: 30 };
 
@@ -189,9 +191,10 @@ describe('CharacterDetail header', () => {
     expect(w.text()).toContain('1,284 images · 412 posts · 61 artists');
   });
 
-  it('the source filter narrows the grid to one source and back', async () => {
+  it('the source filter, now in the filter row, narrows the grid to one source and back', async () => {
     const { w } = await mountPage();
 
+    expect(w.find('.filters .labels').exists()).toBe(true); // one row: source + label
     await button(w, 'X').trigger('click');
     await flushPromises();
     expect(vi.mocked(api.get).mock.lastCall?.[0]).toMatch(/^\/api\/gallery\/ganyu\?.*&source=twitter$/);
@@ -200,6 +203,23 @@ describe('CharacterDetail header', () => {
     await button(w, 'All').trigger('click');
     await flushPromises();
     expect(vi.mocked(api.get).mock.lastCall?.[0]).not.toContain('source=');
+  });
+
+  it('the label filter replaces the Show / Who / Made rows; the grid sends label= and never ident, character or origin', async () => {
+    const { w } = await mountPage();
+
+    expect(w.find('[role="radiogroup"]').exists()).toBe(true);
+    expect(w.text()).toContain('Any label');
+    for (const gone of ['Illustrations', 'Identified', 'Hand-drawn', 'Not labeled yet']) {
+      expect(w.text()).not.toContain(gone);
+    }
+
+    await button(w, 'Non-Illust').trigger('click');
+    await flushPromises();
+    const url = vi.mocked(api.get).mock.lastCall?.[0] ?? '';
+    expect(url).toMatch(/^\/api\/gallery\/ganyu\?.*&label=non_illust$/);
+    expect(url).not.toMatch(/ident=|character=|origin=/);
+    expect(button(w, 'Non-Illust').attributes('aria-checked')).toBe('true');
   });
 
   it('Delete character (in the more menu) asks twice, then deletes it and goes back to the gallery', async () => {
@@ -352,8 +372,8 @@ describe('CharacterDetail deleting images', () => {
   it('By tag: a chip marks every image carrying it through the daemon, the strip shows the arithmetic, a tile click drops one', async () => {
     const { w } = await mountPage();
     await pickMode(w, 'By tag');
-    expect(api.get).toHaveBeenCalledWith('/api/gallery/ganyu/artists');
     expect(w.text()).toContain('Artists');
+    expect(w.text()).not.toContain('View Artists Tags'); // the filter row's toggle steps aside
 
     await w
       .findAll('.tags button.chip')
@@ -381,13 +401,29 @@ describe('CharacterDetail deleting images', () => {
     expect(w.text()).toContain('0 selected');
     expect(w.text()).toContain('−1 excluded');
 
-    // the Show / Who / Characters rows select too, instead of filtering
-    const screencaps = w.findAll('button.chip').find((b) => b.text().includes('Anime screencaps'))!;
-    await screencaps.trigger('click');
+    // the label row selects too, instead of filtering
+    expect(w.text()).not.toContain('Any label');
+    const ai = button(w, 'AI');
+    await ai.trigger('click');
     await flushPromises();
-    expect(vi.mocked(api.get).mock.lastCall?.[0]).toMatch(/\/images\?.*sel_kind=screencap$/);
-    expect(screencaps.classes()).toContain('sel');
+    expect(vi.mocked(api.get).mock.lastCall?.[0]).toMatch(/\/images\?.*sel_label=ai$/);
+    expect(ai.classes()).toContain('sel');
     expect(w.text()).toContain('2 − 1 = 1'); // two chips' images, one kept back out
+
+    // the page's Artists row selects by sel_artist, so the grid's own artist= filter stays free
+    const alpha = w.findAll('.artists button.chip').find((b) => b.text().includes('Alpha'))!;
+    await alpha.trigger('click');
+    await flushPromises();
+    expect(vi.mocked(api.get).mock.lastCall?.[0]).toMatch(/\/images\?.*sel_artist=pixiv%3Aa$/);
+    expect(alpha.classes()).toContain('sel');
+  });
+
+  it('loads the artists with the gallery, so the filter row and By tag share one list', async () => {
+    const { w } = await mountPage();
+
+    expect(api.get).toHaveBeenCalledWith('/api/gallery/ganyu/artists?limit=300');
+    expect(useLibrary().artists.map((a) => a.name)).toEqual(['Alpha']);
+    expect(w.text()).toContain('View Artists Tags');
   });
 
   it('All: everything is marked, the sheet needs the name typed, and forgetting posts is off by default', async () => {

@@ -17,7 +17,18 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from coreflame import __version__, bundle, handlers, identify, kinds, origin, people, tags, trash
+from coreflame import (
+    __version__,
+    bundle,
+    handlers,
+    identify,
+    kinds,
+    label,
+    origin,
+    people,
+    tags,
+    trash,
+)
 from coreflame.blobs import BlobStore
 from coreflame.config import Config
 from coreflame.db import Store
@@ -178,6 +189,13 @@ class TagAction(BaseModel):
 IDENT_STATES = ("identified", "unidentified", "pending")  # gallery `ident` filter
 # a stale model verdict reads as pending; a declared or tagged one never goes stale
 ORIGIN_JOIN = "LEFT JOIN image_origin o ON o.sha256=m.sha256 AND (o.by<>'model' OR o.model=?)"
+# the one badge per image (coreflame/label.py): the fold over k, o, i and the hand-set l
+LABEL_JOIN = label.MANUAL_JOIN
+LABEL_COLS = f"({label.LABEL_SQL}) AS label, {label.SOURCE_SQL} AS label_source"
+
+
+class LabelIn(BaseModel):
+    label: str | None  # ai | non_illust | unidentified | null = "no label", by hand
 
 
 class CleanupRuleIn(BaseModel):
@@ -668,6 +686,8 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         ident: str | None = None,
         character: str | None = None,
         origin_: str | None = Query(None, alias="origin"),
+        label_: str | None = Query(None, alias="label"),
+        artist: str | None = None,
         order: str = "newest",
         s: Store = Depends(store),
     ) -> dict:
@@ -676,9 +696,11 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         comma list of image kinds to show (plus `unlabeled`); absent = all.
         `ident` is a comma list of identified / unidentified / pending (not
         identified yet); `character` keeps the images naming that character;
-        `origin` a comma list of ai / human / pending (coreflame/origin.py).
-        `order` is newest (default) or oldest first; a cursor only continues
-        the order it came from."""
+        `origin` a comma list of ai / human / pending (coreflame/origin.py);
+        `label` one of ai / non_illust / unidentified, the folded badge
+        (coreflame/label.py); `artist` = `source:artist_id` keeps one artist's
+        images. `order` is newest (default) or oldest first; a cursor only
+        continues the order it came from."""
         if order not in ("newest", "oldest"):
             raise HTTPException(400, {"code": "bad_order", "message": order})
         cmp, direction = ("<", "DESC") if order == "newest" else (">", "ASC")
@@ -710,6 +732,12 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         if origin_ is not None:
             where.append(_origin_in(origin_))
             args += [x for x in origin_.split(",") if x]
+        if label_ is not None:
+            where.append(_label_is(label_))
+            args.append(label_)
+        if artist is not None:
+            where.append("p.source=? AND p.artist_id=?")
+            args += _artist_key(artist)
         if r18 == "exclude":
             where.append("p.is_r18=0")
         if cursor:
@@ -723,13 +751,15 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             f"""SELECT m.sha256, m.source, m.external_id, m.idx, m.width, m.height,
                        p.posted_at, p.artist_name, p.title, k.kind,
                        COALESCE(i.state,'pending') AS identity,
-                       COALESCE(o.state,'pending') AS origin, o.by AS origin_by
+                       COALESCE(o.state,'pending') AS origin, o.by AS origin_by,
+                       {LABEL_COLS}
                 FROM post_watches pw
                 JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
                 JOIN media m ON m.source=p.source AND m.external_id=p.external_id
                 LEFT JOIN image_kinds k ON k.sha256=m.sha256
                 LEFT JOIN image_identity i ON i.sha256=m.sha256 AND i.model=?
                 {ORIGIN_JOIN}
+                {LABEL_JOIN}
                 WHERE {" AND ".join(where)}
                 ORDER BY p.posted_at {direction}, p.external_id {direction}, m.idx
                 LIMIT ?""",
@@ -788,6 +818,29 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             },
         }
 
+    @app.put("/api/images/{sha}/label")
+    def set_image_label(sha: str, body: LabelIn, s: Store = Depends(store)) -> dict:
+        """The badge, chosen by hand (coreflame/label.py): ai / non_illust /
+        unidentified, or null for "no label". Wins over every classifier and
+        survives re-labelling. The image must be one the archive holds."""
+        if body.label is not None and body.label not in label.LABELS:
+            raise HTTPException(400, {"code": "bad_label", "message": str(body.label)})
+        if s.conn.execute("SELECT 1 FROM media WHERE sha256=? LIMIT 1", (sha,)).fetchone() is None:
+            raise nf("no_image", sha)
+        with s.tx():
+            s.set_label(sha, body.label)
+        return {"sha256": sha, "label": body.label, "label_source": "manual"}
+
+    @app.delete("/api/images/{sha}/label")
+    def clear_image_label(sha: str, s: Store = Depends(store)) -> dict:
+        """Back to the classifiers' fold; answers what it now reads."""
+        with s.tx():
+            s.clear_label(sha)
+        got = s.image_label(sha, identify.IDENTIFIER_ID, origin.DETECTOR_ID)
+        if got is None:
+            raise nf("no_image", sha)
+        return {"sha256": sha, **got}
+
     # -- deletion (coreflame/trash.py) ------------------------------------------
     def _watch(s: Store, slug: str) -> Watch:
         w = next((w for w in s.watches() if w.slug == slug), None)
@@ -803,6 +856,8 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         character: str | None,
         r18: str,
         origin_: str | None = None,
+        label_: str | None = None,
+        artist: str | None = None,
     ) -> tuple[list[str], list[Any]]:
         """The grid's own visibility rules, shared with the selection lists:
         what the user cannot see is never selected for deletion."""
@@ -833,9 +888,27 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         if origin_ is not None:
             where.append(_origin_in(origin_))
             args += [x for x in origin_.split(",") if x]
+        if label_ is not None:
+            where.append(_label_is(label_))
+            args.append(label_)
+        if artist is not None:
+            where.append("p.source=? AND p.artist_id=?")
+            args += _artist_key(artist)
         if r18 == "exclude":
             where.append("p.is_r18=0")
         return where, args
+
+    def _artist_key(key: str) -> list[str]:
+        """`source:artist_id` -> [source, artist_id]; the id may itself hold a colon."""
+        src, sep, aid = key.partition(":")
+        if not sep or not src or not aid:
+            raise HTTPException(400, {"code": "bad_artist", "message": key})
+        return [src, aid]
+
+    def _label_is(label_: str) -> str:
+        if label_ not in label.LABELS:
+            raise HTTPException(400, {"code": "bad_label", "message": label_})
+        return f"({label.LABEL_SQL}) = ?"
 
     def _origin_in(origin_: str) -> str:
         want = [x for x in origin_.split(",") if x]
@@ -852,20 +925,26 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         ident: str | None = None,
         character: str | None = None,
         origin_: str | None = Query(None, alias="origin"),
-        tag: str | None = None,
+        label_: str | None = Query(None, alias="label"),
         artist: str | None = None,
+        tag: str | None = None,
+        sel_artist: str | None = None,
         sel_kind: str | None = None,
         sel_ident: str | None = None,
         sel_character: str | None = None,
         sel_origin: str | None = None,
+        sel_label: str | None = None,
         s: Store = Depends(store),
     ) -> dict:
         """Every image of this gallery (its shas, in grid order) that carries
-        one *term*: a tag (`tag_norm`), an artist (`source:artist_id`), a kind,
-        an identification state or a character -- what By tag and All select
-        with. The grid's own filters (`source kinds ident character`) still
+        one *term*: a tag (`tag_norm`), an artist (`sel_artist` =
+        `source:artist_id`), a kind, an identification state, a character, an
+        origin or a label -- what By tag and All select with. The grid's own
+        filters (`source kinds ident character origin label artist`) still
         apply, so a hidden image is never picked. No term = everything shown."""
-        where, args = _grid_where(slug, source, kinds_, ident, character, r18, origin_)
+        where, args = _grid_where(
+            slug, source, kinds_, ident, character, r18, origin_, label_, artist
+        )
         args = [identify.IDENTIFIER_ID, origin.DETECTOR_ID, *args]
         if tag:
             where.append(
@@ -873,10 +952,9 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
                 "AND t.external_id=p.external_id AND t.tag_norm=?)"
             )
             args.append(tag)
-        if artist:
-            src, _, aid = artist.partition(":")
+        if sel_artist:
             where.append("p.source=? AND p.artist_id=?")
-            args += [src, aid]
+            args += _artist_key(sel_artist)
         if sel_kind:
             if sel_kind not in (*kinds.KINDS, kinds.UNLABELED):
                 raise HTTPException(400, {"code": "bad_kind", "message": sel_kind})
@@ -897,6 +975,9 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
                 raise HTTPException(400, {"code": "bad_origin", "message": sel_origin})
             where.append("COALESCE(o.state,'pending')=?")
             args.append(sel_origin)
+        if sel_label:
+            where.append(_label_is(sel_label))
+            args.append(sel_label)
         rows = s.conn.execute(
             f"""SELECT m.sha256, m.source FROM post_watches pw
                 JOIN posts p ON p.source=pw.source AND p.external_id=pw.external_id
@@ -904,6 +985,7 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
                 LEFT JOIN image_kinds k ON k.sha256=m.sha256
                 LEFT JOIN image_identity i ON i.sha256=m.sha256 AND i.model=?
                 {ORIGIN_JOIN}
+                {LABEL_JOIN}
                 WHERE {" AND ".join(where)}
                 ORDER BY p.posted_at DESC, p.external_id DESC, m.idx""",
             args,
@@ -1115,6 +1197,14 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         made = s.origins(shas, origin.DETECTOR_ID)
         for m in media:
             m["origin"] = made.get(m["sha256"] or "")
+            # the one badge (coreflame/label.py), folded from every verdict + a hand-set one
+            got_label = (
+                s.image_label(m["sha256"], identify.IDENTIFIER_ID, origin.DETECTOR_ID)
+                if m["sha256"]
+                else None
+            )
+            m["label"] = got_label["label"] if got_label else None
+            m["label_source"] = got_label["label_source"] if got_label else "auto"
         # who each image shows (coreflame/identify.py); null = not identified yet
         found = s.identities(shas)
         for m in media:

@@ -12,8 +12,8 @@ import type {
  * Deleting images from one character's gallery (coreflame/trash.py).
  *
  * Four ways to choose them, one selection: *By image* marks tiles by hand;
- * *By tag* marks every image a chip stands for (a tag, a kind, an
- * identification state, a character, an artist), any or all of them; *Smart*
+ * *By tag* marks every image a chip stands for (a tag, an artist, a label),
+ * any or all of them; *Smart*
  * marks what the identifier's criteria flag; *All* marks everything. In the
  * last three the user drops single tiles back out (`dropped`, the amber
  * "kept" ring). `effective` is what the confirm sheet and the daemon get.
@@ -56,13 +56,11 @@ interface ImageList {
   sources?: Record<string, string>;
 }
 
+/** the selection list's parameter per term kind; `artist=` is the grid's own filter, so a term says `sel_artist=` */
 const TERM_PARAM: Record<TermKind, string> = {
   tag: 'tag',
-  kind: 'sel_kind',
-  ident: 'sel_ident',
-  character: 'sel_character',
-  artist: 'artist',
-  origin: 'sel_origin',
+  artist: 'sel_artist',
+  label: 'sel_label',
 };
 
 let smartTimer: ReturnType<typeof setTimeout> | null = null;

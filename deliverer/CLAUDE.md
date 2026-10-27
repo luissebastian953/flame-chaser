@@ -9,12 +9,13 @@ deliverer/
 │   ├── i18n.ts (+ .test.ts)   LOCALES, glob-loaded messages, setLocale
 │   ├── pages/            Gallery* · CharacterDetail* · Config* · PipelineList* · PipelineDetail* · Settings
 │   ├── components/       AuthBadge* · AuthGate · BackupPanel* · BrandMark · DeleteMenu · DeleteSheet · DeleteToast* · DetailAside* · EmberField · GalleryTile* · GenderFilter* · Icon* · ImageViewer* ·
-│   │                     IdentityFilter* · InfoTip* · KindFilter* · NetworkCard* · NetworkDetail* · NotificationsPanel* · OriginFilter* · QueuedPanel · RateBudget · RunToast* · RunToasts* · SelectionBar · ShutdownConfirm* · SignalBars ·
+│   │                     InfoTip* · LabelFilter* · NetworkCard* · NetworkDetail* · NotificationsPanel* · QueuedPanel · RateBudget · RunToast* · RunToasts* · SelectionBar · ShutdownConfirm* · SignalBars ·
 │   │                     SmartPanel · SourceCard* · StatCard* · StoragePanel* · ThemePanel* · ThemePreview · UpdateBanner* · UpdatesPanel · WatchForm* · WorkerAvatar   (* = has a .test.ts)
 │   ├── stores/           background* · characterDefaults* · deletion* · endpoint · jobs* · library* · network* · sources* · theme* · toasts* · updater* · viewer*  (Pinia)
 │   ├── lib/api.ts (+ .test.ts)   endpoint discovery, fetch wrapper, mediaUrl, EventSource
 │   ├── lib/types.ts      the API shapes - keep in step with dawnmaker/app.py
 │   ├── lib/related.ts (+ .test.ts)   the related set a post detail walks: its pages, then the linked post's images
+│   ├── lib/labels.ts · lib/artists.ts   the label values and their i18n leaves; the `source:artist_id` key
 │   ├── lib/shell.ts      openExternal (default browser) · revealInFolder (Finder / Explorer; desktop only)
 │   ├── lib/pipeline.ts (+ .test.ts)   what the pipeline screens derive from a job: stages, character, counters, worker colour
 │   ├── lib/netchart.ts (+ .test.ts)   the network modal's chart maths: 30 samples → smoothed line + area paths

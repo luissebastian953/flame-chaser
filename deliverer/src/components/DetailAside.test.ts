@@ -9,6 +9,7 @@ vi.mock('@tauri-apps/plugin-opener', () => opener);
 
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
+  api: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
   mediaUrl: (sha: string, kind = 'thumb') => `http://d/${sha}/${kind}`,
 }));
 
@@ -24,6 +25,8 @@ function media(over: Partial<PostMedia> & { idx: number }): PostMedia {
     path: `/lib/blobs/69/9a/sha${over.idx}.png`,
     source_variant: 'original',
     identity: null,
+    label: null,
+    label_source: 'auto',
     ...over,
   };
 }
@@ -191,6 +194,69 @@ describe('DetailAside', () => {
 
     await w.findAll('.strip .tile')[3]!.trigger('click');
     expect(made()).toContain('not judged yet');
+    w.unmount();
+  });
+
+  it('the preview carries the label badge and the LABEL row shows the current label with its description', async () => {
+    const w = mountAside(
+      post({
+        media: [
+          media({ idx: 0, label: 'ai', label_source: 'auto' }),
+          media({ idx: 1, label: 'unidentified', label_source: 'manual' }),
+          media({ idx: 2, label: null }),
+        ],
+        linked: [],
+      }),
+    );
+
+    expect(w.find('.art .ilabel').text()).toBe('AI');
+    expect(w.find('.labelrow .ptitle').text()).toBe('Label');
+    expect(w.find('.ltrig').text()).toContain('AI');
+    expect(w.find('.ltrig').text()).toContain('AI-generated illustration');
+
+    await w.findAll('.strip .tile')[1]!.trigger('click');
+    expect(w.find('.art .ilabel').text()).toBe('Unidentified');
+    expect(w.find('.ltrig').text()).toContain("Couldn't identify");
+
+    await w.findAll('.strip .tile')[2]!.trigger('click');
+    expect(w.find('.art .ilabel').exists()).toBe(false); // a normal illustration: no badge
+    expect(w.find('.ltrig').text()).toContain('No label');
+    expect(w.find('.ltrig').text()).toContain('Normal illustration');
+    w.unmount();
+  });
+
+  it("the LABEL row is absent on a linked post's media, where the daemon sends no label", async () => {
+    const w = mountAside();
+    expect(w.find('.labelrow').exists()).toBe(true);
+    await w.findAll('.strip .tile')[3]!.trigger('click'); // the X thread
+    expect(w.find('.labelrow').exists()).toBe(false);
+    expect(w.find('.art .ilabel').exists()).toBe(false);
+    w.unmount();
+  });
+
+  it('picking a label in the dropdown sets it through the store; No label clears it', async () => {
+    vi.mocked(api.put).mockImplementation(async (_p: string, body?: unknown) => ({
+      sha256: 'sha0',
+      label: (body as { label: string | null }).label,
+      label_source: 'manual',
+    }));
+
+    const p = post({ media: [media({ idx: 0, label: null })], linked: [] });
+    const w = mountAside(p);
+    useLibrary().detail = p; // as in the app: the aside shows the store's open post
+    const select = w.findComponent({ name: 'SelectRoot' });
+
+    select.vm.$emit('update:modelValue', 'non_illust');
+    await flushPromises();
+    expect(api.put).toHaveBeenCalledWith('/api/images/sha0/label', { label: 'non_illust' });
+
+    select.vm.$emit('update:modelValue', 'none');
+    await flushPromises();
+    expect(api.put).toHaveBeenLastCalledWith('/api/images/sha0/label', { label: null });
+
+    select.vm.$emit('update:modelValue', 'none'); // the same value again: nothing sent
+    await flushPromises();
+    expect(api.put).toHaveBeenCalledTimes(2);
     w.unmount();
   });
 

@@ -553,6 +553,36 @@ class Store:
             )
         }
 
+    # -- the label set by hand (coreflame/label.py) -----------------------------
+    def set_label(self, sha: str, label: str | None) -> None:
+        """A label chosen by hand (None = "no label", by hand): wins over
+        every classifier and is never touched by re-labelling."""
+        self.conn.execute(
+            """INSERT INTO image_label(sha256,label,set_at) VALUES(?,?,?)
+               ON CONFLICT(sha256) DO UPDATE SET label=excluded.label, set_at=excluded.set_at""",
+            (sha, label, _now()),
+        )
+
+    def clear_label(self, sha: str) -> None:
+        """Back to the classifiers' fold."""
+        self.conn.execute("DELETE FROM image_label WHERE sha256=?", (sha,))
+
+    def image_label(self, sha: str, ident_model: str, origin_model: str) -> dict[str, Any] | None:
+        """{label, label_source} as the gallery folds it, for one stored sha;
+        None when no media row carries it."""
+        from .label import LABEL_SQL, MANUAL_JOIN, SOURCE_SQL
+
+        r = self.conn.execute(
+            f"""SELECT {LABEL_SQL} AS label, {SOURCE_SQL} AS label_source FROM media m
+                LEFT JOIN image_kinds k ON k.sha256=m.sha256
+                LEFT JOIN image_identity i ON i.sha256=m.sha256 AND i.model=?
+                LEFT JOIN image_origin o ON o.sha256=m.sha256 AND (o.by<>'model' OR o.model=?)
+                {MANUAL_JOIN}
+                WHERE m.sha256=? LIMIT 1""",
+            (ident_model, origin_model, sha),
+        ).fetchone()
+        return dict(r) if r else None
+
     # -- character identity (coreflame/identify.py) ---------------------------
     def set_identity(self, sha: str, ident: Any) -> None:
         """The verdict, the candidates, and one row per character named --

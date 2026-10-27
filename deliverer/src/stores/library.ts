@@ -1,19 +1,19 @@
 import type {
+  GalleryArtist,
   GalleryCharacters,
   GalleryKinds,
   GalleryOrigins,
   GalleryPage,
   GridOrder,
-  IdentState,
+  ImageLabel,
   KindFilter,
-  OriginState,
   PostDetail,
   Source,
   TagStat,
   Watch,
 } from '@/lib/types';
 
-/** Every kind a grid can show, in chip order. */
+/** Every kind a grid can show. */
 export const ALL_KIND_FILTERS: KindFilter[] = [
   'illustration',
   'screencap',
@@ -30,59 +30,11 @@ export const ALL_KIND_FILTERS: KindFilter[] = [
  */
 export const KIND_FILTERS: KindFilter[] = ['illustration', 'screencap', 'unlabeled'];
 
-/** Everything selected; each character's grid narrows it to what it can hold. */
-export const DEFAULT_KIND_FILTER: KindFilter[] = [...ALL_KIND_FILTERS];
-
-const SHOW_KEY = 'curio.gallery.show';
-
-/** Identified / unidentified / not identified yet, in chip order. */
-export const IDENT_STATES: IdentState[] = ['identified', 'unidentified', 'pending'];
-
-const WHO_KEY = 'curio.gallery.who';
-
-/** Hand-drawn / AI-made / not judged yet, in chip order. */
-export const ORIGIN_STATES: OriginState[] = ['human', 'ai', 'pending'];
-
-const MADE_KEY = 'curio.gallery.made';
-
-/** Per-viewer convenience, like the theme: localStorage, never the daemon. */
-function loadShow(): KindFilter[] {
-  try {
-    const v: unknown = JSON.parse(localStorage.getItem(SHOW_KEY) ?? 'null');
-    if (Array.isArray(v) && v.length && v.every((k) => ALL_KIND_FILTERS.includes(k as KindFilter))) {
-      return v as KindFilter[];
-    }
-  } catch {
-    /* private mode / blocked storage / bad JSON: defaults */
-  }
-
-  return [...DEFAULT_KIND_FILTER];
-}
-
-function loadWho(): IdentState[] {
-  try {
-    const v: unknown = JSON.parse(localStorage.getItem(WHO_KEY) ?? 'null');
-    if (Array.isArray(v) && v.length && v.every((k) => IDENT_STATES.includes(k as IdentState))) {
-      return v as IdentState[];
-    }
-  } catch {
-    /* defaults */
-  }
-
-  return [...IDENT_STATES];
-}
-
-function loadMade(): OriginState[] {
-  try {
-    const v: unknown = JSON.parse(localStorage.getItem(MADE_KEY) ?? 'null');
-    if (Array.isArray(v) && v.length && v.every((k) => ORIGIN_STATES.includes(k as OriginState))) {
-      return v as OriginState[];
-    }
-  } catch {
-    /* defaults */
-  }
-
-  return [...ORIGIN_STATES];
+/** PUT / DELETE /api/images/{sha256}/label */
+interface LabelResult {
+  sha256: string;
+  label: ImageLabel | null;
+  label_source: 'auto' | 'manual';
 }
 
 export const useLibrary = defineStore('library', {
@@ -97,18 +49,17 @@ export const useLibrary = defineStore('library', {
     },
     tags: [] as TagStat[],
     detail: null as PostDetail | null,
-    show: loadShow(),
     kinds: null as GalleryKinds | null,
-    /** which identification states the grid shows (remembered) */
-    who: loadWho(),
-    /** one character the grid is narrowed to (this gallery only), or null */
-    character: null as string | null,
     characters: null as GalleryCharacters | null,
-    /** which origins (AI-made / hand-drawn / not judged) the grid shows (remembered) */
-    made: loadMade(),
     origins: null as GalleryOrigins | null,
+    /** one label the grid is narrowed to (this gallery only), or null for any */
+    label: null as ImageLabel | null,
     /** one source the grid is narrowed to (this gallery only), or null for every source */
     source: null as Source | null,
+    /** one artist (`source:artist_id`, lib/artists.ts) the grid is narrowed to (this gallery only), or null for all */
+    artist: null as string | null,
+    /** this gallery's artists, most images first - the filter row's chips and By tag's selector */
+    artists: [] as GalleryArtist[],
     /** newest or oldest first; kept while the app runs */
     order: 'newest' as GridOrder,
   }),
@@ -119,23 +70,18 @@ export const useLibrary = defineStore('library', {
     kindsFor: (s) => (slug: string) =>
       s.watches.find((w) => w.slug === slug)?.kind_filter === false ? ALL_KIND_FILTERS : KIND_FILTERS,
     /**
-     * The grid's filters as query parameters (kinds, identification state or
-     * character, origin, source) -- what every page of the grid sends, and what a
-     * selection list (stores/deletion.ts) sends so it never picks an image
-     * the grid is not showing.
+     * The grid's filters as query parameters (kinds, label, source, artist) -- what
+     * every page of the grid sends, and what a selection list
+     * (stores/deletion.ts) sends so it never picks an image the grid is not
+     * showing.
      */
     gridQuery(): (slug: string) => URLSearchParams {
       return (slug: string) => {
         const q = new URLSearchParams();
-        const can = this.kindsFor(slug);
-        const kinds = this.show.filter((k) => can.includes(k));
-        q.set('kinds', (kinds.length ? kinds : can).join(','));
-        // a chosen character replaces the identified/unidentified choice
-        if (this.character) q.set('character', this.character);
-        else if (this.who.length && this.who.length < IDENT_STATES.length) q.set('ident', this.who.join(','));
-        // independent of the character choice: how an image was made is not who is in it
-        if (this.made.length && this.made.length < ORIGIN_STATES.length) q.set('origin', this.made.join(','));
+        q.set('kinds', this.kindsFor(slug).join(','));
+        if (this.label) q.set('label', this.label);
         if (this.source) q.set('source', this.source);
+        if (this.artist) q.set('artist', this.artist);
         return q;
       };
     },
@@ -188,53 +134,51 @@ export const useLibrary = defineStore('library', {
     async loadKinds(slug: string) {
       this.kinds = await api.get<GalleryKinds>(`/api/gallery/${slug}/kinds`);
     },
-    /** Change which kinds the grid shows; remembered, and the grid starts over. */
-    async setShow(slug: string, show: KindFilter[]) {
-      this.show = ALL_KIND_FILTERS.filter((k) => show.includes(k));
-      try {
-        localStorage.setItem(SHOW_KEY, JSON.stringify(this.show));
-      } catch {
-        /* best effort */
-      }
-
-      await this.loadGrid(slug, true);
-    },
     async loadCharacters(slug: string) {
       this.characters = await api.get<GalleryCharacters>(`/api/gallery/${slug}/characters`);
-    },
-    /** Change which identification states the grid shows; remembered, and the grid starts over. */
-    async setWho(slug: string, who: IdentState[]) {
-      this.who = IDENT_STATES.filter((k) => who.includes(k));
-      try {
-        localStorage.setItem(WHO_KEY, JSON.stringify(this.who));
-      } catch {
-        /* best effort */
-      }
-
-      await this.loadGrid(slug, true);
     },
     async loadOrigins(slug: string) {
       this.origins = await api.get<GalleryOrigins>(`/api/gallery/${slug}/origins`);
     },
-    /** Change which origins the grid shows; remembered, and the grid starts over. */
-    async setMade(slug: string, made: OriginState[]) {
-      this.made = ORIGIN_STATES.filter((k) => made.includes(k));
-      try {
-        localStorage.setItem(MADE_KEY, JSON.stringify(this.made));
-      } catch {
-        /* best effort */
-      }
-
+    /** The gallery's artists with their image counts; 300 covers any character the archive has seen. */
+    async loadArtists(slug: string) {
+      this.artists = await api.get<GalleryArtist[]>(`/api/gallery/${slug}/artists?limit=300`);
+    },
+    /** Narrow the grid to one label (null = any); not remembered across galleries, the grid starts over. */
+    async setLabel(slug: string, label: ImageLabel | null) {
+      this.label = label;
       await this.loadGrid(slug, true);
     },
-    /** Narrow the grid to one character (null = everyone); not remembered across galleries. */
-    async setCharacter(slug: string, name: string | null) {
-      this.character = name;
-      await this.loadGrid(slug, true);
+    /**
+     * Set an image's label by hand (null = no badge). The daemon keeps it over
+     * any later re-classification. Every loaded copy of the image follows -
+     * the grid's tiles and the open post's media rows - and a filtered grid
+     * starts over so the change shows; the aside stays on its post.
+     */
+    async setImageLabel(sha: string, label: ImageLabel | null) {
+      const r = await api.put<LabelResult>(`/api/images/${sha}/label`, { label });
+      for (const it of this.grid.items) {
+        if (it.sha256 === sha) {
+          it.label = r.label;
+          it.label_source = r.label_source;
+        }
+      }
+      for (const m of this.detail?.media ?? []) {
+        if (m.sha256 === sha) {
+          m.label = r.label;
+          m.label_source = r.label_source;
+        }
+      }
+      if (this.label && this.grid.slug) await this.loadGrid(this.grid.slug, true);
     },
     /** Narrow the grid to one source (null = every source); the grid starts over. */
     async setSource(slug: string, source: Source | null) {
       this.source = source;
+      await this.loadGrid(slug, true);
+    },
+    /** Narrow the grid to one artist by its `source:artist_id` key (null = all); the grid starts over. */
+    async setArtist(slug: string, key: string | null) {
+      this.artist = key;
       await this.loadGrid(slug, true);
     },
     /** Newest or oldest first; a cursor only continues its own order, so the grid starts over. */

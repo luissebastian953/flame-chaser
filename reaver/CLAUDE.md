@@ -26,6 +26,7 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
 │   ├── people.py     who is in a picture (WD tagger v3): per-character gender filter, full/partial
 │   ├── identify.py   the character's name (WD v3 + Camie v2 vouch for each other) or unidentified; labels only
 │   ├── origin.py     AI-made or by hand: pixiv's aiType flag, an AI hashtag, else deepghs/anime_ai_check; labels only
+│   ├── label.py      the one badge per image: a hand-set label, else non_illust > ai > unidentified, folded in SQL
 │   ├── trash.py      deleting images: batches to <library>/trash, forget/reopen posts, undo, 30-day purge, Smart criteria, crawl-time rule
 │   ├── library.py    hardlink view, gc, import, usage (Settings › Storage figures)
 │   ├── bundle.py     export/import the archive as one file: .curio (framed, hashed, scan-recoverable) or .zip; inspect, verify, merge/restore

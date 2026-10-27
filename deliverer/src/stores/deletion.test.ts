@@ -83,7 +83,7 @@ describe('By tag', () => {
 
     vi.mocked(api.get).mockResolvedValueOnce({ shas: ['3', '4'] });
     await del.toggleTerm('artist', 'pixiv:a', 'Alpha', new URLSearchParams(), 10);
-    expect(vi.mocked(api.get).mock.lastCall?.[0]).toBe('/api/gallery/ganyu/images?artist=pixiv%3Aa');
+    expect(vi.mocked(api.get).mock.lastCall?.[0]).toBe('/api/gallery/ganyu/images?sel_artist=pixiv%3Aa');
     expect(del.effective).toEqual(['1', '2', '3', '4']);
     expect(del.overlap).toBe(1);
     expect(del.termsOf('3').map((x) => x.label)).toEqual(['原神', 'Alpha']);
@@ -102,15 +102,24 @@ describe('By tag', () => {
     expect(del.effective).toEqual(['3', '4']);
   });
 
-  it('an origin chip selects by sel_origin, filtered like the grid', async () => {
+  it('a label chip selects by sel_label, filtered like the grid', async () => {
     const del = useDeletion();
     del.enter('ganyu', 'tag');
     vi.mocked(api.get).mockResolvedValueOnce({ shas: ['5', '6'] });
 
-    await del.toggleTerm('origin', 'ai', 'AI-made', new URLSearchParams({ kinds: 'illustration' }), 10);
+    await del.toggleTerm(
+      'label',
+      'non_illust',
+      'Non-Illust',
+      new URLSearchParams({ kinds: 'illustration', source: 'pixiv' }),
+      10,
+    );
 
-    expect(api.get).toHaveBeenCalledWith('/api/gallery/ganyu/images?kinds=illustration&sel_origin=ai');
-    expect(del.isTerm('origin', 'ai')).toBe(true);
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/gallery/ganyu/images?kinds=illustration&source=pixiv&sel_label=non_illust',
+    );
+
+    expect(del.isTerm('label', 'non_illust')).toBe(true);
     expect(del.effective).toEqual(['5', '6']);
   });
 

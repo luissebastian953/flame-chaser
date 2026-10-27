@@ -871,16 +871,23 @@ panel on the same image. With one image in the set, ← → walk the grid in its
 current order through `viewer.stepOut`, which the character page sets. The
 chrome fades after 2 s without mouse movement, not under reduced motion.
 
-A **Show** row of chips above the grid narrows it between the kinds the
-archive keeps (§10.15): Illustrations, Anime screencaps, and Not labeled yet
-while anything is unlabeled, each with its count, the choice remembered per
-viewer. For images stored before the keep rule the row offers "Label N
-images" / "Remove N images", which runs a `label` job and redraws when it ends.
+A **filter row** at the top of the sticky header, above Observed tags, holds
+two segmented controls: the source (All / pixiv / X) and the **label** (Any
+label / AI / Non-Illust / Unidentified, §10.23), single-select each and ANDed,
+kept for this gallery only, and a "View Artists Tags" toggle that unfolds a
+chip row of the character's artists (most images first, 30 then "+N more")
+to narrow the grid to one of them. Under it, only while something is still
+unjudged, one status line: "N images not fully labeled yet · Label now",
+which runs the `label` job (kinds, gender, names and origin in one pass) and
+redraws when it ends. Every tile carries its label as a small badge at the
+bottom right (the X source mark stays top right); the image panel repeats it
+on the preview and offers a Label dropdown under the tag chips to set it by
+hand.
 
 **Deleting images** (§10.20) starts from Delete ▾ in the header, an outline
 rose button whose picker offers four ways to choose: _By image_ (click,
-⇧click range, drag a box, `A` for all visible), _By tag_ (the Show / Who /
-Characters chips, the observed tags and an Artists row become selectors -
+⇧click range, drag a box, `A` for all visible), _By tag_ (the label
+options, the observed tags and an Artists row become selectors -
 rose, never ember - any or all of them, the picked chips moved to the front
 of their row, with a strip showing the arithmetic),
 _Smart · AI identifier_ (a 300 px criteria panel: low recognition score,
@@ -1043,15 +1050,22 @@ GET /gallery/{slug}?cursor=&limit=100&source=pixiv|twitter&order=newest|oldest&r
                    &ident=identified,unidentified,pending   (absent = all; §10.19)
                    &character=raiden_mei               (images naming that character)
                    &origin=ai,human,pending            (absent = all; §10.22)
+                   &label=ai|non_illust|unidentified   (one; absent = any; §10.23)
+                   &artist=source:artist_id            (one artist's images; absent = all)
                                      → {items:[{sha256,source,external_id,idx,
                                                 width,height,posted_at,
                                                 artist_name,thumb_url,
                                                 kind, identity,
-                                                origin, origin_by}],  kind: null = unlabeled
+                                                origin, origin_by,
+                                                label, label_source}],  kind: null = unlabeled
                                         next_cursor}       origin_by: declared|tags|model|null
+                                                           label: ai|non_illust|unidentified|null
+                                                           label_source: auto|manual
                                        400 bad_kind on an unknown or empty kinds=,
                                        400 bad_ident on an unknown or empty ident=,
-                                       400 bad_origin on an unknown or empty origin=
+                                       400 bad_origin on an unknown or empty origin=,
+                                       400 bad_label on an unknown label=,
+                                       400 bad_artist on an artist= without source:id
                                        400 bad_order on anything but newest|oldest
                                        (a cursor only continues the order it came from)
                                        (the UI always sends the kept kinds + unlabeled;
@@ -1081,6 +1095,15 @@ GET /posts/{source}/{external_id}    → full detail for the aside:
                                         media[].origin: null (not judged yet) |
                                           {state: ai|human, by: declared|tags|model,
                                            score: p(ai) when the model ran, else null}
+                                        media[].label: ai|non_illust|unidentified|null,
+                                        media[].label_source: auto|manual   (§10.23)
+PUT /images/{sha256}/label           ← {label: ai|non_illust|unidentified|null}
+                                     → {sha256, label, label_source: "manual"}
+                                       404 no_image; 400 bad_label. By hand: wins over
+                                       every classifier, survives re-labelling;
+                                       null = "no label", by hand
+DELETE /images/{sha256}/label        → {sha256, label, label_source: "auto"}
+                                       back to the classifiers' fold
                                         linked:[{source,external_id,artist_handle,
                                                  artist_name,title,permalink,
                                                  posted_at,reason,media:[…]}]
@@ -1090,8 +1113,9 @@ GET /posts/{source}/{external_id}    → full detail for the aside:
 GET /media/{sha256}/thumb?w=400      → image/webp, Cache-Control: immutable
 GET /media/{sha256}/full             → original bytes, supports Range
 GET /gallery/{slug}/tags?state=&limit=40   → ranked observed tags               (§4b.2)
-GET /gallery/{slug}/images?tag=&artist=source:id&sel_kind=&sel_ident=&sel_character=
-                   &sel_origin=&source=&kinds=&ident=&character=&origin=&r18=exclude
+GET /gallery/{slug}/images?tag=&sel_artist=source:id&sel_kind=&sel_ident=&sel_character=
+                   &sel_origin=&sel_label=&source=&kinds=&ident=&character=&origin=&label=
+                   &artist=&r18=exclude
                                      → {shas:[...]}   every image carrying one term,
                                        filtered exactly like the grid (By tag / All; §10.20)
 GET /gallery/{slug}/artists?limit=40 → [{source,artist_id,name,handle,count}]
@@ -1950,4 +1974,27 @@ declared by the artist", "from its tags" or "detected 97%".
   flags some very smooth hand painting. Either is a wrong label, never a
   lost image. The contract: `origin=` on the grid, `/gallery/{slug}/origins`,
   `media[].origin` on post detail (§6).
+
+### 10.23 The label - one badge per image (`coreflame/label.py`)
+
+The classifiers each answer their own question and keep their own table:
+what the image is (§10.15), how it was made (§10.22), who is in it (§10.19).
+The gallery shows one word per image, folded from them in SQL so the grid
+filters by it in the query that lists it. In order, the first that applies:
+
+1. a label set by hand (`image_label`, migration v14; a row with a NULL
+   label is "no label", chosen by hand) - re-running any classifier never
+   touches it, and the row is keyed by sha like every verdict;
+2. `non_illust` when the kind is anything but `illustration` - a screencap is
+   kept, and is still not an illustration;
+3. `ai` when the origin is `ai` (declared, tagged or detected alike);
+4. `unidentified` when the identifier judged it and named nobody;
+5. none - a normal illustration carries no badge.
+
+The order was the owner's call (2026-10-27): what it is, then how it was
+made, then who is in it. A photo is a photo even if it looks AI. The
+underlying verdicts stay visible in the image panel's characters and made
+rows, so a hand-set label hides nothing. The three old filter rows (Show,
+Who, Made) and their chips went with this; By tag selects by label instead
+of by kind, identification state, character or origin.
 

@@ -454,6 +454,110 @@ def test_gallery_origin_filter(tmp: Path) -> None:
     print("  gallery origin:       ok (filter, counts, By tag term, detail)")
 
 
+def test_gallery_label(tmp: Path) -> None:
+    """The one badge per image (coreflame/label.py): folded from kind,
+    origin and identity in that order, a hand-set one on top; the grid and
+    the By tag list filter by it; post detail carries it."""
+    import hashlib
+
+    from coreflame import identify, origin
+    from coreflame.identify import Hit, Identity
+    from coreflame.origin import Origin
+
+    client, store, state = boot(tmp / "label")
+    store.upsert_watch(Watch(slug="lb", pixiv_tags=["x"]))
+    setups = {
+        "501": ("photo", None, None),  # non_illust
+        "502": ("illustration", "ai", "identified"),  # ai
+        "503": ("illustration", "human", "unidentified"),  # unidentified
+        "504": ("illustration", "human", "identified"),  # none
+        "505": ("screencap", "ai", "unidentified"),  # non_illust wins over ai
+        "506": (None, None, None),  # nothing judged: none
+    }
+    shas: dict[str, str] = {}
+    for i, (eid, (kind, made, who)) in enumerate(setups.items(), 1):
+        data = _img(90 + i, (300, 400))
+        store.upsert_post(
+            IllustRecord(
+                source="pixiv",
+                external_id=eid,
+                artist_id="a",
+                posted_at=f"2026-09-2{i}T10:00:00+00:00",
+                media=[{"index": 0, "url": f"https://x/lb{i}.png"}],
+            ),
+            "lb",
+        )
+        state.blobs.put(data, "png")
+        sha = hashlib.sha256(data).hexdigest()
+        shas[eid] = sha
+        store.mark_media("pixiv", eid, 0, state="stored", sha=sha, nbytes=len(data), ext="png")
+        if kind:
+            store.set_kind(sha, kind, {}, "m")
+        if made:
+            store.set_origin(sha, Origin(made, "model", 0.9, origin.DETECTOR_ID))
+        if who:
+            hits = [Hit("raiden_mei", "raiden_mei", 0.9, "wd")] if who == "identified" else []
+            store.set_identity(sha, Identity(hits, {"wd": [], "camie": []}, identify.IDENTIFIER_ID))
+
+    def grid(q: str = "") -> dict[str, tuple]:
+        r = client.get(f"/api/gallery/lb{q}")
+        assert r.status_code == 200, r.text
+        return {it["external_id"]: (it["label"], it["label_source"]) for it in r.json()["items"]}
+
+    assert grid() == {
+        "506": (None, "auto"),
+        "505": ("non_illust", "auto"),
+        "504": (None, "auto"),
+        "503": ("unidentified", "auto"),
+        "502": ("ai", "auto"),
+        "501": ("non_illust", "auto"),
+    }
+    assert list(grid("?label=non_illust")) == ["505", "501"]
+    assert list(grid("?label=ai")) == ["502"]
+    assert list(grid("?label=unidentified&source=pixiv")) == ["503"]
+    for bad in ("?label=bogus", "?label="):
+        r = client.get(f"/api/gallery/lb{bad}")
+        assert r.status_code == 400 and r.json()["error"]["code"] == "bad_label", bad
+    sel = client.get("/api/gallery/lb/images?sel_label=non_illust").json()["shas"]
+    assert set(sel) == {shas["501"], shas["505"]}
+    assert client.get("/api/gallery/lb/images?label=ai&sel_label=ai").json()["shas"] == [
+        shas["502"]
+    ]
+    assert client.get("/api/gallery/lb/images?sel_label=nope").status_code == 400
+
+    # by hand: a label, then "no label", then back to the fold
+    r = client.put(f"/api/images/{shas['502']}/label", json={"label": "unidentified"})
+    assert r.status_code == 200 and r.json() == {
+        "sha256": shas["502"],
+        "label": "unidentified",
+        "label_source": "manual",
+    }
+    assert grid()["502"] == ("unidentified", "manual")
+    assert list(grid("?label=unidentified")) == ["503", "502"]
+    r = client.put(f"/api/images/{shas['501']}/label", json={"label": None})
+    assert r.status_code == 200 and grid()["501"] == (None, "manual")
+    assert list(grid("?label=non_illust")) == ["505"]
+    # re-labelling does not touch a hand-set label
+    store.set_kind(shas["501"], "photo", {}, "m2")
+    store.set_origin(shas["502"], Origin("ai", "model", 0.99, origin.DETECTOR_ID))
+    assert grid()["501"] == (None, "manual") and grid()["502"] == ("unidentified", "manual")
+    assert client.put(f"/api/images/{shas['501']}/label", json={"label": "nope"}).status_code == 400
+    assert client.put("/api/images/deadbeef/label", json={"label": "ai"}).status_code == 404
+    r = client.delete(f"/api/images/{shas['502']}/label")
+    assert r.status_code == 200 and r.json() == {
+        "sha256": shas["502"],
+        "label": "ai",
+        "label_source": "auto",
+    }
+    assert client.delete("/api/images/deadbeef/label").status_code == 404
+
+    d = client.get("/api/posts/pixiv/501").json()["media"][0]
+    assert d["label"] is None and d["label_source"] == "manual"
+    d = client.get("/api/posts/pixiv/505").json()["media"][0]
+    assert d["label"] == "non_illust" and d["label_source"] == "auto"
+    print("  gallery label:        ok (fold order, filter, By tag term, by hand wins, detail)")
+
+
 def test_watch_target_and_kind_filter(tmp: Path) -> None:
     client, _, _ = boot(tmp / "w")
     body = {"slug": "mei", "match_terms": ["raiden mei"], "sources": ["twitter"]}
@@ -581,10 +685,19 @@ def test_delete_and_trash_api(tmp: Path) -> None:
     assert every == shas[::-1]
     assert listed["sources"][shas[3]] == "twitter" and listed["sources"][shas[0]] == "pixiv"
     assert client.get("/api/gallery/firefly/images?tag=fanart").json()["shas"] == [shas[2], shas[0]]
-    assert client.get("/api/gallery/firefly/images?artist=pixiv:a").json()["shas"] == [
+    assert client.get("/api/gallery/firefly/images?sel_artist=pixiv:a").json()["shas"] == [
         shas[1],
         shas[0],
     ]
+    # the grid's own artist filter (the Artists chips) narrows the grid and the list alike
+    grid_a = client.get("/api/gallery/firefly?artist=pixiv:a").json()["items"]
+    assert [it["sha256"] for it in grid_a] == [shas[1], shas[0]]
+    assert client.get("/api/gallery/firefly/images?artist=pixiv:a&tag=fanart").json()["shas"] == [
+        shas[0]
+    ]
+    for bad in ("?artist=pixiv", "?artist=:a", "/images?sel_artist=nope"):
+        r = client.get(f"/api/gallery/firefly{bad}")
+        assert r.status_code == 400 and r.json()["error"]["code"] == "bad_artist", bad
     assert client.get("/api/gallery/firefly/images?sel_character=sam").json()["shas"] == [shas[2]]
     assert client.get("/api/gallery/firefly/images?source=twitter").json()["shas"] == [shas[3]]
     assert client.get("/api/gallery/firefly/images?sel_kind=nope").status_code == 400
@@ -988,6 +1101,7 @@ if __name__ == "__main__":
         test_gallery_kinds_filter(tmp)
         test_gallery_identity_filter(tmp)
         test_gallery_origin_filter(tmp)
+        test_gallery_label(tmp)
         test_watch_target_and_kind_filter(tmp)
         test_post_detail_links_cross_source(tmp)
         test_delete_and_trash_api(tmp)

@@ -1,14 +1,6 @@
 <script setup lang="ts">
 import { pickedFirst } from '@/lib/chips';
-import type {
-  DeleteMode,
-  GalleryArtist,
-  GalleryItem,
-  GridOrder,
-  SmartResult,
-  Source,
-  TermKind,
-} from '@/lib/types';
+import type { DeleteMode, GalleryItem, GridOrder, SmartResult, TermKind } from '@/lib/types';
 
 const props = defineProps<{ slug: string }>();
 const lib = useLibrary();
@@ -21,7 +13,6 @@ const { t } = useI18n();
 const sentinel = ref<HTMLElement | null>(null);
 let io: IntersectionObserver | null = null;
 
-const SOURCES: Source[] = ['pixiv', 'twitter'];
 const ORDERS: GridOrder[] = ['newest', 'oldest'];
 const TAGS_SHOWN = 10; // tag chips before "see all"
 
@@ -180,7 +171,6 @@ function onDocClick(e: MouseEvent) {
 }
 
 // ---- selecting images to delete (stores/deletion.ts) ------------------------
-const artists = ref<GalleryArtist[]>([]);
 /** Smart candidates with the default criteria, for the picker's chip */
 const suggested = ref<number | null>(null);
 const visible = computed(() => lib.grid.items.map((it) => it.sha256));
@@ -199,17 +189,11 @@ const bySource = computed(() => {
 async function enter(mode: DeleteMode) {
   del.enter(props.slug, mode);
   lib.closeDetail();
-  if (mode === 'tag' && !artists.value.length) {
-    artists.value = await api.get<GalleryArtist[]>(`/api/gallery/${props.slug}/artists`);
-  }
   if (mode === 'all') await del.loadEverything(lib.gridQuery(props.slug));
 }
 
 async function switchMode(mode: DeleteMode) {
   del.switchTo(mode);
-  if (mode === 'tag' && !artists.value.length) {
-    artists.value = await api.get<GalleryArtist[]>(`/api/gallery/${props.slug}/artists`);
-  }
   if (mode === 'all') await del.loadEverything(lib.gridQuery(props.slug));
 }
 
@@ -328,8 +312,6 @@ const formula = computed(() => {
   });
 });
 
-const artistKey = (a: GalleryArtist) => `${a.source}:${a.artist_id}`;
-
 // Smart: matches float to the top in the chosen order, the rest below (or hidden)
 const smartMatches = computed(() => {
   const r = del.smartResult;
@@ -444,6 +426,7 @@ async function reload() {
     lib.loadWatches(),
     lib.loadCharacters(props.slug),
     lib.loadOrigins(props.slug),
+    lib.loadArtists(props.slug),
   ]);
 }
 
@@ -496,13 +479,14 @@ async function loadSuggested() {
 }
 
 async function load() {
-  // a character or source choice belongs to the gallery it was made in
-  lib.character = null;
+  // a label, source or artist choice belongs to the gallery it was made in
+  lib.label = null;
   lib.source = null;
+  lib.artist = null;
+  lib.artists = [];
   lib.kinds = null;
   lib.origins = null;
   allTags.value = false;
-  artists.value = [];
   shown.value = null;
   del.exit();
 
@@ -512,6 +496,7 @@ async function load() {
     lib.loadKinds(props.slug),
     lib.loadCharacters(props.slug),
     lib.loadOrigins(props.slug),
+    lib.loadArtists(props.slug),
   ]);
 
   void loadSuggested();
@@ -584,26 +569,6 @@ watch(() => props.slug, load);
         <div class="sub">{{ stats }}</div>
       </div>
       <div class="spacer" />
-      <div class="seg" role="group" :aria-label="$t('gallery.detail.source.label')">
-        <button
-          class="btn sm"
-          :class="{ on: !lib.source }"
-          :aria-pressed="!lib.source"
-          @click="lib.setSource(slug, null)"
-        >
-          {{ $t('gallery.detail.source.all') }}
-        </button>
-        <button
-          v-for="s in SOURCES"
-          :key="s"
-          class="btn sm"
-          :class="{ on: lib.source === s }"
-          :aria-pressed="lib.source === s"
-          @click="lib.setSource(slug, s)"
-        >
-          {{ $t(`gallery.aside.source.${s}`) }}
-        </button>
-      </div>
       <SelectRoot v-model="order">
         <SelectTrigger class="btn gh rk-select-trigger order" :aria-label="$t('gallery.detail.order.label')">
           <SelectValue />
@@ -652,6 +617,7 @@ watch(() => props.slug, load);
       <!-- the filters stay put while the grid scrolls under them, on a frosted
            plate that fades toward the tiles -->
       <div class="filters" :class="{ glass: scrolled }">
+        <LabelFilter :slug="slug" />
         <div v-if="lib.tags.length" class="tagbar">
           <div class="taghead">
             <span class="ptitle">{{ $t('gallery.detail.observedTags') }}</span>
@@ -708,13 +674,10 @@ watch(() => props.slug, load);
             </template>
           </div>
         </div>
-        <KindFilter :slug="slug" />
-        <IdentityFilter :slug="slug" />
-        <OriginFilter :slug="slug" />
-        <div v-if="del.mode === 'tag' && artists.length" class="artists">
+        <div v-if="del.mode === 'tag' && lib.artists.length" class="artists">
           <span class="ptitle">{{ $t('gallery.delete.tag.artists') }}</span>
           <button
-            v-for="a in artists"
+            v-for="a in lib.artists"
             :key="artistKey(a)"
             class="chip pick"
             :class="{ sel: del.isTerm('artist', artistKey(a)) }"
@@ -945,7 +908,7 @@ watch(() => props.slug, load);
   user-select: none;
 }
 
-/* The filters (observed tags, Show, Who, Characters): sticky at the top of
+/* The filters (source + label row, observed tags): sticky at the top of
    the grid. Their plate (::before) fades in on scroll - opaque under the
    header, thinning toward the images, then a feathered edge so tiles slide
    under it instead of being cut off. */

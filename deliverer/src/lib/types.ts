@@ -117,7 +117,19 @@ export interface GalleryItem {
   origin: OriginState;
   /** who said so; null while pending */
   origin_by: OriginBy | null;
+  /** the one badge the daemon picked when several apply; null = a normal illustration */
+  label: ImageLabel | null;
+  label_source: LabelSource;
 }
+
+/**
+ * ai = AI-generated illustration; non_illust = not an illustration (photo,
+ * screencap, render, other); unidentified = the character could not be named
+ */
+export type ImageLabel = 'ai' | 'non_illust' | 'unidentified';
+
+/** auto = the classifiers' verdict; manual = set in the aside, survives re-classification */
+export type LabelSource = 'auto' | 'manual';
 
 /** which end of the timeline a gallery grid starts from */
 export type GridOrder = 'newest' | 'oldest';
@@ -228,6 +240,9 @@ export interface PostMedia {
   identity?: { state: 'identified' | 'unidentified'; characters: CharacterHit[] } | null;
   /** how it was made; `score` = p(ai) when the detector ran, else null. null = not judged yet; absent on a linked post's media */
   origin?: { state: 'ai' | 'human'; by: OriginBy; score: number | null } | null;
+  /** the image's badge; null = none; absent on a linked post's media */
+  label?: ImageLabel | null;
+  label_source?: LabelSource;
 }
 
 export interface LinkedPost {
@@ -307,7 +322,7 @@ export interface Health {
 export type DeleteMode = 'image' | 'tag' | 'smart' | 'all';
 
 /** a chip By tag selects with: what it is and which images carry it */
-export type TermKind = 'tag' | 'kind' | 'ident' | 'character' | 'artist' | 'origin';
+export type TermKind = 'tag' | 'artist' | 'label';
 
 /** GET /api/gallery/{slug}/artists */
 export interface GalleryArtist {

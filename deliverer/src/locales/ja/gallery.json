@@ -97,7 +97,6 @@
     }
   },
   "kinds": {
-    "show": "表示",
     "name": {
       "illustration": "イラスト",
       "screencap": "アニメのキャプチャ",
@@ -105,53 +104,33 @@
       "render": "3D・フィギュア",
       "other": "スクリーンショット・その他",
       "unlabeled": "未ラベル"
+    }
+  },
+  "label": {
+    "title": "ラベル",
+    "filter": "ラベル",
+    "artists": "作者タグを表示",
+    "any": "すべてのラベル",
+    "ai": "AI",
+    "nonIllust": "イラスト以外",
+    "unidentified": "未特定",
+    "none": "ラベルなし",
+    "desc": {
+      "ai": "AI生成イラスト",
+      "nonIllust": "イラストではない",
+      "unidentified": "特定できず",
+      "none": "通常のイラスト"
     },
-    "labelNow": "0枚をラベル付け | 1枚をラベル付け | {n}枚をラベル付け",
-    "removeNow": "0枚を削除 | 1枚を削除 | {n}枚を削除",
-    "checkPeople": "0枚を性別フィルターで確認 | 1枚を性別フィルターで確認 | {n}枚を性別フィルターで確認",
-    "policy": "イラストとアニメのキャプチャだけを残します - 写真、コスプレ、3D、フィギュア、スクリーンショットは除外されます",
+    "pendingLine": "0枚がまだラベル付け途中 | 1枚がまだラベル付け途中 | {n}枚がまだラベル付け途中",
+    "labelNow": "今すぐラベル付け",
     "labeling": "ラベル付け中… {done} / {total}",
     "labelingStarting": "ラベル付け中…",
-    "firstUse": "初回実行時に分類器（約 34 MB）をダウンロードします",
-    "unavailable": "画像ラベルはオフです: 任意の分類器がインストールされていません（{cmd}）",
+    "firstUse": "初回実行時に分類器をダウンロードします（最大約 1.3 GB）",
+    "unavailable": "ラベルはオフです: 任意の分類器がインストールされていません（{cmd}）",
     "failed": "ラベル付けに失敗: {error}"
   },
-  "who": {
-    "title": "誰",
-    "state": {
-      "identified": "特定済み",
-      "unidentified": "未特定",
-      "pending": "まだ特定していません"
-    },
-    "characters": "キャラクター",
-    "more": "+あと{n}件",
-    "fewer": "少なく表示",
-    "identifyNow": "0枚を特定 | 1枚を特定 | {n}枚を特定",
-    "identifying": "特定中… {done} / {total}",
-    "identifyingStarting": "特定中…",
-    "policy": "名前は画像にラベルを付けるだけ - 何も削除されません",
-    "firstUse": "初回実行時にキャラクタータガーを 2 つダウンロードします（最大約 1.3 GB）",
-    "off": "キャラクター名はオフです - 設定 › キャラクター でオンにできます",
-    "unavailable": "キャラクター名はオフです: 任意の分類器がインストールされていません（{cmd}）",
-    "failed": "特定に失敗: {error}"
-  },
-  "made": {
-    "title": "制作",
-    "state": {
-      "human": "手描き",
-      "ai": "AI生成",
-      "pending": "未判定"
-    },
-    "judgeNow": "0枚を判定 | 1枚を判定 | {n}枚を判定",
-    "judging": "判定中… {done} / {total}",
-    "judgingStarting": "判定中…",
-    "policy": "ラベルを付けるだけ - 何も削除されません",
-    "firstUse": "初回実行時に検出器（約 17 MB）をダウンロードします",
-    "unavailable": "AI判定はオフです: 任意の分類器がインストールされていません（{cmd}）",
-    "failed": "判定に失敗: {error}"
-  },
   "tile": {
-    "ai": "AI"
+    "labeled": "画像、ラベル: {label}"
   },
   "delete": {
     "menu": {

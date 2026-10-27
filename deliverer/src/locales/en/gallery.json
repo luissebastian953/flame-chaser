@@ -97,7 +97,6 @@
     }
   },
   "kinds": {
-    "show": "Show",
     "name": {
       "illustration": "Illustrations",
       "screencap": "Anime screencaps",
@@ -105,53 +104,33 @@
       "render": "3D & figures",
       "other": "Screenshots & other",
       "unlabeled": "Not labeled yet"
+    }
+  },
+  "label": {
+    "title": "Label",
+    "filter": "Label",
+    "artists": "View Artists Tags",
+    "any": "Any label",
+    "ai": "AI",
+    "nonIllust": "Non-Illust",
+    "unidentified": "Unidentified",
+    "none": "No label",
+    "desc": {
+      "ai": "AI-generated illustration",
+      "nonIllust": "Not an illustration",
+      "unidentified": "Couldn't identify",
+      "none": "Normal illustration"
     },
-    "labelNow": "Label 0 images | Label 1 image | Label {n} images",
-    "removeNow": "Remove 0 images | Remove 1 image | Remove {n} images",
-    "checkPeople": "Check 0 images for the gender filter | Check 1 image for the gender filter | Check {n} images for the gender filter",
-    "policy": "only illustrations and anime screencaps are kept - photos, cosplay, 3D, figures and screenshots are thrown away",
+    "pendingLine": "0 images not fully labeled yet | 1 image not fully labeled yet | {n} images not fully labeled yet",
+    "labelNow": "Label now",
     "labeling": "Labeling… {done} / {total}",
     "labelingStarting": "Labeling…",
-    "firstUse": "the first run downloads the classifier (~34 MB)",
-    "unavailable": "Image labels are off: the optional classifier is not installed ({cmd})",
+    "firstUse": "the first run downloads the classifiers (up to ~1.3 GB)",
+    "unavailable": "Labels are off: the optional classifier is not installed ({cmd})",
     "failed": "Labeling failed: {error}"
   },
-  "who": {
-    "title": "Who",
-    "state": {
-      "identified": "Identified",
-      "unidentified": "Unidentified",
-      "pending": "Not identified yet"
-    },
-    "characters": "Characters",
-    "more": "+{n} more",
-    "fewer": "fewer",
-    "identifyNow": "Identify 0 images | Identify 1 image | Identify {n} images",
-    "identifying": "Identifying… {done} / {total}",
-    "identifyingStarting": "Identifying…",
-    "policy": "names only label images - nothing is removed",
-    "firstUse": "the first run downloads two character taggers (up to ~1.3 GB)",
-    "off": "Character names are off - switch them on in Settings › Characters",
-    "unavailable": "Character names are off: the optional classifier is not installed ({cmd})",
-    "failed": "Identifying failed: {error}"
-  },
-  "made": {
-    "title": "Made",
-    "state": {
-      "human": "Hand-drawn",
-      "ai": "AI-made",
-      "pending": "Not judged yet"
-    },
-    "judgeNow": "Judge 0 images | Judge 1 image | Judge {n} images",
-    "judging": "Judging… {done} / {total}",
-    "judgingStarting": "Judging…",
-    "policy": "labels only - nothing is removed",
-    "firstUse": "the first run downloads the detector (~17 MB)",
-    "unavailable": "AI detection is off: the optional classifier is not installed ({cmd})",
-    "failed": "Judging failed: {error}"
-  },
   "tile": {
-    "ai": "AI"
+    "labeled": "Image, label: {label}"
   },
   "delete": {
     "menu": {

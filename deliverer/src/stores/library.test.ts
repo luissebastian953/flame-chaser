@@ -1,4 +1,4 @@
-import type { GalleryItem, GalleryPage, Watch } from '@/lib/types';
+import type { GalleryItem, GalleryPage, PostDetail, Watch } from '@/lib/types';
 
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
@@ -38,6 +38,8 @@ function item(sha256: string): GalleryItem {
     identity: 'pending',
     origin: 'pending',
     origin_by: null,
+    label: null,
+    label_source: 'auto',
   };
 }
 
@@ -185,44 +187,18 @@ describe('useLibrary detail', () => {
 });
 
 describe('useLibrary kind filter', () => {
-  it('defaults to the kept kinds + unlabeled, and always asks for exactly those', async () => {
+  it('always asks for exactly the kinds the character keeps', async () => {
     vi.mocked(api.get).mockResolvedValueOnce(page([], null));
     const lib = useLibrary();
-
-    expect(lib.show).toEqual(ALL_KIND_FILTERS); // narrowed per character below
     await lib.loadGrid('kiana');
 
-    // sent even when all are on: the daemon may still hold thrown-away kinds before a cleanup
+    // sent even though nothing narrows it: the daemon may still hold thrown-away kinds before a cleanup
     expect(api.get).toHaveBeenLastCalledWith(
       '/api/gallery/kiana?limit=120&kinds=illustration%2Cscreencap%2Cunlabeled',
     );
   });
 
-  it('setShow() keeps chip order, remembers the choice and starts the grid over', async () => {
-    vi.mocked(api.get)
-      .mockResolvedValueOnce(page(['a'], 'c1'))
-      .mockResolvedValueOnce(page(['b'], null));
-
-    const lib = useLibrary();
-    await lib.loadGrid('kiana');
-
-    await lib.setShow('kiana', ['unlabeled', 'illustration']);
-    expect(lib.show).toEqual(['illustration', 'unlabeled']);
-    expect(JSON.parse(localStorage.getItem('curio.gallery.show') ?? '[]')).toEqual(lib.show);
-    expect(api.get).toHaveBeenLastCalledWith('/api/gallery/kiana?limit=120&kinds=illustration%2Cunlabeled');
-    expect(lib.grid.items.map((i) => i.sha256)).toEqual(['b']); // reset, not appended
-  });
-
-  it('reads a saved choice at creation and ignores a corrupt one', () => {
-    localStorage.setItem('curio.gallery.show', JSON.stringify(['photo']));
-    expect(useLibrary().show).toEqual(['photo']);
-
-    setActivePinia(createPinia());
-    localStorage.setItem('curio.gallery.show', JSON.stringify(['nonsense']));
-    expect(useLibrary().show).toEqual(DEFAULT_KIND_FILTER);
-  });
-
-  it('a character with its filter off gets every selected kind; with it on, only what it keeps', async () => {
+  it('a character with its filter off gets every kind; with it on, only what it keeps', async () => {
     vi.mocked(api.get).mockResolvedValue(page([], null));
     const lib = useLibrary();
     lib.watches = [{ ...watch('all'), kind_filter: false }, watch('kept')];
@@ -234,13 +210,6 @@ describe('useLibrary kind filter', () => {
     );
 
     await lib.loadGrid('kept');
-
-    expect(api.get).toHaveBeenLastCalledWith(
-      '/api/gallery/kept?limit=120&kinds=illustration%2Cscreencap%2Cunlabeled',
-    );
-
-    lib.show = ['photo']; // nothing this character holds: fall back to all it can
-    await lib.loadGrid('kept', true);
 
     expect(api.get).toHaveBeenLastCalledWith(
       '/api/gallery/kept?limit=120&kinds=illustration%2Cscreencap%2Cunlabeled',
@@ -260,118 +229,236 @@ describe('useLibrary kind filter', () => {
     expect(api.get).toHaveBeenCalledWith('/api/gallery/kiana/kinds');
     expect(lib.kinds).toEqual(kinds);
   });
-});
 
-describe('useLibrary identity filter', () => {
-  const KINDS = 'kinds=illustration%2Cscreencap%2Cunlabeled';
-
-  it('shows everyone by default and then sends no ident filter at all', async () => {
-    vi.mocked(api.get).mockResolvedValueOnce(page([], null));
-    const lib = useLibrary();
-
-    expect(lib.who).toEqual(IDENT_STATES);
-    await lib.loadGrid('mei');
-
-    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}`);
-  });
-
-  it('setWho() keeps chip order, remembers the choice and starts the grid over', async () => {
-    vi.mocked(api.get).mockResolvedValue(page([], null));
-    const lib = useLibrary();
-
-    await lib.setWho('mei', ['pending', 'unidentified']);
-
-    expect(lib.who).toEqual(['unidentified', 'pending']);
-    expect(JSON.parse(localStorage.getItem('curio.gallery.who') ?? '[]')).toEqual(lib.who);
-
-    expect(api.get).toHaveBeenLastCalledWith(
-      `/api/gallery/mei?limit=120&${KINDS}&ident=unidentified%2Cpending`,
-    );
-
-    setActivePinia(createPinia());
-    expect(useLibrary().who).toEqual(['unidentified', 'pending']); // read back at creation
-  });
-
-  it('a chosen character replaces the state filter; null shows everyone again', async () => {
-    vi.mocked(api.get).mockResolvedValue(page([], null));
-    const lib = useLibrary();
-    lib.who = ['unidentified'];
-
-    await lib.setCharacter('mei', 'raiden_mei');
-    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}&character=raiden_mei`);
-
-    await lib.setCharacter('mei', null);
-    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}&ident=unidentified`);
-  });
-
-  it('loadCharacters() reads the counts and the cast', async () => {
+  it('loadCharacters() and loadOrigins() read the backlog counts the status line sums', async () => {
     const c = {
       counts: { identified: 2, unidentified: 1, pending: 0 },
       characters: [{ name: 'raiden_mei', label: 'Raiden Mei', count: 2 }],
       identifier: { enabled: true, available: true, models: true },
     };
 
-    vi.mocked(api.get).mockResolvedValueOnce(c);
+    const o = { counts: { ai: 2, human: 9, pending: 1 }, detector: { available: true, models: false } };
+    vi.mocked(api.get).mockResolvedValueOnce(c).mockResolvedValueOnce(o);
     const lib = useLibrary();
     await lib.loadCharacters('mei');
+    await lib.loadOrigins('mei');
 
     expect(api.get).toHaveBeenCalledWith('/api/gallery/mei/characters');
+    expect(api.get).toHaveBeenCalledWith('/api/gallery/mei/origins');
     expect(lib.characters).toEqual(c);
+    expect(lib.origins).toEqual(o);
   });
 });
 
-describe('useLibrary origin filter', () => {
+describe('useLibrary label filter', () => {
   const KINDS = 'kinds=illustration%2Cscreencap%2Cunlabeled';
 
-  it('shows every origin by default and then sends no origin filter at all', async () => {
+  it('any label by default, so none is sent; never ident, character or origin', async () => {
     vi.mocked(api.get).mockResolvedValueOnce(page([], null));
     const lib = useLibrary();
 
-    expect(lib.made).toEqual(ORIGIN_STATES);
+    expect(lib.label).toBeNull();
     await lib.loadGrid('mei');
 
     expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}`);
+    const url = vi.mocked(api.get).mock.lastCall?.[0] ?? '';
+    expect(url).not.toMatch(/ident=|character=|origin=/);
   });
 
-  it('setMade() keeps chip order, remembers the choice and starts the grid over', async () => {
+  it('setLabel() narrows the query to one label and starts the grid over; null is any again', async () => {
+    vi.mocked(api.get)
+      .mockResolvedValueOnce(page(['a'], 'c1'))
+      .mockResolvedValueOnce(page(['ai1'], null))
+      .mockResolvedValueOnce(page(['a'], null));
+
+    const lib = useLibrary();
+    await lib.loadGrid('mei');
+
+    await lib.setLabel('mei', 'ai');
+    expect(lib.label).toBe('ai');
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}&label=ai`);
+    expect(lib.grid.items.map((i) => i.sha256)).toEqual(['ai1']); // reset, not appended
+
+    await lib.setLabel('mei', null);
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}`);
+  });
+
+  it('the label rides along with a source: the two are ANDed', async () => {
     vi.mocked(api.get).mockResolvedValue(page([], null));
     const lib = useLibrary();
+    lib.source = 'twitter';
 
-    await lib.setMade('mei', ['pending', 'human']);
-
-    expect(lib.made).toEqual(['human', 'pending']);
-    expect(JSON.parse(localStorage.getItem('curio.gallery.made') ?? '[]')).toEqual(lib.made);
-    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}&origin=human%2Cpending`);
-
-    setActivePinia(createPinia());
-    expect(useLibrary().made).toEqual(['human', 'pending']); // read back at creation
-  });
-
-  it('ignores a corrupt saved choice', () => {
-    localStorage.setItem('curio.gallery.made', JSON.stringify(['nonsense']));
-    expect(useLibrary().made).toEqual(ORIGIN_STATES);
-  });
-
-  it('the origin choice rides along with a chosen character: it is not who is in the picture', async () => {
-    vi.mocked(api.get).mockResolvedValue(page([], null));
-    const lib = useLibrary();
-    lib.made = ['human'];
-
-    await lib.setCharacter('mei', 'raiden_mei');
+    await lib.setLabel('mei', 'non_illust');
 
     expect(api.get).toHaveBeenLastCalledWith(
-      `/api/gallery/mei?limit=120&${KINDS}&character=raiden_mei&origin=human`,
+      `/api/gallery/mei?limit=120&${KINDS}&label=non_illust&source=twitter`,
     );
+
+    expect(lib.gridQuery('mei').get('label')).toBe('non_illust'); // what a selection list sends too
+  });
+});
+
+describe('useLibrary artist filter', () => {
+  const KINDS = 'kinds=illustration%2Cscreencap%2Cunlabeled';
+
+  it('all artists by default, so none is sent', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce(page([], null));
+    const lib = useLibrary();
+
+    expect(lib.artist).toBeNull();
+    expect(lib.artists).toEqual([]);
+    await lib.loadGrid('mei');
+
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}`);
+    expect(lib.gridQuery('mei').has('artist')).toBe(false);
   });
 
-  it('loadOrigins() reads the counts and the detector state', async () => {
-    const o = { counts: { ai: 2, human: 9, pending: 1 }, detector: { available: true, models: false } };
-    vi.mocked(api.get).mockResolvedValueOnce(o);
-    const lib = useLibrary();
-    await lib.loadOrigins('mei');
+  it('setArtist() narrows the query to one source:artist_id key and starts the grid over; null is all again', async () => {
+    vi.mocked(api.get)
+      .mockResolvedValueOnce(page(['a'], 'c1'))
+      .mockResolvedValueOnce(page(['by1'], null))
+      .mockResolvedValueOnce(page(['a'], null));
 
-    expect(api.get).toHaveBeenCalledWith('/api/gallery/mei/origins');
-    expect(lib.origins).toEqual(o);
+    const lib = useLibrary();
+    await lib.loadGrid('mei');
+
+    await lib.setArtist('mei', 'pixiv:123');
+    expect(lib.artist).toBe('pixiv:123');
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}&artist=pixiv%3A123`);
+    expect(lib.grid.items.map((i) => i.sha256)).toEqual(['by1']); // reset, not appended
+
+    await lib.setArtist('mei', null);
+    expect(api.get).toHaveBeenLastCalledWith(`/api/gallery/mei?limit=120&${KINDS}`);
+  });
+
+  it('the artist rides along with the source and the label: the three are ANDed', async () => {
+    vi.mocked(api.get).mockResolvedValue(page([], null));
+    const lib = useLibrary();
+    lib.source = 'twitter';
+    lib.label = 'ai';
+
+    await lib.setArtist('mei', 'twitter:9');
+
+    expect(api.get).toHaveBeenLastCalledWith(
+      `/api/gallery/mei?limit=120&${KINDS}&label=ai&source=twitter&artist=twitter%3A9`,
+    );
+
+    expect(lib.gridQuery('mei').get('artist')).toBe('twitter:9'); // what a selection list sends too
+  });
+
+  it('loadArtists() reads up to 300 artists, most images first, as the daemon orders them', async () => {
+    const artists = [
+      { source: 'pixiv', artist_id: '1', name: 'A', handle: 'a', count: 9 },
+      { source: 'twitter', artist_id: '2', name: 'B', handle: '', count: 3 },
+    ];
+
+    vi.mocked(api.get).mockResolvedValueOnce(artists);
+    const lib = useLibrary();
+    await lib.loadArtists('mei');
+
+    expect(api.get).toHaveBeenCalledWith('/api/gallery/mei/artists?limit=300');
+    expect(lib.artists).toEqual(artists);
+  });
+});
+
+describe('useLibrary setImageLabel()', () => {
+  const manual = (sha256: string, label: 'ai' | 'non_illust' | 'unidentified' | null) => ({
+    sha256,
+    label,
+    label_source: 'manual' as const,
+  });
+
+  function detail(): PostDetail {
+    return {
+      source: 'pixiv',
+      external_id: '1',
+      artist_id: 'a',
+      artist_name: 'a',
+      artist_handle: 'a',
+      title: 't',
+      caption: '',
+      posted_at: null,
+      permalink: '',
+      bookmark_count: 0,
+      state: 'live',
+      source_meta: '{}',
+      media: [
+        {
+          idx: 0,
+          sha256: 'a',
+          state: 'stored',
+          dupe_of: null,
+          width: 1,
+          height: 1,
+          bytes: 1,
+          ext: 'png',
+          path: null,
+          source_variant: '',
+          label: null,
+          label_source: 'auto',
+        },
+        {
+          idx: 1,
+          sha256: 'b',
+          state: 'stored',
+          dupe_of: null,
+          width: 1,
+          height: 1,
+          bytes: 1,
+          ext: 'png',
+          path: null,
+          source_variant: '',
+          label: null,
+          label_source: 'auto',
+        },
+      ],
+      tags: [],
+      linked: [],
+    };
+  }
+
+  it('PUTs the label, then patches every grid tile and media row with that sha; the aside stays', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce(page(['a', 'b', 'a'], null));
+    vi.mocked(api.put).mockResolvedValueOnce(manual('a', 'ai'));
+    const lib = useLibrary();
+    await lib.loadGrid('mei');
+    const d = detail();
+    lib.detail = d;
+
+    await lib.setImageLabel('a', 'ai');
+
+    expect(api.put).toHaveBeenCalledWith('/api/images/a/label', { label: 'ai' });
+
+    expect(lib.grid.items.map((i) => [i.label, i.label_source])).toEqual([
+      ['ai', 'manual'],
+      [null, 'auto'],
+      ['ai', 'manual'],
+    ]);
+
+    expect(lib.detail?.media.map((m) => [m.label, m.label_source])).toEqual([
+      ['ai', 'manual'],
+      [null, 'auto'],
+    ]);
+
+    expect(lib.detail).toMatchObject({ external_id: d.external_id }); // not closed, not refetched
+    expect(api.get).toHaveBeenCalledTimes(1); // the grid is not filtered: no reload
+  });
+
+  it('clearing a label sends null; a filtered grid starts over so the filter re-applies', async () => {
+    vi.mocked(api.get).mockResolvedValue(page(['a'], null));
+    vi.mocked(api.put).mockResolvedValueOnce(manual('a', null));
+    const lib = useLibrary();
+    await lib.setLabel('mei', 'ai');
+    expect(api.get).toHaveBeenCalledTimes(1);
+
+    await lib.setImageLabel('a', null);
+
+    expect(api.put).toHaveBeenCalledWith('/api/images/a/label', { label: null });
+    expect(api.get).toHaveBeenCalledTimes(2);
+
+    expect(api.get).toHaveBeenLastCalledWith(
+      '/api/gallery/mei?limit=120&kinds=illustration%2Cscreencap%2Cunlabeled&label=ai',
+    );
   });
 });
 

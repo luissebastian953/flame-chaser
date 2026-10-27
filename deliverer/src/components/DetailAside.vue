@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PostDetail } from '@/lib/types';
+import type { ImageLabel, PostDetail } from '@/lib/types';
 import { linkedStart, megabytes, relatedSet } from '@/lib/related';
 
 /**
@@ -14,6 +14,10 @@ const emit = defineEmits<{ close: [] }>();
 const { t, te } = useI18n();
 const viewer = useViewer();
 const src = useSources();
+const lib = useLibrary();
+
+/** the dropdown's options: the three labels, then none; a Select value is a string, so null rides as 'none' */
+const LABEL_OPTIONS: (ImageLabel | 'none')[] = [...IMAGE_LABELS, 'none'];
 
 const set = computed(() => relatedSet(props.post));
 const at = ref(0);
@@ -38,6 +42,15 @@ const madeBy = computed(() => {
   }
   return t(`gallery.aside.madeBy.${o.by}`);
 });
+
+/** the dropdown's current value; absent (a daemon without labels) hides the row */
+const labelValue = computed(() => row.value?.label ?? 'none');
+
+function onLabel(v: unknown) {
+  if (!cur.value) return;
+  const label = v === 'none' ? null : (v as ImageLabel);
+  if (label !== (row.value?.label ?? null)) void lib.setImageLabel(cur.value.sha, label);
+}
 
 const own = computed(() => set.value.filter((it) => !it.linked));
 const others = computed(() => set.value.filter((it) => it.linked));
@@ -148,6 +161,9 @@ const storedAt = computed(() => {
         @click="openViewer"
       >
         <img :src="mediaUrl(cur.sha)" alt="" />
+        <span v-if="row?.label" class="ilabel" :class="row.label">
+          {{ $t(`gallery.label.${LABEL_KEY[row.label]}`) }}
+        </span>
         <span v-if="cur.pages > 1" class="badge pages mono">
           {{ $t('gallery.aside.counter', { n: cur.page, total: cur.pages }) }}
         </span>
@@ -182,6 +198,37 @@ const storedAt = computed(() => {
       </div>
       <div v-if="post.tags.length && !cur?.linked" class="chips">
         <span v-for="tag in post.tags" :key="tag.tag_norm" class="chip jp">{{ tag.tag_raw }}</span>
+      </div>
+
+      <div v-if="row && row.label !== undefined" class="labelrow">
+        <span class="ptitle">{{ $t('gallery.label.title') }}</span>
+        <SelectRoot :model-value="labelValue" @update:model-value="onLabel">
+          <SelectTrigger class="btn gh rk-select-trigger ltrig" :aria-label="$t('gallery.label.title')">
+            <span class="lcur">
+              <i class="sw" :class="labelValue" aria-hidden="true" />
+              <span class="lname" :class="labelValue">{{ $t(`gallery.label.${labelKey(row.label)}`) }}</span>
+              <span class="ldesc">{{ $t(`gallery.label.desc.${labelKey(row.label)}`) }}</span>
+            </span>
+            <Icon name="chevron-down" :size="14" class="text-dim" />
+          </SelectTrigger>
+          <SelectPortal>
+            <SelectContent class="rk-select-content" position="popper" :side-offset="4">
+              <SelectViewport>
+                <SelectItem v-for="l in LABEL_OPTIONS" :key="l" :value="l" class="rk-select-item lopt">
+                  <i class="sw" :class="l" aria-hidden="true" />
+                  <SelectItemText>
+                    <span class="lname" :class="l">
+                      {{ $t(`gallery.label.${l === 'none' ? 'none' : LABEL_KEY[l]}`) }}
+                    </span>
+                  </SelectItemText>
+                  <SelectItemIndicator class="lcheck">
+                    <Icon name="check" :size="13" />
+                  </SelectItemIndicator>
+                </SelectItem>
+              </SelectViewport>
+            </SelectContent>
+          </SelectPortal>
+        </SelectRoot>
       </div>
 
       <section v-if="set.length > 1" class="related">
@@ -452,6 +499,104 @@ const storedAt = computed(() => {
   left: 8px;
   color: var(--mut);
   border: 1px solid var(--line);
+}
+/* the image's label over the preview: amber = AI, muted = not an illustration, dashed dim = unidentified */
+.ilabel {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 2px;
+  background: oklch(0.14 0.024 265 / 0.82);
+  font: 600 10px var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ilabel.ai {
+  color: var(--amber);
+  border: 1px solid color-mix(in oklch, var(--amber) 55%, transparent);
+}
+.ilabel.non_illust {
+  color: var(--mut);
+  border: 1px solid var(--line);
+}
+.ilabel.unidentified {
+  color: var(--dim);
+  border: 1px dashed var(--line);
+}
+/* the LABEL row: title, then the dropdown that sets the label by hand */
+.labelrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.labelrow .ptitle {
+  font-size: 10px;
+  flex: none;
+}
+.ltrig {
+  flex: 1;
+  min-width: 0;
+  height: 29px;
+  padding: 0 10px;
+}
+.lcur {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sw {
+  flex: none;
+  width: 6px;
+  height: 6px;
+}
+.sw.ai {
+  background: var(--amber);
+}
+.sw.non_illust {
+  background: var(--mut);
+}
+.sw.unidentified {
+  border: 1px dashed var(--dim);
+}
+.lname {
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.lname.ai {
+  color: var(--amber);
+}
+.lname.non_illust {
+  color: var(--mut);
+}
+.lname.unidentified {
+  color: var(--dim);
+}
+.lname.none {
+  color: var(--dim);
+  font-weight: 400;
+}
+.ldesc {
+  font-size: 10.5px;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lopt {
+  display: grid;
+  grid-template-columns: 6px 1fr 16px;
+  align-items: center;
+  gap: 8px;
+}
+.lcheck {
+  color: var(--ember);
 }
 .title {
   font-size: 14px;
