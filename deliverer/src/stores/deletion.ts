@@ -150,6 +150,12 @@ export const useDeletion = defineStore('deletion', {
     count(): number {
       return this.effective.length;
     },
+    /** Clear has something to undo: a mark, a chip, or a tile kept back out */
+    clearable(): boolean {
+      if (this.mode === 'image') return this.picked.length > 0;
+      if (this.mode === 'tag') return this.terms.length > 0 || this.dropped.length > 0;
+      return this.count > 0;
+    },
     baseSet(): Set<string> {
       return new Set(this.base);
     },

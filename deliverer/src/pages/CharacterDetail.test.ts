@@ -323,8 +323,11 @@ describe('CharacterDetail deleting images', () => {
   it('Esc leaves silently with nothing marked and asks for a second Esc with a selection', async () => {
     const { w } = await mountPage();
     await pickMode(w, 'By image');
+    const clear = () => w.findAll('.selbar button').find((b) => b.text() === 'Clear')!;
+    expect(clear().attributes('disabled')).toBeDefined(); // nothing to clear yet
     await tiles(w)[1]!.trigger('click');
     expect(w.text()).toContain('1 selected');
+    expect(clear().attributes('disabled')).toBeUndefined();
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await flushPromises();

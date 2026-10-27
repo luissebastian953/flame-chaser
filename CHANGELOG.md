@@ -6,6 +6,7 @@ person using the app, not for git log.
 
 ## Unreleased
 
+- Changed: the Clear button in the selection bar is greyed out while there is nothing to clear
 - Changed: while choosing images to delete By tag, the chips stay where they are in their row; it is the images behind the picked chips that move to the front of the grid, so the selection reads in one place without the rows reshuffling
 
 ## 0.2.0 - 2026-10-26

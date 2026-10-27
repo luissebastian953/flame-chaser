@@ -109,7 +109,9 @@ const minus = computed(() =>
         {{ $t('gallery.delete.bar.reviewOnly') }}
       </button>
       <div class="spacer" />
-      <button class="btn gh sm" @click="del.clear()">{{ $t('gallery.delete.bar.clear') }}</button>
+      <button class="btn gh sm" :disabled="!del.clearable" @click="del.clear()">
+        {{ $t('gallery.delete.bar.clear') }}
+      </button>
       <button class="btn del" :disabled="!del.count || del.busy" @click="emit('delete')">
         <Icon v-if="del.busy" name="loader" class="spin" :size="12" />
         <Icon v-else name="trash" :size="13" />
