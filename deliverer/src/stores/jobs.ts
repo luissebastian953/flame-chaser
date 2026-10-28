@@ -30,6 +30,8 @@ export const useJobs = defineStore('jobs', {
   getters: {
     /** one per busy worker (pixiv, then X) */
     running: (s) => s.jobs.filter((j) => j.state === 'running'),
+    /** a worker is actually moving: running, not paused, the queue not held (the embers burn) */
+    burning: (s) => !s.pipeline?.paused && s.jobs.some((j) => j.state === 'running' && !j.paused),
     /** in the order the workers will take them */
     queued: (s) =>
       s.jobs

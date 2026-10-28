@@ -246,7 +246,7 @@ describe('PipelineList', () => {
     expect(wrapper.text()).toContain('idle');
     expect(wrapper.text()).toContain('queue empty');
     expect(wrapper.find('[data-pipeline-running="false"]').exists()).toBe(true);
-    expect(wrapper.find('.embers').exists()).toBe(false);
+    expect(wrapper.find('.embers .p').exists()).toBe(false);
   });
 
   it('a hold for a lost connection reads as paused with no internet, and Resume queue stays available', async () => {

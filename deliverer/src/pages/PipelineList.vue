@@ -131,7 +131,7 @@ function dotColor(e: DaemonEvent): string {
 
 <template>
   <div class="screen" :data-pipeline-running="anyRunning ? 'true' : 'false'">
-    <EmberField v-if="anyRunning" />
+    <EmberField :active="jobs.burning" />
     <div class="top">
       <div>
         <div class="flex items-center gap-10">

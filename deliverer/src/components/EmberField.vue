@@ -1,13 +1,17 @@
 <script setup lang="ts">
 /**
  * Embers rising from a bright line glow at the bottom edge while a worker
- * runs. Decoration only (aria-hidden, no pointer events). Embers hold full
+ * runs. When `active` drops (paused, stopped) no ember launches again and
+ * the whole field - line, haze and the embers already flying - fades out,
+ * then empties itself so nothing keeps animating. Decoration only (aria-hidden, no pointer events). Embers hold full
  * glow to 50% of the container height and fade out by 80%. They stay still
  * under prefers-reduced-motion.
  *
  * Color comes from the parent's --ember (falls back to cyan).
  * Values are deterministic (no Math.random) so SSR and hydration match.
  */
+const props = defineProps<{ active: boolean }>();
+
 const COUNT = 96;
 
 const EMBERS = Array.from({ length: COUNT }, (_, i) => {
@@ -25,11 +29,48 @@ const EMBERS = Array.from({ length: COUNT }, (_, i) => {
     },
   };
 });
+
+/** how long a stopped field takes to fade out before its embers are removed */
+const FADE_MS = 2500;
+
+const root = ref<HTMLElement | null>(null);
+/** the embers are in the DOM; false once a stopped field has burnt out */
+const lit = ref(props.active);
+let outTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** no ember starts another flight; one still on the line goes out now */
+function stopLaunching() {
+  for (const a of root.value?.getAnimations?.({ subtree: true }) ?? []) {
+    if (!(a instanceof CSSAnimation) || a.animationName !== 'rise') continue;
+    const { currentIteration, progress } = a.effect?.getComputedTiming() ?? {};
+    if (currentIteration == null) continue;
+    a.effect?.updateTiming({ iterations: currentIteration + ((progress ?? 0) < 0.04 ? 0 : 1) });
+  }
+}
+
+watch(
+  () => props.active,
+  (on) => {
+    clearTimeout(outTimer);
+    if (on) {
+      // a fresh field: the spans remount mid-flight from their negative delays
+      lit.value = false;
+      void nextTick(() => (lit.value = true));
+      return;
+    }
+    stopLaunching();
+    outTimer = setTimeout(() => (lit.value = false), FADE_MS);
+  },
+);
+
+onBeforeUnmount(() => clearTimeout(outTimer));
 </script>
 
 <template>
-  <div class="embers" aria-hidden="true">
-    <span v-for="(e, i) in EMBERS" :key="i" class="p" :class="{ far: e.far }" :style="e.style" />
+  <div ref="root" class="embers" :class="{ out: !active }" aria-hidden="true">
+    <div v-if="lit" class="flight">
+      <span v-for="(e, i) in EMBERS" :key="i" class="p" :class="{ far: e.far }" :style="e.style" />
+    </div>
   </div>
 </template>
 
@@ -61,6 +102,7 @@ const EMBERS = Array.from({ length: COUNT }, (_, i) => {
     0 0 4px var(--c),
     0 -2px 10px var(--c-soft);
   animation: breathe 6s ease-in-out infinite;
+  transition: opacity 1.2s ease-out;
   z-index: 1;
 }
 
@@ -79,9 +121,24 @@ const EMBERS = Array.from({ length: COUNT }, (_, i) => {
     transparent 100%
   );
   animation: breathe 9s ease-in-out infinite reverse;
+  transition: opacity 1.6s ease-out;
+}
+/* stopped: the source dies down (the animation lets go so the fade can run) */
+.embers.out::before,
+.embers.out::after {
+  animation: none;
+  opacity: 0;
 }
 
-/* Embers */
+/* Embers: the wrapper fades them as one while each keeps its own keyframes */
+.flight {
+  position: absolute;
+  inset: 0;
+  transition: opacity 2.4s ease-out;
+}
+.embers.out .flight {
+  opacity: 0;
+}
 .p {
   position: absolute;
   bottom: 2px; /* born on the line */

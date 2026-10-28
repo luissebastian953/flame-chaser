@@ -163,7 +163,7 @@ function back() {
 
 <template>
   <div class="screen" :data-pipeline-running="anyRunning ? 'true' : 'false'" :style="{ '--wc': color }">
-    <EmberField v-if="anyRunning" />
+    <EmberField :active="jobs.burning" />
     <div class="top">
       <button
         class="btn gh back"
