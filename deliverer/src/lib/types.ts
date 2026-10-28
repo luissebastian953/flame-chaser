@@ -515,3 +515,27 @@ export interface StorageUsage {
   thumbs: { files: number; bytes: number };
   by_character: { characters: number };
 }
+
+/** Settings › Storage › Purge all data (coreflame/purge.py) */
+export type PurgeScope = 'galleries' | 'all';
+
+/** GET /api/storage/purge/preview - what a purge would remove */
+export interface PurgePreview {
+  images: number;
+  characters: number;
+  posts: number;
+  /** blobs + thumbs + trash */
+  bytes: number;
+}
+
+/** GET /api/storage/purge/{id} - the purge's progress, then its outcome */
+export interface PurgeStatus {
+  id: string;
+  scope: PurgeScope;
+  state: 'running' | 'succeeded' | 'failed';
+  done: number;
+  total: number;
+  /** the daemon's error, verbatim */
+  error: string | null;
+  result: { scope: PurgeScope; images: number; bytes: number; failed: string[] } | null;
+}

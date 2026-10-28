@@ -7,8 +7,11 @@ sync endpoints in a threadpool). Every error is `{"error": {code, message}}`.
 from __future__ import annotations
 
 import base64
+import dataclasses
 import shutil
+import threading
 import time
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
@@ -26,6 +29,7 @@ from coreflame import (
     label,
     origin,
     people,
+    purge,
     tags,
     trash,
 )
@@ -124,6 +128,10 @@ class State:
         self.auth = Auth(cfg)
         self.blobs = BlobStore(cfg.blob_root)
         self.thumbs = ThumbStore(Path(cfg.blob_root).parent / "thumbs")
+        # held by an import or a purge: the two rewrite the database and the
+        # library wholesale, so neither may start while the other runs
+        self.exclusive = threading.Lock()
+        self.purge: dict[str, Any] | None = None  # the last purge's progress
 
     def open_store(self) -> Store:
         """A Store for ONE request. A thread-local cache is wrong here: the
@@ -228,6 +236,14 @@ class SmartIn(BaseModel):
 
 class PurgeIn(BaseModel):
     everything: bool = False
+
+
+class StoragePurgeIn(BaseModel):
+    """Settings › Storage › Purge all data. `confirm` is the phrase the user
+    typed; the daemon re-checks it so no stray request can wipe the archive."""
+
+    scope: Literal["galleries", "all"]
+    confirm: str
 
 
 class SpeedIn(BaseModel):
@@ -464,6 +480,74 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
         from coreflame.library import usage
 
         return usage(state.cfg.blob_root.parent, state.cfg.db_path, s)
+
+    # -- purge all data (coreflame/purge.py) -------------------------------------
+    @app.get("/api/storage/purge/preview")
+    def purge_preview(s: Store = Depends(store)) -> dict:
+        """The counts the confirm sheet shows: one answer serves both scopes."""
+        return purge.preview(s, state.cfg.blob_root.parent)
+
+    @app.post("/api/storage/purge", status_code=202)
+    def purge_start(body: StoragePurgeIn, s: Store = Depends(store)) -> dict:
+        """Runs on its own thread, not the job queue: it needs the queue held
+        and empty. 409 `busy` while a crawl, export or import runs."""
+        if body.confirm.strip() != purge.PHRASE:
+            raise HTTPException(
+                400, {"code": "confirm", "message": f"type {purge.PHRASE} to confirm"}
+            )
+        if not JobRunner.idle(s) or not state.exclusive.acquire(blocking=False):
+            raise HTTPException(
+                409, {"code": "busy", "message": "a crawl, export or import is running"}
+            )
+        before = purge.preview(s, state.cfg.blob_root.parent)
+        was_held = state.runner.held
+        state.runner.hold(True)  # nothing starts while the rows and files go
+        jid = uuid.uuid4().hex
+        job: dict[str, Any] = {
+            "id": jid,
+            "scope": body.scope,
+            "state": "running",
+            "done": 0,
+            "total": before["images"],
+            "error": None,
+            "result": None,
+        }
+        state.purge = job
+
+        def progress(done: int, total: int) -> None:
+            job["done"], job["total"] = done, total
+
+        def run() -> None:
+            ps = state.open_store()
+            try:
+                if body.scope == "all":
+                    state.auth.clear_pixiv()
+                    state.auth.clear_twitter()
+                out = purge.purge(ps, state.cfg, body.scope, progress)
+                if body.scope == "all":
+                    fresh = purge.fresh_config(state.cfg)
+                    for f in dataclasses.fields(fresh):  # in place: every holder sees it
+                        setattr(state.cfg, f.name, getattr(fresh, f.name))
+                    state.speed.reset()
+                out["images"] = before["images"]
+                job["result"], job["state"] = out, "succeeded"
+            except Exception as e:  # reported verbatim to the sheet
+                job["error"], job["state"] = str(e) or type(e).__name__, "failed"
+            finally:
+                ps.close()
+                # a full purge starts unpaused, as a fresh install does
+                state.runner.hold(False if body.scope == "all" else was_held)
+                state.exclusive.release()
+                state.hub.publish("storage.purged", {"id": jid, "state": job["state"]})
+
+        threading.Thread(target=run, name="storage-purge", daemon=True).start()
+        return {"job_id": jid}
+
+    @app.get("/api/storage/purge/{jid}")
+    def purge_status(jid: str) -> dict:
+        if not state.purge or state.purge["id"] != jid:
+            raise HTTPException(404, {"code": "not_found", "message": jid})
+        return state.purge
 
     # -- watches ---------------------------------------------------------------
     @app.get("/api/watches")
@@ -1126,6 +1210,14 @@ def create_app(state: State, dev: bool = False) -> FastAPI:
             raise HTTPException(
                 409, {"code": "busy", "message": "pause the pipeline and let it drain first"}
             )
+        if not state.exclusive.acquire(blocking=False):
+            raise HTTPException(409, {"code": "busy", "message": "a purge is running"})
+        try:
+            return _bundle_import(body, s)
+        finally:
+            state.exclusive.release()
+
+    def _bundle_import(body: BundleImportIn, s: Store) -> dict:
         opts = bundle.ImportOptions(
             mode=body.mode,
             settings=body.settings,

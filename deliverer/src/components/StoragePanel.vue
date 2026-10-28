@@ -7,12 +7,16 @@ import type { StorageUsage, TrashSummary } from '@/lib/types';
  * load-bearing rule as a shield hint), Layout (the three trees with their
  * counts) and Trash (count, size, the 30-day rule, Empty). The versions
  * sit in the panel header's right slot. Figures come from GET /api/storage
- * (coreflame/library.py usage) and GET /api/trash.
+ * (coreflame/library.py usage) and GET /api/trash. A full-width Purge
+ * all data plate closes the grid; its sheet is PurgeSheet, and it is off
+ * while a crawl, export or import is queued or running.
  */
 const { t } = useI18n();
 const fm = useFormats();
 const ep = useEndpoint();
 const up = useUpdater();
+const jobs = useJobs();
+const lib = useLibrary();
 
 const desktop = '__TAURI_INTERNALS__' in window;
 
@@ -32,7 +36,23 @@ async function load() {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  jobs.load().catch(() => {});
+});
+
+// ---- purge all data ----------------------------------------------------------
+const purging = ref(false);
+const purged = ref<{ images: number; bytes: number; failed: number } | null>(null);
+/** the daemon refuses with 409 too; this says why before the click */
+const busy = computed(() => jobs.running.length > 0 || jobs.queued.length > 0);
+
+async function onPurged(r: { images: number; bytes: number; failed: string[] }) {
+  purging.value = false;
+  purged.value = { images: r.images, bytes: r.bytes, failed: r.failed.length };
+  emptied.value = null;
+  await Promise.all([load(), lib.loadWatches().catch(() => {})]);
+}
 
 /** share of the disk, in percent, clamped so the bar never overflows */
 const pct = (n: number) => (usage.value ? Math.min(100, (100 * n) / Math.max(1, usage.value.disk.total)) : 0);
@@ -211,12 +231,69 @@ const versions = computed(() =>
           </template>
         </div>
       </section>
+
+      <!-- PURGE ALL DATA -->
+      <section class="plate cut purge">
+        <Icon name="warning" :size="13" class="text-rose" />
+        <div class="pt">
+          <div class="text-base text-tx">{{ $t('settings.storage.purge.title') }}</div>
+          <div class="data text-small text-mut">{{ $t('settings.storage.purge.desc') }}</div>
+          <div v-if="busy" class="data text-small text-dim">{{ $t('settings.storage.purge.busy') }}</div>
+          <div v-else-if="purged" class="data text-small text-tx">
+            {{
+              $t('settings.storage.purge.done', {
+                images: fm.number(purged.images),
+                size: fm.bytes(purged.bytes),
+              })
+            }}
+            <template v-if="purged.failed">
+              ·
+              <span class="text-rose">
+                {{ $t('settings.storage.purge.failedFiles', { n: purged.failed }, purged.failed) }}
+              </span>
+            </template>
+          </div>
+        </div>
+        <button class="btn danger purge-btn" :disabled="busy" @click="purging = true">
+          {{ $t('settings.storage.purge.button') }}
+        </button>
+      </section>
     </div>
     <div v-else class="empty">{{ error || $t('settings.storage.loading') }}</div>
   </div>
+  <!-- beside the panel, not in it: its container query would trap a fixed sheet -->
+  <PurgeSheet v-if="purging" @close="purging = false" @done="onPurged" />
 </template>
 
 <style scoped>
+.plate.purge {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+.plate.purge > svg {
+  flex: none;
+}
+.pt {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.purge-btn {
+  flex: none;
+  margin-left: auto;
+}
+.purge-btn:disabled {
+  opacity: 0.35;
+}
+@container (max-width: 1000px) {
+  .plate.purge {
+    flex-wrap: wrap;
+  }
+}
 .plates {
   position: relative;
   z-index: 1;

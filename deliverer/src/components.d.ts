@@ -32,6 +32,7 @@ declare module 'vue' {
     NetworkCard: typeof import('./components/NetworkCard.vue')['default']
     NetworkDetail: typeof import('./components/NetworkDetail.vue')['default']
     NotificationsPanel: typeof import('./components/NotificationsPanel.vue')['default']
+    PurgeSheet: typeof import('./components/PurgeSheet.vue')['default']
     QueuedPanel: typeof import('./components/QueuedPanel.vue')['default']
     RateBudget: typeof import('./components/RateBudget.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

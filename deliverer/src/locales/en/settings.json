@@ -194,7 +194,15 @@
     "trashKept": "kept {days} days, then removed",
     "emptyTrash": "Empty trash now",
     "trashEmptied": "0 images removed | 1 image removed | {n} images removed",
-    "loading": "reading the library…"
+    "loading": "reading the library…",
+    "purge": {
+      "title": "Purge all data",
+      "desc": "remove the galleries, or the galleries and every config · exported bundles are not touched",
+      "button": "Purge all data…",
+      "busy": "wait for the running crawl, export or import to finish",
+      "done": "purged · {images} images · {size} freed",
+      "failedFiles": "0 files could not be removed | 1 file could not be removed | {n} files could not be removed"
+    }
   },
   "network": {
     "title": "Network",
@@ -351,5 +359,37 @@
       "run": "Import",
       "importing": "importing… the window will not respond until it is done"
     }
+  },
+  "purge": {
+    "title": "Purge all data",
+    "meta": "choose what is removed · this cannot be undone",
+    "group": "Purge",
+    "close": "Close",
+    "esc": "Esc closes",
+    "galleries": {
+      "title": "1. Purge galleries only",
+      "desc": "images, thumbnails, posts and trash are removed. Accounts, characters, crawl configs and settings stay.",
+      "label": "purge galleries only",
+      "count": "{images} images · {size}"
+    },
+    "all": {
+      "title": "2. Purge configs and galleries",
+      "desc": "everything above, plus characters, crawl configs, accounts and settings. Curio starts as freshly installed.",
+      "label": "purge configs and galleries",
+      "count": "{images} images · {characters} characters · {size}"
+    },
+    "pending": "…",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "sure": "Are you sure?",
+    "warnTitle": "This cannot be undone",
+    "warnDetail": "export a backup first if you may need this archive again",
+    "prompt": "Type {phrase} to continue",
+    "escNo": "Esc = No",
+    "yes": "Yes",
+    "no": "No",
+    "retry": "Retry",
+    "running": "purging… {done} / {total} images",
+    "failed": "purge failed · {error}"
   }
 }

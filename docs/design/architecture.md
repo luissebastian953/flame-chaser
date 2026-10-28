@@ -377,6 +377,31 @@ tables wholesale (bytes already on disk stay). Export is a job on the
 inside the request and the daemon refuses it unless the queue is paused
 and empty (409 `busy`). The pixiv cookie is opt-in on both ends.
 
+### 3.5 Purge all data (`coreflame/purge.py`)
+
+Settings › Storage ends with a Purge all data plate. Two scopes, chosen in a
+two-step sheet that asks for `PLEASE DELETE` typed exactly (the daemon
+re-checks it):
+
+| Data | galleries | all |
+|---|---|---|
+| `blobs/`, `thumbs/`, `by-character/`, `trash/` files | removed | removed |
+| posts, media, classifier rows, raw payloads, trash, **`seen_posts`**, watermarks | removed | removed |
+| characters (`watches`), job history, the queue's hold | kept | removed |
+| `config.json`, `secrets.json`, X cookies, the webview's `curio.*` keys | kept | removed |
+| exported bundles, the db file itself, the library folder's location | kept | kept |
+
+The visited set goes with the galleries on purpose: an `indexed` row means
+"never revisit", so keeping it would make the next crawl skip everything the
+purge just removed. The purge runs on its own daemon thread, not the job
+queue, because it needs the queue held and empty: 409 while any job is
+queued or running, and it shares a lock with Import so the two wholesale
+rewrites never overlap. Rows go in one transaction, then the files; a file
+that cannot be removed is reported in the result and never rolls the rows
+back. After `galleries` the hold returns to what it was; after `all` the
+queue runs again, the in-memory config is reset in place (same home, same
+library folder), and the webview clears its own keys and reloads to first run.
+
 ### 3.3 Thumbnails are not optional
 
 A grid of 500 cards pointing at 8 MB PNGs will move ~4 GB through the webview
@@ -1190,6 +1215,18 @@ POST /bundle/import   ← {path, mode: merge|restore, settings: keep|take, secre
                         characters:{slug: keep|take|merge}, salvage}
                       → {mode, damaged:[names], ui | null, characters, posts, placed, dupes, refetch}
                         409 busy (queue not paused or not empty) · 400 as inspect
+```
+
+### Purge (built; §3.5)
+
+```
+GET  /storage/purge/preview → {images, characters, posts, bytes}   one answer for both scopes
+POST /storage/purge   ← {scope: galleries|all, confirm: "PLEASE DELETE"}
+                      → 202 {job_id}   400 confirm (phrase mismatch, trimmed, case-sensitive)
+                        409 busy (a job queued or running, or an import in flight)
+GET  /storage/purge/{id} → {id, scope, state: running|succeeded|failed, done, total, error,
+                        result: {scope, images, bytes, failed: [names]} | null}   404 not_found
+                        the last purge only; an event `storage.purged` marks the end
 ```
 
 ---

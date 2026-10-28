@@ -9,7 +9,7 @@ deliverer/
 │   ├── i18n.ts (+ .test.ts)   LOCALES, glob-loaded messages, setLocale
 │   ├── pages/            Gallery* · CharacterDetail* · Config* · PipelineList* · PipelineDetail* · Settings
 │   ├── components/       AuthBadge* · AuthGate · BackupPanel* · BrandMark · DeleteMenu · DeleteSheet · DeleteToast* · DetailAside* · EmberField · GalleryTile* · GenderFilter* · Icon* · ImageViewer* ·
-│   │                     InfoTip* · LabelFilter* · NetworkCard* · NetworkDetail* · NotificationsPanel* · QueuedPanel · RateBudget · RunToast* · RunToasts* · SelectionBar · ShutdownConfirm* · SignalBars ·
+│   │                     InfoTip* · LabelFilter* · NetworkCard* · NetworkDetail* · NotificationsPanel* · PurgeSheet* · QueuedPanel · RateBudget · RunToast* · RunToasts* · SelectionBar · ShutdownConfirm* · SignalBars ·
 │   │                     SmartPanel · SourceCard* · StatCard* · StoragePanel* · ThemePanel* · ThemePreview · UpdateBanner* · UpdatesPanel · WatchForm* · WorkerAvatar   (* = has a .test.ts)
 │   ├── stores/           background* · characterDefaults* · deletion* · endpoint · jobs* · library* · network* · sources* · theme* · toasts* · updater* · viewer*  (Pinia)
 │   ├── lib/api.ts (+ .test.ts)   endpoint discovery, fetch wrapper, mediaUrl, EventSource

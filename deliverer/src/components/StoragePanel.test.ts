@@ -1,7 +1,9 @@
 /**
  * Settings › Storage: the four plates read GET /api/storage and GET
  * /api/trash; the disk bar is proportional; the trash plate offers Empty
- * only when there is something in it; Reveal is desktop-only.
+ * only when there is something in it; Reveal is desktop-only. The purge
+ * plate closes the grid, is off while a job is queued or running, and after
+ * a galleries purge reloads the figures and says what was freed.
  */
 import { flushPromises } from '@vue/test-utils';
 import { mountWithPlugins, setTauri } from '@/test/utils';
@@ -35,10 +37,16 @@ const usage: StorageUsage = {
   by_character: { characters: 2 },
 };
 
-function serve(trash: { count: number; bytes: number; oldest: string | null; days: number }) {
+function serve(
+  trash: { count: number; bytes: number; oldest: string | null; days: number },
+  jobs: { state: string }[] = [],
+) {
   vi.mocked(api.get).mockImplementation(async (path: string) => {
     if (path === '/api/storage') return usage;
     if (path === '/api/trash') return trash;
+    if (path === '/api/jobs?limit=100') return jobs;
+    if (path === '/api/watches') return [];
+    if (path === '/api/storage/purge/preview') return { images: 3, characters: 1, posts: 3, bytes: 9 };
     throw new Error(path);
   });
 }
@@ -104,5 +112,39 @@ describe('StoragePanel', () => {
     await flushPromises();
     expect(api.post).toHaveBeenCalledWith('/api/trash/purge', { everything: true });
     expect(w2.text()).toContain('2 images removed');
+  });
+
+  it('the purge plate is off while a job runs', async () => {
+    setTauri(false);
+    serve({ count: 0, bytes: 0, oldest: null, days: 30 }, [{ state: 'running' }]);
+    const w = mountWithPlugins(StoragePanel);
+    await flushPromises();
+    expect(w.text()).toContain('Purge all data');
+    expect(w.text()).toContain('exported bundles are not touched');
+    expect(w.text()).toContain('wait for the running crawl, export or import to finish');
+    const btn = w.findAll('button').find((b) => b.text() === 'Purge all data…')!;
+    expect(btn.attributes('disabled')).toBeDefined();
+  });
+
+  it('a finished galleries purge reloads the figures and says what was freed', async () => {
+    setTauri(false);
+    serve({ count: 0, bytes: 0, oldest: null, days: 30 });
+    const w = mountWithPlugins(StoragePanel);
+    await flushPromises();
+    const btn = w.findAll('button').find((b) => b.text() === 'Purge all data…')!;
+    expect(btn.attributes('disabled')).toBeUndefined();
+    await btn.trigger('click');
+    await flushPromises();
+    const sheet = w.findComponent({ name: 'PurgeSheet' });
+    expect(sheet.exists()).toBe(true);
+    vi.mocked(api.get).mockClear();
+
+    sheet.vm.$emit('done', { scope: 'galleries', images: 1193, bytes: 41_200_000_000, failed: [] });
+    await flushPromises();
+    expect(w.findComponent({ name: 'PurgeSheet' }).exists()).toBe(false);
+    expect(w.text()).toContain('purged · 1,193 images · 38.4 GiB freed');
+    const paths = vi.mocked(api.get).mock.calls.map((c) => c[0]);
+    expect(paths).toContain('/api/storage');
+    expect(paths).toContain('/api/watches');
   });
 });

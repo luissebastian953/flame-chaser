@@ -29,6 +29,7 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
 │   ├── label.py      the one badge per image: a hand-set label, else non_illust > ai > unidentified, folded in SQL
 │   ├── trash.py      deleting images: batches to <library>/trash, forget/reopen posts, undo, 30-day purge, Smart criteria, crawl-time rule
 │   ├── library.py    hardlink view, gc, import, usage (Settings › Storage figures)
+│   ├── purge.py      Settings › Storage › Purge all data: preview counts; galleries (rows + library trees + visited set) or all (+ characters, config files)
 │   ├── bundle.py     export/import the archive as one file: .curio (framed, hashed, scan-recoverable) or .zip; inspect, verify, merge/restore
 │   ├── jobs.py       queue, one worker thread per source lane, JobContext (check/stage/progress/tally), pause (persisted), interrupted-at-boot, retry
 │   ├── handlers.py   job type -> pipeline function; adapters built per job; plan() splits a crawl per source
@@ -64,6 +65,7 @@ reaver/                 the project (pyproject, tests). Not a package. Python >=
     ├── test_origin.py    hashtag fold, declared vs the model's cut, at download (never rejects), backlog without and with the detector, new model (fake)
     ├── test_trash.py     delete to trash, forget vs reopen, undo, permanent, purge, Smart matches, crawl verdict
     ├── test_bundle.py    both codecs round-trip, inspect conflicts, merge policies + rules, restore, bit flip / truncation / salvage
+    ├── test_purge.py     preview, galleries keeps characters/config/bundles, all removes them, a stuck file is reported
     └── test_dawnmaker.py the HTTP surface via TestClient (auth layers, routes, SSE)
 ```
 

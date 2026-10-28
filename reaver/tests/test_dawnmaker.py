@@ -1087,6 +1087,88 @@ def test_net_speed(tmp: Path) -> None:
     print("  net speed:            ok (GET = last answer, POST measures, settings save resets)")
 
 
+def test_storage_purge_api(tmp: Path) -> None:
+    """Purge all data: the typed phrase is re-checked, a queued job blocks it,
+    galleries keeps the characters and the hold, all resets the accounts and
+    config and leaves the queue running."""
+    import hashlib
+
+    from coreflame.phash import dhash
+
+    def seed(client: TestClient, store: Store, state: State) -> None:
+        store.upsert_watch(Watch(slug="firefly", label="Firefly", pixiv_tags=["流螢"]))
+        for i in range(3):
+            data = _img(40 + i, (200, 260))
+            rec = IllustRecord(
+                source="pixiv",
+                external_id=str(500 + i),
+                artist_id="a",
+                artist_name="A",
+                posted_at="2026-09-01T00:00:00+00:00",
+                media=[{"index": 0, "url": f"https://x/{i}.png"}],
+            )
+            store.upsert_post(rec, "firefly")
+            state.blobs.put(data, "png")
+            store.mark_media(
+                "pixiv",
+                rec.external_id,
+                0,
+                state="stored",
+                sha=hashlib.sha256(data).hexdigest(),
+                phash=dhash(data),
+                ext="png",
+            )
+
+    def wait(client: TestClient, jid: str) -> dict:
+        for _ in range(200):
+            got = client.get(f"/api/storage/purge/{jid}").json()
+            if got["state"] != "running":
+                return got
+            time.sleep(0.02)
+        raise AssertionError("purge never finished")
+
+    client, store, state = boot(tmp / "purge")
+    seed(client, store, state)
+    pv = client.get("/api/storage/purge/preview").json()
+    assert pv["images"] == 3 and pv["characters"] == 1 and pv["posts"] == 3 and pv["bytes"] > 0
+
+    r = client.post("/api/storage/purge", json={"scope": "galleries", "confirm": "please delete"})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "confirm"
+    jid = JobRunner.submit(store, "tags", {})
+    r = client.post("/api/storage/purge", json={"scope": "galleries", "confirm": "PLEASE DELETE"})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "busy"
+    store.conn.execute("UPDATE jobs SET state='cancelled' WHERE id=?", (jid,))
+    store.conn.commit()
+
+    state.runner.hold(True)  # paused by the user before: still paused after
+    r = client.post("/api/storage/purge", json={"scope": "galleries", "confirm": " PLEASE DELETE "})
+    assert r.status_code == 202
+    done = wait(client, r.json()["job_id"])
+    assert done["state"] == "succeeded", done
+    assert done["result"]["images"] == 3 and done["result"]["failed"] == []
+    assert state.runner.held
+    assert client.get("/api/storage/purge/preview").json()["images"] == 0
+    assert len(client.get("/api/watches").json()) == 1
+    assert client.get("/api/storage").json()["blobs"]["files"] == 0
+    assert client.get("/api/storage/purge/nope").status_code == 404
+
+    # all: characters, accounts and config go; the queue runs again
+    state.cfg.pixiv_rate = 0.25
+    state.cfg.save()
+    state.auth.set_twitter("a" * 40, "b" * 40)
+    seed(client, store, state)
+    r = client.post("/api/storage/purge", json={"scope": "all", "confirm": "PLEASE DELETE"})
+    done = wait(client, r.json()["job_id"])
+    assert done["state"] == "succeeded", done
+    assert client.get("/api/watches").json() == []
+    assert not state.runner.held
+    assert state.cfg.pixiv_rate == 1.0 and state.cfg.twitter_cookies_file is None
+    assert not (state.cfg.home / "config.json").exists()
+    assert not (state.cfg.home / "twitter-cookies.txt").exists()
+    assert client.get("/api/sources/status").json()["twitter"]["authed"] is False
+    print("  storage purge:        ok (phrase, busy, galleries keeps hold, all resets config)")
+
+
 if __name__ == "__main__":
     import tempfile
 
@@ -1106,6 +1188,7 @@ if __name__ == "__main__":
         test_post_detail_links_cross_source(tmp)
         test_delete_and_trash_api(tmp)
         test_bundle_api(tmp)
+        test_storage_purge_api(tmp)
         test_serving_when_the_handshake_arrives(tmp)
         test_hub_close_ends_live_streams()
         test_heartbeat_grace()

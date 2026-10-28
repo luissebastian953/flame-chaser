@@ -230,7 +230,7 @@ declare global {
   export type { ViewerItem } from './lib/related'
   import('./lib/related')
   // @ts-ignore
-  export type { Source, Gender, GenderMode, Watch, JobState, Lane, Job, WorkerSlot, RateBudget, PauseReason, PipelineState, LogLine, GalleryItem, ImageLabel, LabelSource, GridOrder, GalleryPage, ImageKind, KindFilter, IdentState, GalleryCharacters, CharacterHit, OriginState, OriginBy, GalleryOrigins, GalleryKinds, TagStat, PostDetail, PostMedia, LinkedPost, NameSuggestion, CharacterNames, ProbeResult, SourcesStatus, Health, DeleteMode, TermKind, GalleryArtist, SmartReason, SmartMatch, SmartResult, CleanupRule, ReviewSummary, DeletePreview, DeleteResult, TrashSummary, NetworkSpeed, BundleFormat, WatchPolicy, BundleExportBody, BundleConflict, BundleInspect, BundleImportBody, BundleImportResult, StorageUsage } from './lib/types'
+  export type { Source, Gender, GenderMode, Watch, JobState, Lane, Job, WorkerSlot, RateBudget, PauseReason, PipelineState, LogLine, GalleryItem, ImageLabel, LabelSource, GridOrder, GalleryPage, ImageKind, KindFilter, IdentState, GalleryCharacters, CharacterHit, OriginState, OriginBy, GalleryOrigins, GalleryKinds, TagStat, PostDetail, PostMedia, LinkedPost, NameSuggestion, CharacterNames, ProbeResult, SourcesStatus, Health, DeleteMode, TermKind, GalleryArtist, SmartReason, SmartMatch, SmartResult, CleanupRule, ReviewSummary, DeletePreview, DeleteResult, TrashSummary, NetworkSpeed, BundleFormat, WatchPolicy, BundleExportBody, BundleConflict, BundleInspect, BundleImportBody, BundleImportResult, StorageUsage, PurgeScope, PurgePreview, PurgeStatus } from './lib/types'
   import('./lib/types')
 }
 
