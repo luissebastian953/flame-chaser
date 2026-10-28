@@ -174,6 +174,15 @@ export interface TickInput {
   expanded: boolean;
   finished: { posts: number } | null;
   locale: string;
+  /** the app's theme variables (`cssVars`); the mini window wears the same palette */
+  theme?: Record<string, string>;
+}
+
+/** the app's `--color-*` theme variables renamed to the ones pip.css reads */
+export function pipTheme(vars: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(vars)) if (k.startsWith('--color-')) out[`--${k.slice(8)}`] = v;
+  return out;
 }
 
 export function buildTick(input: TickInput, t: Translate, te: Exists): PipTick {
@@ -191,6 +200,7 @@ export function buildTick(input: TickInput, t: Translate, te: Exists): PipTick {
     finished: input.finished,
     strings: pipStrings(t),
     lang: input.locale,
+    theme: input.theme ? pipTheme(input.theme) : {},
   };
 }
 
@@ -275,6 +285,7 @@ export function useBackgroundController() {
   const bg = useBackground();
   const jobs = useJobs();
   const lib = useLibrary();
+  const theme = useTheme();
   const router = useRouter();
   const { t, te, locale } = useI18n();
 
@@ -310,6 +321,7 @@ export function useBackgroundController() {
         expanded: bg.expanded,
         finished,
         locale: locale.value,
+        theme: cssVars(theme.applied),
       },
       t,
       te,

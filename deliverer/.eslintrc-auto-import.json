@@ -217,6 +217,7 @@
     "pickedFirst": true,
     "pipRows": true,
     "pipStrings": true,
+    "pipTheme": true,
     "postsOf": true,
     "provide": true,
     "queueMeta": true,

@@ -6,7 +6,8 @@
  */
 import { i18n } from '@/i18n';
 import type { Job, Watch } from '@/lib/types';
-import { buildTick, finishedNotice, newSince, pipRows, shouldOpen, tooltipFor } from './background';
+import { cssVars, defaultSettings } from '@/stores/theme';
+import { buildTick, finishedNotice, newSince, pipRows, pipTheme, shouldOpen, tooltipFor } from './background';
 
 // vue-i18n's overloads make a direct call to `t` with a loose key blow the type checker up
 const g = i18n.global as unknown as {
@@ -211,6 +212,17 @@ describe('buildTick', () => {
     expect(tick.strings.more).toBe('{n}+ more');
     expect(tick.lang).toBe('en');
     expect(tick.newToday).toBe(57);
+  });
+
+  it('carries the applied theme under the names pip.css reads', () => {
+    const s = defaultSettings();
+    s.theme = { ...s.theme, primary: '#ff4d5a', bg: '#140708' };
+    const tick = buildTick({ ...input, theme: cssVars(s) }, t, te);
+
+    expect(tick.theme['--ember']).toBe('#ff4d5a');
+    expect(tick.theme['--bg']).toBe('#140708');
+    expect(tick.theme['--glow']).toBeUndefined();
+    expect(pipTheme({ '--color-tx': '#fff', '--grid-alpha': '0.1' })).toEqual({ '--tx': '#fff' });
   });
 });
 

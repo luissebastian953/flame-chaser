@@ -72,6 +72,8 @@ export interface PipTick {
   finished: { posts: number } | null;
   strings: PipStrings;
   lang: string;
+  /** the applied theme as the CSS variables pip.css reads (`--bg`, `--ember`, ...) */
+  theme: Record<string, string>;
 }
 
 export const PIP_EVENTS = {

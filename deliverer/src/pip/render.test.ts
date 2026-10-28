@@ -50,6 +50,7 @@ const tick = (p: Partial<PipTick> = {}): PipTick => ({
   finished: null,
   strings,
   lang: 'en',
+  theme: {},
   ...p,
 });
 

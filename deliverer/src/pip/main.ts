@@ -38,6 +38,7 @@ const handlers = {
 
 function paint(tick: PipTick) {
   last = tick;
+  for (const [k, v] of Object.entries(tick.theme ?? {})) document.documentElement.style.setProperty(k, v);
   render(root, tick, handlers, open);
   document.body.classList.toggle('still', reduced || document.visibilityState !== 'visible');
   const height = Math.ceil(root.getBoundingClientRect().height);

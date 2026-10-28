@@ -117,6 +117,7 @@ declare global {
   const pickedFirst: typeof import('./lib/chips').pickedFirst
   const pipRows: typeof import('./lib/background').pipRows
   const pipStrings: typeof import('./lib/background').pipStrings
+  const pipTheme: typeof import('./lib/background').pipTheme
   const postsOf: typeof import('./lib/pipeline').postsOf
   const provide: typeof import('vue').provide
   const queueMeta: typeof import('./lib/pipeline').queueMeta
@@ -348,6 +349,7 @@ declare module 'vue' {
     readonly pickedFirst: UnwrapRef<typeof import('./lib/chips')['pickedFirst']>
     readonly pipRows: UnwrapRef<typeof import('./lib/background')['pipRows']>
     readonly pipStrings: UnwrapRef<typeof import('./lib/background')['pipStrings']>
+    readonly pipTheme: UnwrapRef<typeof import('./lib/background')['pipTheme']>
     readonly postsOf: UnwrapRef<typeof import('./lib/pipeline')['postsOf']>
     readonly provide: UnwrapRef<typeof import('vue')['provide']>
     readonly queueMeta: UnwrapRef<typeof import('./lib/pipeline')['queueMeta']>
